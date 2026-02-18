@@ -1,0 +1,155 @@
+import { useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { Client } from '@stomp/stompjs'
+import SockJS from 'sockjs-client'
+import { useFlowState, resetFlowState } from '../hooks/useFlowState'
+import { getConversation } from '../services/messagesApi'
+import { getAllUsers } from '../services/usersApi'
+import { ensureNotificationPermission, getNotifyCutoff, pushNotify, setNotifyCutoff } from '../lib/notifications'
+import './GamesPage.css'
+
+const GAME_ITEMS = [
+  { id: 'rps', title: 'Rock / Paper / Scissors', icon: '/theme/icon-rock-paper-scissors.png', path: '/games/rps' },
+  { id: 'coin', title: 'Heads / Tails', icon: '/theme/icon-coin.png', path: '/games/coin' },
+  { id: 'ttt', title: 'Tic-Tac-Toe', icon: '/theme/icon-tic-tac-toe.png', path: '/games/ttt' },
+]
+
+function GamesPage() {
+  const navigate = useNavigate()
+  const [flow, setFlow] = useFlowState()
+
+  useEffect(() => {
+    if (!flow.username || !flow.token) navigate('/auth')
+  }, [flow.username, flow.token, navigate])
+
+  useEffect(() => {
+    const requestOnFirstInteraction = () => {
+      ensureNotificationPermission(true)
+      window.removeEventListener('pointerdown', requestOnFirstInteraction)
+      window.removeEventListener('keydown', requestOnFirstInteraction)
+    }
+
+    window.addEventListener('pointerdown', requestOnFirstInteraction, { once: true })
+    window.addEventListener('keydown', requestOnFirstInteraction, { once: true })
+
+    return () => {
+      window.removeEventListener('pointerdown', requestOnFirstInteraction)
+      window.removeEventListener('keydown', requestOnFirstInteraction)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!flow.username || !flow.token) return
+
+    const client = new Client({
+      webSocketFactory: () => new SockJS('http://localhost:8080/ws-chat'),
+      connectHeaders: {
+        username: flow.username,
+        Authorization: `Bearer ${flow.token}`,
+      },
+      reconnectDelay: 1200,
+      onConnect: () => {
+        client.subscribe('/user/queue/messages', async (frame) => {
+          try {
+            const payload = JSON.parse(frame.body)
+            const fromUsername = payload?.fromUsername || 'Unknown'
+            const type = payload?.type || 'text'
+            const text = payload?.message || ''
+
+            const preview = type === 'image'
+              ? 'Sent an image'
+              : type === 'video'
+                ? 'Sent a video'
+                : type === 'voice'
+                  ? 'Sent a voice message'
+                  : type === 'file'
+                    ? `Sent file: ${payload?.fileName || 'attachment'}`
+                    : text
+
+            await pushNotify(`@${fromUsername}`, preview || 'New message')
+            setNotifyCutoff(flow.username, fromUsername, Number(payload?.createdAt || Date.now()))
+          } catch {
+            // Ignore invalid realtime payloads.
+          }
+        })
+      },
+    })
+
+    client.activate()
+    return () => client.deactivate()
+  }, [flow.username, flow.token])
+
+  useEffect(() => {
+    if (!flow.username || !flow.token) return
+
+    let cancelled = false
+
+    const notifyMissedWhileOffline = async () => {
+      try {
+        const everyone = await getAllUsers(flow.token)
+        const peers = (everyone || []).filter(
+          (user) => (user?.username || '').toLowerCase() !== (flow.username || '').toLowerCase()
+        )
+
+        for (const user of peers) {
+          if (cancelled) return
+          const peerUsername = user.username
+          const cutoff = getNotifyCutoff(flow.username, peerUsername)
+          const rows = await getConversation(flow.token, peerUsername)
+          if (cancelled) return
+
+          const missed = (rows || [])
+            .filter((row) => row?.sender === 'other')
+            .filter((row) => Number(row?.createdAt || 0) > cutoff)
+
+          if (!missed.length) continue
+
+          const latest = Math.max(...missed.map((row) => Number(row.createdAt || 0)))
+          setNotifyCutoff(flow.username, peerUsername, latest || Date.now())
+          await pushNotify(`@${peerUsername}`, `${missed.length} new message${missed.length > 1 ? 's' : ''}`)
+        }
+      } catch {
+        // Ignore missed-notification sync failures on dashboard.
+      }
+    }
+
+    notifyMissedWhileOffline()
+    return () => {
+      cancelled = true
+    }
+  }, [flow.username, flow.token])
+
+  return (
+    <section className="games-dashboard-page">
+      <header className="games-dashboard-topbar">
+        <button className="dash-ctrl-btn" onClick={() => navigate('/profile', { state: { from: '/games' } })}>
+          👤 Profile
+        </button>
+        <button className="dash-ctrl-btn dash-home-btn">Home</button>
+        <button className="dash-ctrl-btn" onClick={() => {
+          resetFlowState(setFlow);
+          navigate('/auth');
+        }}>
+          🚪 Logout
+        </button>
+      </header>
+
+      <div className="games-dashboard-layout">
+        <section className="games-home-panel">
+          <h2>Home</h2>
+          <p>Select a Game</p>
+          <div className="games-icon-grid">
+            {GAME_ITEMS.map((item) => (
+              <button key={item.id} className="games-icon-btn" onClick={() => navigate(item.path)}>
+                <img src={item.icon} alt={item.title} className="games-icon-img" />
+                <span>{item.title}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      </div>
+    </section>
+  )
+}
+
+export default GamesPage

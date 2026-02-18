@@ -1,0 +1,67 @@
+.single-game-page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 1rem;
+  display: grid;
+  align-content: start;
+  gap: 1rem;
+  background:
+    radial-gradient(circle at 15% 10%, rgba(255, 232, 160, 0.45) 0%, rgba(255, 232, 160, 0) 38%),
+    radial-gradient(circle at 82% 22%, rgba(255, 198, 85, 0.34) 0%, rgba(255, 198, 85, 0) 40%),
+    linear-gradient(180deg, #7fd3ea 0%, #b3eef6 52%, #c8e6aa 100%);
+}
+
+.single-game-top {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.single-game-top h2 {
+  margin: 0;
+  text-align: center;
+  color: #4b2b15;
+  font-weight: 900;
+}
+
+.single-game-top button,
+.single-game-actions button {
+  border: 2px solid #6a391b;
+  border-radius: 0.65rem;
+  background: #fff2cf;
+  color: #4f2d17;
+  font-weight: 700;
+  padding: 0.35rem 0.7rem;
+}
+
+.coin-stage {
+  width: min(640px, 100%);
+  margin: 0 auto;
+  border: 3px solid #7a4d1f;
+  border-radius: 1rem;
+  background: linear-gradient(180deg, rgba(255, 249, 216, 0.96), rgba(255, 230, 168, 0.94));
+  padding: 1rem;
+  display: grid;
+  justify-items: center;
+  gap: 0.75rem;
+}
+
+.single-game-icon {
+  width: 132px;
+  height: 132px;
+  border-radius: 999px;
+  object-fit: contain;
+}
+
+.single-game-actions {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.coin-stage p {
+  margin: 0;
+  color: #5d3a22;
+  font-weight: 700;
+}

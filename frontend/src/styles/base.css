@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+:root {
+  font-family: 'Poppins', 'Segoe UI', sans-serif;
+  --ink: #18252f;
+  --panel: #ffffffef;
+  --line: #d9e2ea;
+  --accent: #ff6f3c;
+  --accent-dark: #ea5e2e;
+  --mint: #dff6ef;
+  --peach: #ffe9dd;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: radial-gradient(circle at 0% 10%, #fff2e9 0%, #e9fbf7 35%, #e6edf9 100%);
+  color: var(--ink);
+}
+
+#root {
+  min-height: 100vh;
+}

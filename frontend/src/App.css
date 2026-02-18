@@ -1,0 +1,42 @@
+.app-wrap {
+  min-height: 100vh;
+}
+
+.app-auth-route {
+  min-height: 100vh;
+}
+
+.app-auth-max {
+  width: 100%;
+  min-height: 100vh;
+}
+
+.app-max {
+  max-width: 1080px;
+}
+
+.app-header {
+  background: linear-gradient(125deg, #ffffffcf, #ffffff9e);
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  padding: 1rem 1.25rem;
+  backdrop-filter: blur(6px);
+}
+
+.surface-card {
+  border: 1px solid var(--line);
+  border-radius: 1.1rem;
+  background: var(--panel);
+  box-shadow: 0 12px 28px rgba(17, 29, 45, 0.08);
+}
+
+.btn-accent {
+  border: none;
+  color: #fff;
+  background: linear-gradient(90deg, var(--accent), #ffa42d);
+}
+
+.btn-accent:hover {
+  color: #fff;
+  background: linear-gradient(90deg, var(--accent-dark), #f59517);
+}

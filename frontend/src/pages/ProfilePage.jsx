@@ -1,0 +1,283 @@
+import { useEffect, useRef, useMemo, useState } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
+import { toast } from 'react-toastify'
+import { resetFlowScores, resetFlowState, useFlowState } from '../hooks/useFlowState'
+import './ProfilePage.css'
+
+const API_BASE = 'http://localhost:8080/api/app'
+
+function ProfilePage() {
+  const navigate = useNavigate()
+  const location = useLocation()
+  const [flow, setFlow] = useFlowState()
+  const [showSecretKeyModal, setShowSecretKeyModal] = useState(false)
+  const [secretKey, setSecretKey] = useState('')
+  const [isFirstTime, setIsFirstTime] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const timerRef = useRef(null)
+  const wins = flow.wins || { rps: 0, coin: 0, ttt: 0 }
+  const totalWins = useMemo(() => wins.rps + wins.coin + wins.ttt, [wins])
+  const previousPage = location.state?.from || '/games'
+
+  // Only redirect if not authenticated on initial load
+  useEffect(() => {
+    if (!flow.username || !flow.token) {
+      toast.error('You need to login first')
+      navigate('/auth', { replace: true })
+    }
+  }, [])
+
+  const updateProfile = (key, value) => {
+    setFlow((prev) => ({ ...prev, [key]: value }))
+  }
+
+  const handleUnauthorized = () => {
+    toast.error('Session expired. Please login again.')
+    resetFlowState(setFlow)
+    navigate('/auth', { replace: true })
+  }
+
+  const handleResetScoreMouseDown = () => {
+    timerRef.current = setTimeout(async () => {
+      setIsLoading(true)
+      try {
+        // Check if user has a secret key in the database
+        const response = await fetch(
+          `${API_BASE}/users/${flow.userId}/secret-key-exists`,
+          {
+            method: 'GET',
+            headers: {
+              Authorization: `Bearer ${flow.token}`,
+            }
+          }
+        )
+        
+        if (response.status === 401) {
+          handleUnauthorized()
+          return
+        }
+
+        if (response.ok) {
+          const data = await response.json()
+          setIsFirstTime(!data.exists)
+          setShowSecretKeyModal(true)
+          setSecretKey('')
+        } else {
+          toast.error('Unable to check secret key status.')
+        }
+      } catch (error) {
+        console.error('Error checking secret key:', error)
+        toast.error('Unable to reach server.')
+      } finally {
+        setIsLoading(false)
+      }
+    }, 2000)
+  }
+
+  const handleResetScoreMouseUp = () => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current)
+      timerRef.current = null
+    }
+  }
+
+  const handleResetScoreMouseLeave = () => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current)
+      timerRef.current = null
+    }
+  }
+
+  const verifySecretKey = async () => {
+    if (!secretKey.trim()) {
+      toast.error('Secret key cannot be empty')
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      if (isFirstTime) {
+        // Create/Set secret key for first time
+        const response = await fetch(
+          `${API_BASE}/users/${flow.userId}/secret-key`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${flow.token}`,
+            },
+            body: JSON.stringify({ secretKey: secretKey })
+          }
+        )
+
+        if (response.status === 401) {
+          handleUnauthorized()
+          return
+        }
+
+        if (response.ok) {
+          setFlow((prev) => ({ ...prev, verified: true }))
+          toast.success('Confirmation key created successfully!')
+          setShowSecretKeyModal(false)
+          setSecretKey('')
+          // Redirect to chat after a short delay
+          setTimeout(() => {
+            navigate('/chat')
+          }, 500)
+        } else {
+          toast.error('Failed to create confirmation key')
+          setSecretKey('')
+        }
+      } else {
+        // Verify existing secret key
+        const response = await fetch(
+          `${API_BASE}/users/${flow.userId}/verify-secret-key`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${flow.token}`,
+            },
+            body: JSON.stringify({ secretKey: secretKey })
+          }
+        )
+
+        if (response.status === 401) {
+          handleUnauthorized()
+          return
+        }
+
+        if (response.ok) {
+          const data = await response.json()
+          if (data.verified) {
+            setFlow((prev) => ({ ...prev, verified: true }))
+            toast.success('Confirmation key verified! Redirecting to chat...')
+            setShowSecretKeyModal(false)
+            setSecretKey('')
+            // Redirect to chat after a short delay
+            setTimeout(() => {
+              navigate('/chat')
+            }, 500)
+          } else {
+            toast.error('Wrong confirmation key! Few chances left!')
+            setSecretKey('')
+          }
+        } else {
+          toast.error('Error verifying confirmation key')
+          setSecretKey('')
+        }
+      }
+    } catch (error) {
+      console.error('Error with secret key:', error)
+      toast.error('An error occurred. Please try again.')
+      setSecretKey('')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  return (
+    <section className="profile-page">
+      <header className="profile-topbar">
+        <button className="profile-nav-btn" onClick={() => navigate(previousPage)}>Back</button>
+        <h2>Profile</h2>
+        <button className="profile-nav-btn" onClick={() => navigate(previousPage)}>Home</button>
+      </header>
+
+      <article className="profile-card">
+        <label className="profile-field">
+          <span>Name</span>
+          <input value={flow.username || ''} readOnly />
+        </label>
+        <label className="profile-field">
+          <span>Phone Number</span>
+          <input
+            value={flow.phone || ''}
+            onChange={(event) => updateProfile('phone', event.target.value)}
+            placeholder="+1 (555) 000-0000"
+          />
+        </label>
+        <label className="profile-field">
+          <span>DOB</span>
+          <input type="date" value={flow.dob || ''} onChange={(event) => updateProfile('dob', event.target.value)} />
+        </label>
+        <label className="profile-field">
+          <span>Email</span>
+          <input
+            type="email"
+            value={flow.email || ''}
+            onChange={(event) => updateProfile('email', event.target.value)}
+            placeholder="name@email.com"
+          />
+        </label>
+
+        <div className="profile-stats">
+          <h3>User Statistics</h3>
+          <p>RPS Wins: {wins.rps}</p>
+          <p>Coin Wins: {wins.coin}</p>
+          <p>Tic-Tac-Toe Wins: {wins.ttt}</p>
+          <p>Total Wins: {totalWins}</p>
+        </div>
+
+        <button 
+          className="profile-reset-secret-btn" 
+          onMouseDown={handleResetScoreMouseDown}
+          onMouseUp={handleResetScoreMouseUp}
+          onMouseLeave={handleResetScoreMouseLeave}
+          onTouchStart={handleResetScoreMouseDown}
+          onTouchEnd={handleResetScoreMouseUp}
+          disabled={isLoading}
+        >
+          Reset Secret
+        </button>
+      </article>
+
+      {/* Confirmation Key Modal */}
+      {showSecretKeyModal && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <h3 className="modal-title">
+              {isFirstTime ? 'Create Confirmation Key' : 'Verify Confirmation Key'}
+            </h3>
+            <p className="modal-description">
+              {isFirstTime 
+                ? 'Enter a key to reset score - this cannot be undone'
+                : 'Enter key to reset score - this cannot be undone'}
+            </p>
+            <input
+              type="password"
+              value={secretKey}
+              onChange={(e) => setSecretKey(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && !isLoading && verifySecretKey()}
+              placeholder="Enter your confirmation key"
+              autoFocus
+              disabled={isLoading}
+              className="modal-input"
+            />
+            <div className="modal-buttons">
+              <button
+                onClick={verifySecretKey}
+                disabled={isLoading}
+                className="modal-btn modal-btn-primary"
+              >
+                {isLoading ? 'Processing...' : isFirstTime ? 'Create' : 'Verify'}
+              </button>
+              <button
+                onClick={() => {
+                  setShowSecretKeyModal(false)
+                  setSecretKey('')
+                }}
+                disabled={isLoading}
+                className="modal-btn modal-btn-secondary"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  )
+}
+
+export default ProfilePage

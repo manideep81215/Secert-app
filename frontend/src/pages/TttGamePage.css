@@ -1,0 +1,82 @@
+.single-game-page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 1rem;
+  display: grid;
+  align-content: start;
+  gap: 1rem;
+  background:
+    radial-gradient(circle at 10% 16%, rgba(188, 237, 255, 0.45) 0%, rgba(188, 237, 255, 0) 36%),
+    radial-gradient(circle at 80% 24%, rgba(255, 220, 168, 0.35) 0%, rgba(255, 220, 168, 0) 42%),
+    linear-gradient(180deg, #81d5eb 0%, #b7f1f5 50%, #c4e7b2 100%);
+}
+
+.single-game-top {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.single-game-top h2 {
+  margin: 0;
+  text-align: center;
+  color: #4b2b15;
+  font-weight: 900;
+}
+
+.single-game-top button,
+.ttt-board-cell,
+.ttt-bottom button {
+  border: 2px solid #6a391b;
+  border-radius: 0.65rem;
+  background: #fff2cf;
+  color: #4f2d17;
+  font-weight: 700;
+  padding: 0.35rem 0.7rem;
+}
+
+.ttt-stage {
+  width: min(680px, 100%);
+  margin: 0 auto;
+  border: 3px solid #5d3117;
+  border-radius: 1rem;
+  background: linear-gradient(180deg, rgba(255, 248, 226, 0.96), rgba(246, 233, 200, 0.95));
+  padding: 1rem;
+  display: grid;
+  justify-items: center;
+  gap: 0.75rem;
+}
+
+.single-game-icon {
+  width: 120px;
+  height: 120px;
+  border-radius: 999px;
+  object-fit: contain;
+}
+
+.ttt-board-grid {
+  width: min(320px, 100%);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.ttt-board-cell {
+  min-height: 3rem;
+  font-size: 1.15rem;
+}
+
+.ttt-bottom {
+  width: min(320px, 100%);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.ttt-bottom p {
+  margin: 0;
+  color: #5d3a22;
+  font-weight: 700;
+}
