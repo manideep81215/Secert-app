@@ -33,10 +33,9 @@ public class AuthService {
         String phone = trimToNull(request.phone());
         String email = trimToNull(request.email());
         String dob = trimToNull(request.dob());
-        String secretKey = trimToNull(request.secretKey());
 
-        if (name == null || phone == null || email == null || dob == null || secretKey == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Name, phone, email, dob and secret key are required");
+        if (name == null || phone == null || email == null || dob == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Name, phone, email and dob are required");
         }
 
         UserEntity user = new UserEntity(username, passwordEncoder.encode(request.password()));
@@ -44,7 +43,6 @@ public class AuthService {
         user.setPhone(phone);
         user.setEmail(email);
         user.setDob(dob);
-        user.setSecretKey(secretKey);
         user = userRepository.save(user);
         String token = issueToken(user.getId());
         return new AuthResponseDto(user.getId(), user.getUsername(), token, "Registration successful");

@@ -25,7 +25,6 @@ function AuthPage() {
   const [phone, setPhone] = useState(flow.phone || '')
   const [email, setEmail] = useState(flow.email || '')
   const [dob, setDob] = useState(flow.dob || '')
-  const [secretKey, setSecretKey] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
@@ -39,8 +38,8 @@ function AuthPage() {
       toast.error('Password and confirm password must match.')
       return
     }
-    if (mode === 'register' && (!name.trim() || !phone.trim() || !email.trim() || !dob.trim() || !secretKey.trim())) {
-      toast.error('Fill name, phone, email, DOB and secret key.')
+    if (mode === 'register' && (!name.trim() || !phone.trim() || !email.trim() || !dob.trim())) {
+      toast.error('Fill name, phone, email and DOB.')
       return
     }
 
@@ -53,7 +52,6 @@ function AuthPage() {
             phone: phone.trim(),
             email: email.trim(),
             dob: dob.trim(),
-            secretKey: secretKey.trim(),
           }
         : { username: username.trim(), password }
       const response = mode === 'login' ? await loginUser(payload) : await registerUser(payload)
@@ -68,7 +66,7 @@ function AuthPage() {
         email: mode === 'register' ? email.trim() : (flow.email || ''),
         wins: flow.wins || { rps: 0, coin: 0, ttt: 0 },
         unlocked: false,
-        verified: mode === 'register' ? true : false,
+        verified: false,
       })
       toast.success(response.message || `${mode === 'login' ? 'Welcome back' : 'Profile created'} ${response.username}`)
       navigate('/games')
@@ -99,7 +97,6 @@ function AuthPage() {
                 <input className="input-fantasy" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone" />
                 <input className="input-fantasy" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" />
                 <input className="input-fantasy" type="date" value={dob} onChange={(e) => setDob(e.target.value)} />
-                <input className="input-fantasy" value={secretKey} onChange={(e) => setSecretKey(e.target.value)} placeholder="Secret Key" />
               </>
             )}
 
@@ -152,7 +149,6 @@ function AuthPage() {
               setMode((prev) => (prev === 'login' ? 'register' : 'login'))
               setConfirmPassword('')
               setShowConfirmPassword(false)
-              setSecretKey('')
             }}
           >
             {mode === 'login' ? 'Register' : 'Sign In'}
