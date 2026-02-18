@@ -2,6 +2,7 @@ import { useEffect, useRef, useMemo, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import { resetFlowScores, resetFlowState, useFlowState } from '../hooks/useFlowState'
+import { getUserById } from '../services/usersApi'
 import { API_APP_BASE_URL } from '../config/apiConfig'
 import './ProfilePage.css'
 
@@ -25,8 +26,34 @@ function ProfilePage() {
     if (!flow.username || !flow.token) {
       toast.error('You need to login first')
       navigate('/auth', { replace: true })
+      return
     }
-  }, [])
+    if (!flow.userId) return
+
+    const loadProfileFromDb = async () => {
+      try {
+        const dbUser = await getUserById(flow.userId, flow.token)
+        if (!dbUser) return
+        setFlow((prev) => ({
+          ...prev,
+          username: dbUser.username || prev.username,
+          name: dbUser.name || prev.name || '',
+          phone: dbUser.phone || '',
+          dob: dbUser.dob || '',
+          email: dbUser.email || '',
+        }))
+      } catch (error) {
+        if (error?.response?.status === 401) {
+          handleUnauthorized()
+          return
+        }
+        console.error('Failed loading profile from database', error)
+        toast.error('Failed to load profile details.')
+      }
+    }
+
+    loadProfileFromDb()
+  }, [flow.userId, flow.token, flow.username, navigate, setFlow])
 
   const updateProfile = (key, value) => {
     setFlow((prev) => ({ ...prev, [key]: value }))
@@ -187,8 +214,12 @@ function ProfilePage() {
 
       <article className="profile-card">
         <label className="profile-field">
-          <span>Name</span>
+          <span>Username</span>
           <input value={flow.username || ''} readOnly />
+        </label>
+        <label className="profile-field">
+          <span>Name</span>
+          <input value={flow.name || ''} readOnly />
         </label>
         <label className="profile-field">
           <span>Phone Number</span>

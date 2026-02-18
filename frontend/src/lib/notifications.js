@@ -57,6 +57,8 @@ export async function pushNotify(title, body) {
   const hasPermission = await ensureNotificationPermission(false)
   if (!hasPermission) return false
 
+  const chatUrl = `${window.location.origin}/#/chat`
+
   try {
     if ('serviceWorker' in navigator) {
       const registration = await navigator.serviceWorker.ready
@@ -65,6 +67,7 @@ export async function pushNotify(title, body) {
           body,
           tag: `chat-${Date.now()}`,
           renotify: false,
+          data: { url: chatUrl },
         })
         return true
       }
@@ -74,7 +77,12 @@ export async function pushNotify(title, body) {
   }
 
   try {
-    new Notification(title, { body })
+    const notification = new Notification(title, { body })
+    notification.onclick = () => {
+      window.focus()
+      window.location.hash = '/chat'
+      notification.close()
+    }
     return true
   } catch {
     // Ignore browser notification errors.

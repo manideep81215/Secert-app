@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import com.game.app.model.ChatMessageEntity;
 import com.game.app.model.ChatMediaEntity;
@@ -84,7 +85,10 @@ public class ChatMessageController {
       media.setData(file.getBytes());
       media = chatMediaRepository.save(media);
 
-      String mediaUrl = "http://localhost:8080/api/app/messages/media/" + media.getId();
+      String mediaUrl = ServletUriComponentsBuilder.fromCurrentContextPath()
+          .path("/api/app/messages/media/{id}")
+          .buildAndExpand(media.getId())
+          .toUriString();
       return new MediaUploadResponse(mediaUrl, media.getFileName(), media.getMimeType());
     } catch (Exception exception) {
       throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Unable to store media");

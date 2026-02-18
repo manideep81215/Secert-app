@@ -8,7 +8,7 @@ import { getMe } from '../services/authApi'
 import { getConversation, uploadMedia } from '../services/messagesApi'
 import { getAllUsers } from '../services/usersApi'
 import { ensureNotificationPermission, getNotifyCutoff, pushNotify, setNotifyCutoff } from '../lib/notifications'
-import { WS_CHAT_URL } from '../config/apiConfig'
+import { API_BASE_URL, WS_CHAT_URL } from '../config/apiConfig'
 import { resetFlowState, useFlowState } from '../hooks/useFlowState'
 import './ChatPageNew.css'
 
@@ -53,6 +53,7 @@ function ChatPageNew() {
   const recordingChunksRef = useRef([])
   const recordingTimerRef = useRef(null)
   const wsErrorToastAtRef = useRef(0)
+  const offlineSinceRef = useRef({})
   const CLEAR_CUTOFFS_KEY = 'chat_clear_cutoffs_v1'
 
   const formatUsername = (name) => {
@@ -105,6 +106,14 @@ function ChatPageNew() {
     if (!value) return getTimeLabel()
     return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   }
+  const normalizeMediaUrl = (url) => {
+    if (!url) return null
+    if (url.startsWith('/')) return `${API_BASE_URL}${url}`
+    if (url.startsWith('http://localhost:8080')) {
+      return `${API_BASE_URL}${url.slice('http://localhost:8080'.length)}`
+    }
+    return url
+  }
   const getMessagePreview = (messageType, textValue, fileNameValue) => {
     if (messageType === 'image') return 'Sent an image'
     if (messageType === 'video') return 'Sent a video'
@@ -145,7 +154,22 @@ function ChatPageNew() {
     }
     return { status: fallback, lastSeenAt: null }
   }
-  const selectedPresence = selectedUser ? getPresence(selectedUser.username, selectedUser.status) : { status: 'offline', lastSeenAt: null }
+  const getResolvedPresence = (username, fallback = 'offline') => {
+    const presence = getPresence(username, fallback)
+    if (presence.status === 'online') {
+      delete offlineSinceRef.current[username]
+      return presence
+    }
+    if (presence.lastSeenAt) {
+      offlineSinceRef.current[username] = presence.lastSeenAt
+      return presence
+    }
+    if (!offlineSinceRef.current[username]) {
+      offlineSinceRef.current[username] = Date.now()
+    }
+    return { ...presence, lastSeenAt: offlineSinceRef.current[username] }
+  }
+  const selectedPresence = selectedUser ? getResolvedPresence(selectedUser.username, selectedUser.status) : { status: 'offline', lastSeenAt: null }
   const selectedTyping = selectedUser ? Boolean(typingMap[selectedUser.username]) : false
 
   useEffect(() => {
@@ -250,7 +274,7 @@ function ChatPageNew() {
           text: row.text || '',
           type: row.type || null,
           fileName: row.fileName || null,
-          mediaUrl: row.mediaUrl || null,
+          mediaUrl: normalizeMediaUrl(row.mediaUrl),
           mimeType: row.mimeType || null,
           replyingTo: row.replyText ? { text: row.replyText, senderName: row.replySenderName || row.senderName } : null,
           senderName: formatUsername(row.senderName),
@@ -329,7 +353,7 @@ function ChatPageNew() {
               text,
               type: data?.type || null,
               fileName: data?.fileName || null,
-              mediaUrl: data?.mediaUrl || null,
+              mediaUrl: normalizeMediaUrl(data?.mediaUrl || null),
               mimeType: data?.mimeType || null,
               replyingTo: data?.replyingTo || (data?.replyText ? { text: data.replyText, senderName: data?.replySenderName || fromUsername } : null),
               createdAt: incomingCreatedAt || null,
@@ -577,7 +601,7 @@ function ChatPageNew() {
     () => users
       .filter((user) => user.username.toLowerCase().includes(searchQuery.toLowerCase()))
       .map((user) => {
-        const presence = getPresence(user.username, user.status)
+        const presence = getResolvedPresence(user.username, user.status)
         const isTyping = Boolean(typingMap[user.username])
         const presenceTime = presence.status === 'online' ? 'online' : toShortLastSeen(presence.lastSeenAt)
         return {
@@ -760,7 +784,7 @@ function ChatPageNew() {
 
     try {
       const uploaded = await uploadMedia(flow.token, file)
-      const uploadedUrl = uploaded?.mediaUrl || localPreviewUrl
+      const uploadedUrl = normalizeMediaUrl(uploaded?.mediaUrl || localPreviewUrl)
       const uploadedMime = uploaded?.mimeType || file.type || null
 
       setMessages((prev) => prev.map((msg) => (

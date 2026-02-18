@@ -19,3 +19,10 @@ export async function searchUsersByUsername(username, token) {
   })
   return data || []
 }
+
+export async function getUserById(userId, token) {
+  const { data } = await usersClient.get(`/${userId}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  })
+  return data
+}
