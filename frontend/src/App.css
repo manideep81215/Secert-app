@@ -59,3 +59,45 @@
 .pwa-install-btn:hover {
   filter: brightness(1.05);
 }
+
+.pwa-ios-help {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 3000;
+  width: min(18rem, calc(100vw - 2rem));
+  background: #fff7ea;
+  border: 1px solid #e6c188;
+  border-radius: 0.9rem;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
+  padding: 0.75rem 0.85rem 0.65rem;
+}
+
+.pwa-ios-help-close {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.45rem;
+  width: 1.3rem;
+  height: 1.3rem;
+  border: 0;
+  border-radius: 50%;
+  background: #e76f00;
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.pwa-ios-help-title {
+  margin: 0 1.6rem 0.25rem 0;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #6a3f00;
+}
+
+.pwa-ios-help-text {
+  margin: 0.08rem 0;
+  font-size: 0.82rem;
+  color: #7e5b27;
+}

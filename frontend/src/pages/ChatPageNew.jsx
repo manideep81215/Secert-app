@@ -7,7 +7,14 @@ import { toast } from 'react-toastify'
 import { getMe } from '../services/authApi'
 import { getConversation, uploadMedia } from '../services/messagesApi'
 import { getAllUsers } from '../services/usersApi'
-import { ensureNotificationPermission, getNotifyCutoff, pushNotify, setNotifyCutoff } from '../lib/notifications'
+import {
+  ensureNotificationPermission,
+  getNotificationBlockedHelp,
+  getNotificationPermissionState,
+  getNotifyCutoff,
+  pushNotify,
+  setNotifyCutoff,
+} from '../lib/notifications'
 import { API_BASE_URL, WS_CHAT_URL } from '../config/apiConfig'
 import { resetFlowState, useFlowState } from '../hooks/useFlowState'
 import './ChatPageNew.css'
@@ -37,7 +44,7 @@ function ChatPageNew() {
   const [isRecordingVoice, setIsRecordingVoice] = useState(false)
   const [recordingSeconds, setRecordingSeconds] = useState(0)
   const [notificationPermission, setNotificationPermission] = useState(
-    typeof Notification !== 'undefined' ? Notification.permission : 'unsupported'
+    getNotificationPermissionState()
   )
   const mediaInputRef = useRef(null)
   const fileInputRef = useRef(null)
@@ -526,20 +533,16 @@ function ChatPageNew() {
   }, [])
 
   useEffect(() => {
-    const requestOnFirstInteraction = () => {
-      ensureNotificationPermission(true).then((granted) => {
-        setNotificationPermission(granted ? 'granted' : (Notification?.permission || 'default'))
-      })
-      window.removeEventListener('pointerdown', requestOnFirstInteraction)
-      window.removeEventListener('keydown', requestOnFirstInteraction)
+    const syncPermission = () => {
+      setNotificationPermission(getNotificationPermissionState())
     }
 
-    window.addEventListener('pointerdown', requestOnFirstInteraction, { once: true })
-    window.addEventListener('keydown', requestOnFirstInteraction, { once: true })
-
+    syncPermission()
+    window.addEventListener('focus', syncPermission)
+    document.addEventListener('visibilitychange', syncPermission)
     return () => {
-      window.removeEventListener('pointerdown', requestOnFirstInteraction)
-      window.removeEventListener('keydown', requestOnFirstInteraction)
+      window.removeEventListener('focus', syncPermission)
+      document.removeEventListener('visibilitychange', syncPermission)
     }
   }, [])
 
@@ -553,7 +556,7 @@ function ChatPageNew() {
       return
     }
     if (current === 'denied') {
-      toast.error('Notifications are blocked in browser site settings.')
+      toast.error(getNotificationBlockedHelp(), { autoClose: 5500 })
     } else {
       toast.error('Notification permission not granted.')
     }

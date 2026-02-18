@@ -6,7 +6,7 @@ import { toast } from 'react-toastify'
 import { useFlowState, resetFlowState } from '../hooks/useFlowState'
 import { getConversation } from '../services/messagesApi'
 import { getAllUsers } from '../services/usersApi'
-import { ensureNotificationPermission, getNotifyCutoff, pushNotify, setNotifyCutoff } from '../lib/notifications'
+import { getNotifyCutoff, pushNotify, setNotifyCutoff } from '../lib/notifications'
 import { WS_CHAT_URL } from '../config/apiConfig'
 import './GamesPage.css'
 
@@ -31,22 +31,6 @@ function GamesPage() {
   useEffect(() => {
     if (!flow.username || !flow.token) navigate('/auth')
   }, [flow.username, flow.token, navigate])
-
-  useEffect(() => {
-    const requestOnFirstInteraction = () => {
-      ensureNotificationPermission(true)
-      window.removeEventListener('pointerdown', requestOnFirstInteraction)
-      window.removeEventListener('keydown', requestOnFirstInteraction)
-    }
-
-    window.addEventListener('pointerdown', requestOnFirstInteraction, { once: true })
-    window.addEventListener('keydown', requestOnFirstInteraction, { once: true })
-
-    return () => {
-      window.removeEventListener('pointerdown', requestOnFirstInteraction)
-      window.removeEventListener('keydown', requestOnFirstInteraction)
-    }
-  }, [])
 
   useEffect(() => {
     if (!flow.username || !flow.token) return

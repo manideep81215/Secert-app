@@ -53,6 +53,27 @@ export async function ensureNotificationPermission(interactive = false) {
   }
 }
 
+export function getNotificationPermissionState() {
+  if (typeof window === 'undefined' || !('Notification' in window)) return 'unsupported'
+  return Notification.permission || 'default'
+}
+
+export function getNotificationBlockedHelp() {
+  if (typeof window === 'undefined') return 'Notifications are blocked. Enable them in browser/app settings and reload.'
+  const ua = window.navigator.userAgent.toLowerCase()
+  const isAndroid = /android/.test(ua)
+  const isIos = /iphone|ipad|ipod/.test(ua)
+  const isStandalone = window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true
+
+  if (isIos && isStandalone) {
+    return 'Notifications are blocked. On iPhone: Settings > Notifications > this app > Allow Notifications, then reopen the app.'
+  }
+  if (isAndroid && isStandalone) {
+    return 'Notifications are blocked. On Android: long-press app icon > App info > Notifications > Allow, then reopen the app.'
+  }
+  return 'Notifications are blocked. Open browser Site settings for this app URL and set Notifications to Allow, then reload.'
+}
+
 export async function pushNotify(title, body) {
   const hasPermission = await ensureNotificationPermission(false)
   if (!hasPermission) return false
