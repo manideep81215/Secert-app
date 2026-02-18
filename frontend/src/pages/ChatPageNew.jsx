@@ -52,6 +52,7 @@ function ChatPageNew() {
   const recordingStreamRef = useRef(null)
   const recordingChunksRef = useRef([])
   const recordingTimerRef = useRef(null)
+  const wsErrorToastAtRef = useRef(0)
   const CLEAR_CUTOFFS_KEY = 'chat_clear_cutoffs_v1'
 
   const formatUsername = (name) => {
@@ -278,6 +279,8 @@ function ChatPageNew() {
         username: flow.username,
         Authorization: `Bearer ${flow.token}`,
       },
+      heartbeatIncoming: 20000,
+      heartbeatOutgoing: 20000,
       reconnectDelay: 1000,
       onConnect: () => {
         client.publish({
@@ -404,10 +407,16 @@ function ChatPageNew() {
         })
       },
       onWebSocketError: () => {
-        toast.error('Realtime chat server unavailable.')
+        notifyRealtimeIssue('Realtime connection error (websocket).')
       },
-      onStompError: () => {
-        toast.error('Realtime chat server unavailable.')
+      onWebSocketClose: (event) => {
+        const code = event?.code ?? 'n/a'
+        const reason = event?.reason ? `: ${event.reason}` : ''
+        notifyRealtimeIssue(`Realtime disconnected (${code})${reason}`)
+      },
+      onStompError: (frame) => {
+        const reason = frame?.headers?.message || frame?.body || 'STOMP broker error'
+        notifyRealtimeIssue(`Realtime error: ${reason}`)
       },
     })
 
@@ -517,6 +526,13 @@ function ChatPageNew() {
     } else {
       toast.error('Notification permission not granted.')
     }
+  }
+
+  const notifyRealtimeIssue = (message) => {
+    const now = Date.now()
+    if (now - wsErrorToastAtRef.current < 3000) return
+    wsErrorToastAtRef.current = now
+    toast.error(message)
   }
 
   useEffect(() => {

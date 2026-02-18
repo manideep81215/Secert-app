@@ -1,7 +1,8 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Client } from '@stomp/stompjs'
 import SockJS from 'sockjs-client'
+import { toast } from 'react-toastify'
 import { useFlowState, resetFlowState } from '../hooks/useFlowState'
 import { getConversation } from '../services/messagesApi'
 import { getAllUsers } from '../services/usersApi'
@@ -18,6 +19,14 @@ const GAME_ITEMS = [
 function GamesPage() {
   const navigate = useNavigate()
   const [flow, setFlow] = useFlowState()
+  const wsErrorToastAtRef = useRef(0)
+
+  const notifyRealtimeIssue = (message) => {
+    const now = Date.now()
+    if (now - wsErrorToastAtRef.current < 3000) return
+    wsErrorToastAtRef.current = now
+    toast.error(message)
+  }
 
   useEffect(() => {
     if (!flow.username || !flow.token) navigate('/auth')
@@ -48,6 +57,8 @@ function GamesPage() {
         username: flow.username,
         Authorization: `Bearer ${flow.token}`,
       },
+      heartbeatIncoming: 20000,
+      heartbeatOutgoing: 20000,
       reconnectDelay: 1200,
       onConnect: () => {
         client.subscribe('/user/queue/messages', async (frame) => {
@@ -73,6 +84,18 @@ function GamesPage() {
             // Ignore invalid realtime payloads.
           }
         })
+      },
+      onWebSocketError: () => {
+        notifyRealtimeIssue('Realtime connection error on dashboard.')
+      },
+      onWebSocketClose: (event) => {
+        const code = event?.code ?? 'n/a'
+        const reason = event?.reason ? `: ${event.reason}` : ''
+        notifyRealtimeIssue(`Dashboard realtime disconnected (${code})${reason}`)
+      },
+      onStompError: (frame) => {
+        const reason = frame?.headers?.message || frame?.body || 'STOMP broker error'
+        notifyRealtimeIssue(`Dashboard realtime error: ${reason}`)
       },
     })
 

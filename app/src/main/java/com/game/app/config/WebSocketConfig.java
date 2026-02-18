@@ -36,6 +36,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     registry.addEndpoint("/ws")
         .setAllowedOriginPatterns(origins)
         .withSockJS()
+        .setSessionCookieNeeded(false)
         .setStreamBytesLimit(2 * 1024 * 1024)
         .setHttpMessageCacheSize(1000)
         .setDisconnectDelay(30_000);
@@ -43,6 +44,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     registry.addEndpoint("/ws-chat")
         .setAllowedOriginPatterns(origins)
         .withSockJS()
+        .setSessionCookieNeeded(false)
         .setStreamBytesLimit(2 * 1024 * 1024)
         .setHttpMessageCacheSize(1000)
         .setDisconnectDelay(30_000);
