@@ -4,31 +4,11 @@
 
 .app-auth-route {
   min-height: 100vh;
-  height: 100vh;
-  overflow: hidden;
 }
 
 .app-auth-max {
   width: 100%;
   min-height: 100vh;
-  height: 100vh;
-  overflow: hidden;
-}
-
-@supports (height: 100svh) {
-  .app-auth-route,
-  .app-auth-max {
-    min-height: 100svh;
-    height: 100svh;
-  }
-}
-
-@supports (height: 100dvh) {
-  .app-auth-route,
-  .app-auth-max {
-    min-height: 100dvh;
-    height: 100dvh;
-  }
 }
 
 .app-max {
@@ -59,65 +39,4 @@
 .btn-accent:hover {
   color: #fff;
   background: linear-gradient(90deg, var(--accent-dark), #f59517);
-}
-
-.pwa-install-btn {
-  position: fixed;
-  right: 1rem;
-  bottom: 1rem;
-  z-index: 3000;
-  border: 0;
-  border-radius: 999px;
-  padding: 0.58rem 1rem;
-  font-size: 0.9rem;
-  font-weight: 700;
-  color: #fff;
-  background: linear-gradient(135deg, #ff8f00 0%, #ef6c00 100%);
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.22);
-}
-
-.pwa-install-btn:hover {
-  filter: brightness(1.05);
-}
-
-.pwa-ios-help {
-  position: fixed;
-  right: 1rem;
-  bottom: 1rem;
-  z-index: 3000;
-  width: min(18rem, calc(100vw - 2rem));
-  background: #fff7ea;
-  border: 1px solid #e6c188;
-  border-radius: 0.9rem;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
-  padding: 0.75rem 0.85rem 0.65rem;
-}
-
-.pwa-ios-help-close {
-  position: absolute;
-  top: 0.35rem;
-  right: 0.45rem;
-  width: 1.3rem;
-  height: 1.3rem;
-  border: 0;
-  border-radius: 50%;
-  background: #e76f00;
-  color: #fff;
-  font-size: 0.78rem;
-  font-weight: 700;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.pwa-ios-help-title {
-  margin: 0 1.6rem 0.25rem 0;
-  font-size: 0.92rem;
-  font-weight: 700;
-  color: #6a3f00;
-}
-
-.pwa-ios-help-text {
-  margin: 0.08rem 0;
-  font-size: 0.82rem;
-  color: #7e5b27;
 }
