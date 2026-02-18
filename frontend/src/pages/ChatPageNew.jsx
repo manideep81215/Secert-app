@@ -237,10 +237,13 @@ function ChatPageNew() {
         const dbUsers = await getAllUsers(flow.token)
         const me = (flow.username || '').toLowerCase()
         const list = (dbUsers || [])
-          .filter((user) => (user?.username || '').toLowerCase() !== me)
+          .filter((user) => {
+            const username = (user?.username || '').trim()
+            return username && username.toLowerCase() !== me
+          })
           .map((user) => ({
             id: user.id,
-            username: user.username,
+            username: (user.username || '').trim(),
             status: 'offline',
             lastMessage: '',
             timestamp: '',
@@ -606,7 +609,7 @@ function ChatPageNew() {
 
   const filteredUsers = useMemo(
     () => users
-      .filter((user) => user.username.toLowerCase().includes(searchQuery.toLowerCase()))
+      .filter((user) => (user?.username || '').toLowerCase().includes(searchQuery.toLowerCase()))
       .map((user) => {
         const presence = getResolvedPresence(user.username, user.status)
         const isTyping = Boolean(typingMap[user.username])
