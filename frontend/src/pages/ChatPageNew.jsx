@@ -261,6 +261,12 @@ function ChatPageNew() {
         setReplyingTo(null)
       })
       .catch((error) => {
+        if (error?.response?.status === 401) {
+          toast.error('Session expired. Please login again.')
+          resetFlowState(setFlow)
+          navigate('/auth')
+          return
+        }
         console.error('Failed loading conversation', error)
         toast.error('Failed to load conversation history.')
       })
@@ -411,6 +417,7 @@ function ChatPageNew() {
       },
       onWebSocketClose: (event) => {
         const code = event?.code ?? 'n/a'
+        if (code === 1000 || code === 1001) return
         const reason = event?.reason ? `: ${event.reason}` : ''
         notifyRealtimeIssue(`Realtime disconnected (${code})${reason}`)
       },

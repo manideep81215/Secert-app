@@ -90,6 +90,7 @@ function GamesPage() {
       },
       onWebSocketClose: (event) => {
         const code = event?.code ?? 'n/a'
+        if (code === 1000 || code === 1001) return
         const reason = event?.reason ? `: ${event.reason}` : ''
         notifyRealtimeIssue(`Dashboard realtime disconnected (${code})${reason}`)
       },
@@ -132,7 +133,13 @@ function GamesPage() {
           setNotifyCutoff(flow.username, peerUsername, latest || Date.now())
           await pushNotify(`@${peerUsername}`, `${missed.length} new message${missed.length > 1 ? 's' : ''}`)
         }
-      } catch {
+      } catch (error) {
+        if (error?.response?.status === 401) {
+          toast.error('Session expired. Please login again.')
+          resetFlowState(setFlow)
+          navigate('/auth')
+          return
+        }
         // Ignore missed-notification sync failures on dashboard.
       }
     }
