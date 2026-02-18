@@ -40,3 +40,22 @@
   color: #fff;
   background: linear-gradient(90deg, var(--accent-dark), #f59517);
 }
+
+.pwa-install-btn {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 3000;
+  border: 0;
+  border-radius: 999px;
+  padding: 0.58rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #ff8f00 0%, #ef6c00 100%);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.22);
+}
+
+.pwa-install-btn:hover {
+  filter: brightness(1.05);
+}

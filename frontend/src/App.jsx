@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { ToastContainer } from 'react-toastify'
@@ -21,6 +22,8 @@ const pageMotion = {
 
 function App() {
   const location = useLocation()
+  const [installPromptEvent, setInstallPromptEvent] = useState(null)
+  const [isAppInstalled, setIsAppInstalled] = useState(false)
   const isFullBleedRoute =
     location.pathname === '/auth' ||
     location.pathname.startsWith('/games') ||
@@ -28,6 +31,41 @@ function App() {
     location.pathname === '/verify' ||
     location.pathname === '/users' ||
     location.pathname === '/chat'
+
+  useEffect(() => {
+    const checkInstalled = () => {
+      const standalone = window.matchMedia?.('(display-mode: standalone)').matches
+      const iosStandalone = window.navigator.standalone === true
+      setIsAppInstalled(Boolean(standalone || iosStandalone))
+    }
+
+    const onBeforeInstallPrompt = (event) => {
+      event.preventDefault()
+      setInstallPromptEvent(event)
+      checkInstalled()
+    }
+
+    const onAppInstalled = () => {
+      setInstallPromptEvent(null)
+      setIsAppInstalled(true)
+    }
+
+    checkInstalled()
+    window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt)
+    window.addEventListener('appinstalled', onAppInstalled)
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt)
+      window.removeEventListener('appinstalled', onAppInstalled)
+    }
+  }, [])
+
+  const handleInstall = async () => {
+    if (!installPromptEvent) return
+    installPromptEvent.prompt()
+    const result = await installPromptEvent.userChoice
+    if (result?.outcome !== 'accepted') return
+    setInstallPromptEvent(null)
+  }
 
   return (
     <div className={`app-wrap container-fluid ${isFullBleedRoute ? 'app-auth-route p-0' : 'py-4 px-3 px-md-4'}`}>
@@ -50,6 +88,12 @@ function App() {
           </motion.div>
         </AnimatePresence>
       </div>
+
+      {!isAppInstalled && installPromptEvent && (
+        <button className="pwa-install-btn" onClick={handleInstall} aria-label="Install app">
+          Install App
+        </button>
+      )}
 
       <ToastContainer position="bottom-left" autoClose={1800} hideProgressBar />
     </div>
