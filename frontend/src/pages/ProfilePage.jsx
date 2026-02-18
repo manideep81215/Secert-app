@@ -2,9 +2,10 @@ import { useEffect, useRef, useMemo, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import { resetFlowScores, resetFlowState, useFlowState } from '../hooks/useFlowState'
+import { API_APP_BASE_URL } from '../config/apiConfig'
 import './ProfilePage.css'
 
-const API_BASE = 'http://localhost:8080/api/app'
+const API_BASE = API_APP_BASE_URL
 
 function ProfilePage() {
   const navigate = useNavigate()

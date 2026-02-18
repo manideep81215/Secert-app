@@ -1,7 +1,8 @@
 import axios from 'axios'
+import { API_APP_BASE_URL } from '../config/apiConfig'
 
 const messagesClient = axios.create({
-  baseURL: 'http://localhost:8080/api/app/messages',
+  baseURL: `${API_APP_BASE_URL}/messages`,
   timeout: 10000,
 })
 

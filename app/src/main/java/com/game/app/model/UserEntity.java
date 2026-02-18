@@ -21,6 +21,18 @@ public class UserEntity {
     @Column(nullable = false, length = 120)
     private String passwordHash;
 
+    @Column(length = 120)
+    private String name;
+
+    @Column(length = 40)
+    private String phone;
+
+    @Column(length = 120)
+    private String email;
+
+    @Column(length = 20)
+    private String dob;
+
     @Column(length = 255)
     private String secretKey;
 
@@ -50,5 +62,37 @@ public class UserEntity {
 
     public void setSecretKey(String secretKey) {
         this.secretKey = secretKey;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public String getPhone() {
+        return phone;
+    }
+
+    public void setPhone(String phone) {
+        this.phone = phone;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
+    }
+
+    public String getDob() {
+        return dob;
+    }
+
+    public void setDob(String dob) {
+        this.dob = dob;
     }
 }

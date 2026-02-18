@@ -6,6 +6,7 @@ import { useFlowState, resetFlowState } from '../hooks/useFlowState'
 import { getConversation } from '../services/messagesApi'
 import { getAllUsers } from '../services/usersApi'
 import { ensureNotificationPermission, getNotifyCutoff, pushNotify, setNotifyCutoff } from '../lib/notifications'
+import { WS_CHAT_URL } from '../config/apiConfig'
 import './GamesPage.css'
 
 const GAME_ITEMS = [
@@ -42,7 +43,7 @@ function GamesPage() {
     if (!flow.username || !flow.token) return
 
     const client = new Client({
-      webSocketFactory: () => new SockJS('http://localhost:8080/ws-chat'),
+      webSocketFactory: () => new SockJS(WS_CHAT_URL),
       connectHeaders: {
         username: flow.username,
         Authorization: `Bearer ${flow.token}`,

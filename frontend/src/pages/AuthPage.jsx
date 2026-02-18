@@ -21,6 +21,11 @@ function AuthPage() {
   const [username, setUsername] = useState(flow.username || '')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [name, setName] = useState(flow.name || '')
+  const [phone, setPhone] = useState(flow.phone || '')
+  const [email, setEmail] = useState(flow.email || '')
+  const [dob, setDob] = useState(flow.dob || '')
+  const [secretKey, setSecretKey] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
@@ -34,21 +39,36 @@ function AuthPage() {
       toast.error('Password and confirm password must match.')
       return
     }
+    if (mode === 'register' && (!name.trim() || !phone.trim() || !email.trim() || !dob.trim() || !secretKey.trim())) {
+      toast.error('Fill name, phone, email, DOB and secret key.')
+      return
+    }
 
     try {
-      const payload = { username: username.trim(), password }
+      const payload = mode === 'register'
+        ? {
+            username: username.trim(),
+            password,
+            name: name.trim(),
+            phone: phone.trim(),
+            email: email.trim(),
+            dob: dob.trim(),
+            secretKey: secretKey.trim(),
+          }
+        : { username: username.trim(), password }
       const response = mode === 'login' ? await loginUser(payload) : await registerUser(payload)
 
       setFlow({
         userId: response.userId,
         username: response.username,
         token: response.token,
-        phone: flow.phone || '',
-        dob: flow.dob || '',
-        email: flow.email || '',
+        name: mode === 'register' ? name.trim() : (flow.name || ''),
+        phone: mode === 'register' ? phone.trim() : (flow.phone || ''),
+        dob: mode === 'register' ? dob.trim() : (flow.dob || ''),
+        email: mode === 'register' ? email.trim() : (flow.email || ''),
         wins: flow.wins || { rps: 0, coin: 0, ttt: 0 },
         unlocked: false,
-        verified: false,
+        verified: mode === 'register' ? true : false,
       })
       toast.success(response.message || `${mode === 'login' ? 'Welcome back' : 'Profile created'} ${response.username}`)
       navigate('/games')
@@ -72,6 +92,16 @@ function AuthPage() {
 
           <form className="parchment-form" onSubmit={submit}>
             <input className="input-fantasy" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Username" />
+
+            {mode === 'register' && (
+              <>
+                <input className="input-fantasy" value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" />
+                <input className="input-fantasy" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone" />
+                <input className="input-fantasy" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" />
+                <input className="input-fantasy" type="date" value={dob} onChange={(e) => setDob(e.target.value)} />
+                <input className="input-fantasy" value={secretKey} onChange={(e) => setSecretKey(e.target.value)} placeholder="Secret Key" />
+              </>
+            )}
 
             <div className="password-wrap">
               <input
@@ -122,6 +152,7 @@ function AuthPage() {
               setMode((prev) => (prev === 'login' ? 'register' : 'login'))
               setConfirmPassword('')
               setShowConfirmPassword(false)
+              setSecretKey('')
             }}
           >
             {mode === 'login' ? 'Register' : 'Sign In'}

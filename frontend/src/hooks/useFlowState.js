@@ -6,6 +6,7 @@ const emptyFlow = {
   userId: null,
   username: '',
   token: '',
+  name: '',
   phone: '',
   dob: '',
   email: '',

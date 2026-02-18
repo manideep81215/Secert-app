@@ -1,7 +1,8 @@
 import axios from 'axios'
+import { API_APP_BASE_URL } from '../config/apiConfig'
 
 const usersClient = axios.create({
-  baseURL: 'http://localhost:8080/api/app/users'
+  baseURL: `${API_APP_BASE_URL}/users`
 })
 
 export async function getAllUsers(token) {

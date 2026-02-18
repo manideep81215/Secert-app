@@ -1,7 +1,8 @@
 import axios from 'axios'
+import { API_APP_BASE_URL } from '../config/apiConfig'
 
 const authClient = axios.create({
-  baseURL: 'http://localhost:8080/api/app/auth',
+  baseURL: `${API_APP_BASE_URL}/auth`,
   timeout: 7000,
 })
 

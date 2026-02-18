@@ -8,6 +8,7 @@ import { getMe } from '../services/authApi'
 import { getConversation, uploadMedia } from '../services/messagesApi'
 import { getAllUsers } from '../services/usersApi'
 import { ensureNotificationPermission, getNotifyCutoff, pushNotify, setNotifyCutoff } from '../lib/notifications'
+import { WS_CHAT_URL } from '../config/apiConfig'
 import { resetFlowState, useFlowState } from '../hooks/useFlowState'
 import './ChatPageNew.css'
 
@@ -272,7 +273,7 @@ function ChatPageNew() {
     if (!flow.token || !flow.username) return
 
     const client = new Client({
-      webSocketFactory: () => new SockJS('http://localhost:8080/ws-chat'),
+      webSocketFactory: () => new SockJS(WS_CHAT_URL),
       connectHeaders: {
         username: flow.username,
         Authorization: `Bearer ${flow.token}`,

@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import { resetFlowState, useFlowState } from '../hooks/useFlowState'
 import { pushNotify } from '../lib/notifications'
+import { API_APP_BASE_URL } from '../config/apiConfig'
 import './VerifyPage.css'
 
-const API_BASE = 'http://localhost:8080/api/app'
+const API_BASE = API_APP_BASE_URL
 
 function VerifyPage() {
   const navigate = useNavigate()

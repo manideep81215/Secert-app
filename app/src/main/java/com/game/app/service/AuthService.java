@@ -29,8 +29,23 @@ public class AuthService {
         if (userRepository.existsByUsername(username)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Username already exists");
         }
+        String name = trimToNull(request.name());
+        String phone = trimToNull(request.phone());
+        String email = trimToNull(request.email());
+        String dob = trimToNull(request.dob());
+        String secretKey = trimToNull(request.secretKey());
 
-        UserEntity user = userRepository.save(new UserEntity(username, passwordEncoder.encode(request.password())));
+        if (name == null || phone == null || email == null || dob == null || secretKey == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Name, phone, email, dob and secret key are required");
+        }
+
+        UserEntity user = new UserEntity(username, passwordEncoder.encode(request.password()));
+        user.setName(name);
+        user.setPhone(phone);
+        user.setEmail(email);
+        user.setDob(dob);
+        user.setSecretKey(secretKey);
+        user = userRepository.save(user);
         String token = issueToken(user.getId());
         return new AuthResponseDto(user.getId(), user.getUsername(), token, "Registration successful");
     }
@@ -79,5 +94,11 @@ public class AuthService {
 
     private String normalizeUsername(String username) {
         return username == null ? "" : username.trim().toLowerCase();
+    }
+
+    private String trimToNull(String value) {
+        if (value == null) return null;
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }
