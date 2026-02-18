@@ -312,13 +312,17 @@ function ChatPageNew() {
   }, [messages])
 
   useEffect(() => {
-    if (!flow.token || !flow.username) return
+    const authToken = (flow.token || '').trim()
+    const authUsername = (flow.username || '').trim()
+    if (!authToken || !authUsername) return
 
     const client = new Client({
-      webSocketFactory: () => new SockJS(WS_CHAT_URL),
+      webSocketFactory: () => new SockJS(WS_CHAT_URL, null, {
+        transports: ['websocket', 'xhr-streaming', 'xhr-polling'],
+      }),
       connectHeaders: {
-        username: flow.username,
-        Authorization: `Bearer ${flow.token}`,
+        username: authUsername,
+        Authorization: `Bearer ${authToken}`,
       },
       heartbeatIncoming: 20000,
       heartbeatOutgoing: 20000,
@@ -326,7 +330,7 @@ function ChatPageNew() {
       onConnect: () => {
         client.publish({
           destination: '/app/user.online',
-          body: JSON.stringify({ username: flow.username }),
+          body: JSON.stringify({ username: authUsername }),
         })
 
         const consumeStatus = (frame) => {
@@ -375,7 +379,7 @@ function ChatPageNew() {
             incoming.timestamp = formatTimestamp(incoming.createdAt)
             const incomingPreview = getMessagePreview(incoming.type, incoming.text, incoming.fileName)
             await pushNotify(`@${formatUsername(fromUsername)}`, incomingPreview)
-            setNotifyCutoff(flow.username, fromUsername, incomingCreatedAt || Date.now())
+            setNotifyCutoff(authUsername, fromUsername, incomingCreatedAt || Date.now())
 
             setUsers((prev) =>
               prev.map((user) =>
@@ -469,7 +473,7 @@ function ChatPageNew() {
       if (client.connected) {
         client.publish({
           destination: '/app/user.offline',
-          body: JSON.stringify({ username: flow.username }),
+          body: JSON.stringify({ username: authUsername }),
         })
       }
       client.deactivate()

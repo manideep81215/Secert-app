@@ -33,13 +33,17 @@ function GamesPage() {
   }, [flow.username, flow.token, navigate])
 
   useEffect(() => {
-    if (!flow.username || !flow.token) return
+    const authToken = (flow.token || '').trim()
+    const authUsername = (flow.username || '').trim()
+    if (!authUsername || !authToken) return
 
     const client = new Client({
-      webSocketFactory: () => new SockJS(WS_CHAT_URL),
+      webSocketFactory: () => new SockJS(WS_CHAT_URL, null, {
+        transports: ['websocket', 'xhr-streaming', 'xhr-polling'],
+      }),
       connectHeaders: {
-        username: flow.username,
-        Authorization: `Bearer ${flow.token}`,
+        username: authUsername,
+        Authorization: `Bearer ${authToken}`,
       },
       heartbeatIncoming: 20000,
       heartbeatOutgoing: 20000,
@@ -63,7 +67,7 @@ function GamesPage() {
                     : text
 
             await pushNotify(`@${fromUsername}`, preview || 'New message')
-            setNotifyCutoff(flow.username, fromUsername, Number(payload?.createdAt || Date.now()))
+            setNotifyCutoff(authUsername, fromUsername, Number(payload?.createdAt || Date.now()))
           } catch {
             // Ignore invalid realtime payloads.
           }
