@@ -1,5 +1,28 @@
-const FALLBACK_BASE_URL = 'http://localhost:8080'
+import axios from 'axios'
+import { API_APP_BASE_URL } from '../config/apiConfig'
 
-export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || FALLBACK_BASE_URL).replace(/\/+$/, '')
-export const API_APP_BASE_URL = `${API_BASE_URL}/api/app`
-export const WS_CHAT_URL = `${API_BASE_URL}/ws-chat`
+const authClient = axios.create({
+  baseURL: `${API_APP_BASE_URL}/auth`,
+  timeout: 7000,
+  withCredentials: true,  // ✅ Required for iOS CORS
+  headers: {
+    'Content-Type': 'application/json',
+  },
+})
+
+export async function registerUser(payload) {
+  const { data } = await authClient.post('/register', payload)
+  return data
+}
+
+export async function loginUser(payload) {
+  const { data } = await authClient.post('/login', payload)
+  return data
+}
+
+export async function getMe(token) {
+  const { data } = await authClient.get('/me', {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  return data
+}

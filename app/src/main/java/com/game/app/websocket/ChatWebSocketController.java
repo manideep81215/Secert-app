@@ -14,18 +14,24 @@ import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 
 import com.game.app.model.ChatMessageEntity;
 import com.game.app.repository.ChatMessageRepository;
+import com.game.app.service.PushNotificationService;
 
 @Controller
 public class ChatWebSocketController {
 
   private final SimpMessagingTemplate messagingTemplate;
   private final ChatMessageRepository chatMessageRepository;
+  private final PushNotificationService pushNotificationService;
   private final Set<String> onlineUsers = ConcurrentHashMap.newKeySet();
   private final Map<String, Long> lastSeenMap = new ConcurrentHashMap<>();
 
-  public ChatWebSocketController(SimpMessagingTemplate messagingTemplate, ChatMessageRepository chatMessageRepository) {
+  public ChatWebSocketController(
+      SimpMessagingTemplate messagingTemplate,
+      ChatMessageRepository chatMessageRepository,
+      PushNotificationService pushNotificationService) {
     this.messagingTemplate = messagingTemplate;
     this.chatMessageRepository = chatMessageRepository;
+    this.pushNotificationService = pushNotificationService;
   }
 
   @MessageMapping("/chat.send")
@@ -80,6 +86,15 @@ public class ChatWebSocketController {
             true,
             entity.getId(),
             entity.getCreatedAt() != null ? entity.getCreatedAt().toEpochMilli() : Instant.now().toEpochMilli()));
+
+    if (!onlineUsers.contains(normalizedTo)) {
+      String preview = messagePreview(payload.message(), payload.type(), payload.fileName());
+      pushNotificationService.notifyUser(
+          normalizedTo,
+          "@" + normalizedFrom,
+          preview,
+          "/#/chat?with=" + normalizedFrom);
+    }
   }
 
   @MessageMapping("/user.online")
@@ -168,6 +183,16 @@ public class ChatWebSocketController {
 
   private String normalizeUsername(String username) {
     return username == null ? "" : username.trim().toLowerCase();
+  }
+
+  private String messagePreview(String text, String type, String fileName) {
+    if ("image".equalsIgnoreCase(type)) return "Sent an image";
+    if ("video".equalsIgnoreCase(type)) return "Sent a video";
+    if ("voice".equalsIgnoreCase(type)) return "Sent a voice message";
+    if ("file".equalsIgnoreCase(type)) {
+      return fileName != null && !fileName.isBlank() ? "Sent file: " + fileName : "Sent a file";
+    }
+    return text != null ? text : "New message";
   }
 
   public record ChatMessage(

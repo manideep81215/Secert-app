@@ -11,6 +11,8 @@ import VerifyPage from './pages/VerifyPage'
 import UsersListPage from './pages/UsersListPage'
 import ChatPageNew from './pages/ChatPageNew'
 import ProfilePage from './pages/ProfilePage'
+import { useFlowState } from './hooks/useFlowState'
+import { ensurePushSubscription } from './lib/pushSubscription'
 import './App.css'
 
 const pageMotion = {
@@ -22,6 +24,7 @@ const pageMotion = {
 
 function App() {
   const location = useLocation()
+  const [flow] = useFlowState()
   const [installPromptEvent, setInstallPromptEvent] = useState(null)
   const [isAppInstalled, setIsAppInstalled] = useState(false)
   const [showIosInstallHelp, setShowIosInstallHelp] = useState(false)
@@ -87,6 +90,14 @@ function App() {
     window.localStorage.setItem('ios_install_help_dismissed', 'true')
     setShowIosInstallHelp(false)
   }
+
+  useEffect(() => {
+    if (!flow?.token) return
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return
+    ensurePushSubscription(flow.token).catch(() => {
+      // Ignore push subscription setup failures.
+    })
+  }, [flow?.token])
 
   return (
     <div className={`app-wrap container-fluid ${isFullBleedRoute ? 'app-auth-route p-0' : 'py-4 px-3 px-md-4'}`}>

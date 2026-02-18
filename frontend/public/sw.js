@@ -3,6 +3,28 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim())
 })
 
+self.addEventListener('push', (event) => {
+  let payload = {}
+  try {
+    payload = event.data ? event.data.json() : {}
+  } catch {
+    payload = {}
+  }
+
+  const title = payload.title || 'New message'
+  const body = payload.body || 'You have a new message.'
+  const url = payload.url || `${self.location.origin}/#/chat`
+
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      tag: `push-${Date.now()}`,
+      data: { url },
+      renotify: false,
+    })
+  )
+})
+
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
 

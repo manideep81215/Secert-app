@@ -15,6 +15,7 @@ import {
   pushNotify,
   setNotifyCutoff,
 } from '../lib/notifications'
+import { ensurePushSubscription } from '../lib/pushSubscription'
 import { API_BASE_URL, WS_CHAT_URL } from '../config/apiConfig'
 import { resetFlowState, useFlowState } from '../hooks/useFlowState'
 import './ChatPageNew.css'
@@ -146,7 +147,7 @@ function ChatPageNew() {
   const toLongLastSeen = (lastSeenAt) => {
     if (!lastSeenAt) return 'offline'
     const diffSeconds = Math.max(0, Math.floor((Date.now() - lastSeenAt) / 1000))
-    if (diffSeconds < 60) return 'last seen just now'
+    if (diffSeconds < 60) return 'last seen 1 min ago'
     const minutes = Math.floor(diffSeconds / 60)
     if (minutes < 60) return `last seen ${minutes} min ago`
     const hours = Math.floor(minutes / 60)
@@ -553,6 +554,9 @@ function ChatPageNew() {
     if (granted) {
       toast.success('Notifications enabled.')
       await pushNotify('Notifications Enabled', 'You will get alerts for incoming and outgoing messages.')
+      if (flow?.token) {
+        await ensurePushSubscription(flow.token)
+      }
       return
     }
     if (current === 'denied') {
@@ -620,19 +624,22 @@ function ChatPageNew() {
   useEffect(() => {
     const requestedUserId = location.state?.selectedUserId
     const requestedUsername = location.state?.selectedUsername
-    if (!requestedUserId && !requestedUsername) return
+    const requestedFromQuery = new URLSearchParams(location.search).get('with')
+    const normalizedFromQuery = requestedFromQuery ? formatUsername(requestedFromQuery).toLowerCase() : ''
+    if (!requestedUserId && !requestedUsername && !normalizedFromQuery) return
     if (!users.length) return
 
     const nextSelectedUser = users.find((user) =>
       (requestedUserId && user.id === requestedUserId) ||
-      (requestedUsername && user.username === requestedUsername)
+      (requestedUsername && user.username === requestedUsername) ||
+      (normalizedFromQuery && user.username.toLowerCase() === normalizedFromQuery)
     )
 
     if (nextSelectedUser) {
       setSelectedUser(nextSelectedUser)
       navigate('/chat', { replace: true })
     }
-  }, [users, location.state, navigate])
+  }, [users, location.state, location.search, navigate])
 
   const handleSendMessage = async () => {
     const text = inputValue.trim()

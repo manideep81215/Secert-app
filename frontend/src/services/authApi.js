@@ -4,6 +4,10 @@ import { API_APP_BASE_URL } from '../config/apiConfig'
 const authClient = axios.create({
   baseURL: `${API_APP_BASE_URL}/auth`,
   timeout: 7000,
+  withCredentials: true,  // ✅ ADDED: Required for iOS CORS
+  headers: {
+    'Content-Type': 'application/json',  // ✅ ADDED: Explicit content type
+  },
 })
 
 export async function registerUser(payload) {
