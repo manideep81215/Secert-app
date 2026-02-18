@@ -94,7 +94,7 @@ function App() {
         <AnimatePresence mode="wait">
           <motion.div key={location.pathname} {...pageMotion}>
             <Routes>
-              <Route path="/" element={<Navigate to="/auth" replace />} />
+              <Route path="/" element={<Navigate to="/games" replace />} />
               <Route path="/auth" element={<AuthPage />} />
               <Route path="/games" element={<GamesPage />} />
               <Route path="/games/rps" element={<RpsGamePage />} />

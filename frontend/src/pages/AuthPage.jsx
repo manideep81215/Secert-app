@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import { useFlowState } from '../hooks/useFlowState'
@@ -27,6 +27,12 @@ function AuthPage() {
   const [dob, setDob] = useState(flow.dob || '')
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+
+  useEffect(() => {
+    if (flow.username && flow.token) {
+      navigate('/games', { replace: true })
+    }
+  }, [flow.username, flow.token, navigate])
 
   const submit = async (event) => {
     event.preventDefault()
