@@ -1,0 +1,9 @@
+{
+  "appId": "com.simpgames.quest",
+  "appName": "Simp Games Quest",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https"
+  }
+}

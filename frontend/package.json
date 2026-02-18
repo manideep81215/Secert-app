@@ -7,9 +7,15 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "cap:copy": "npm run build && npx cap copy",
+    "cap:sync": "npm run build && npx cap sync",
+    "cap:android": "npm run build && npx cap sync android && npx cap open android",
+    "cap:ios": "npm run build && npx cap sync ios && npx cap open ios"
   },
   "dependencies": {
+    "@capacitor/android": "^7.4.3",
+    "@capacitor/core": "^7.4.3",
     "@stomp/stompjs": "^7.2.1",
     "@tailwindcss/vite": "^4.1.18",
     "axios": "^1.13.5",
@@ -24,6 +30,7 @@
     "tailwindcss": "^4.1.18"
   },
   "devDependencies": {
+    "@capacitor/cli": "^7.4.3",
     "@eslint/js": "^9.39.1",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
