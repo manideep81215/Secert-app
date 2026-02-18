@@ -4,11 +4,31 @@
 
 .app-auth-route {
   min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .app-auth-max {
   width: 100%;
   min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
+}
+
+@supports (height: 100svh) {
+  .app-auth-route,
+  .app-auth-max {
+    min-height: 100svh;
+    height: 100svh;
+  }
+}
+
+@supports (height: 100dvh) {
+  .app-auth-route,
+  .app-auth-max {
+    min-height: 100dvh;
+    height: 100dvh;
+  }
 }
 
 .app-max {

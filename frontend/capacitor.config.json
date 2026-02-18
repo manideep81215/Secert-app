@@ -1,9 +1,18 @@
 {
-  "appId": "com.simpgames.quest",
-  "appName": "Simp Games Quest",
+  "appId": "com.yourdomain.app",
+  "appName": "YourApp",
   "webDir": "dist",
-  "bundledWebRuntime": false,
   "server": {
-    "androidScheme": "https"
+    "androidScheme": "https",
+    "cleartext": true,
+    "allowNavigation": [
+      "https://secert-app.onrender.com",
+      "wss://secert-app.onrender.com"
+    ]
+  },
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    }
   }
 }
