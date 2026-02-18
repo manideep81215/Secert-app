@@ -1,5 +1,9 @@
 package com.game.app.config;
 
+import java.util.Arrays;
+import java.util.List;
+
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.simp.config.ChannelRegistration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
@@ -13,15 +17,31 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
   private final WebSocketChannelInterceptor webSocketChannelInterceptor;
+  private final List<String> allowedOriginPatterns;
 
-  public WebSocketConfig(WebSocketChannelInterceptor webSocketChannelInterceptor) {
+  public WebSocketConfig(
+      WebSocketChannelInterceptor webSocketChannelInterceptor,
+      @Value("${app.cors.allowed-origin-patterns:*}") String allowedOriginPatterns) {
     this.webSocketChannelInterceptor = webSocketChannelInterceptor;
+    this.allowedOriginPatterns = Arrays.stream(allowedOriginPatterns.split(","))
+        .map(String::trim)
+        .filter(value -> !value.isEmpty())
+        .toList();
   }
 
   @Override
   public void registerStompEndpoints(StompEndpointRegistry registry) {
+    String[] origins = allowedOriginPatterns.toArray(String[]::new);
+
+    registry.addEndpoint("/ws")
+        .setAllowedOriginPatterns(origins)
+        .withSockJS()
+        .setStreamBytesLimit(2 * 1024 * 1024)
+        .setHttpMessageCacheSize(1000)
+        .setDisconnectDelay(30_000);
+
     registry.addEndpoint("/ws-chat")
-        .setAllowedOriginPatterns("http://localhost:5173", "http://localhost:5174")
+        .setAllowedOriginPatterns(origins)
         .withSockJS()
         .setStreamBytesLimit(2 * 1024 * 1024)
         .setHttpMessageCacheSize(1000)
