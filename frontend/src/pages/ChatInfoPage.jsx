@@ -88,11 +88,10 @@ function ChatInfoPage() {
         : `${selectedSeen ? 'Seen · ' : ''}${toLongLastSeen(selectedPresence.lastSeenAt)}`)
 
   const goBackToChat = () => {
-    if (window.history.length > 1) {
-      navigate(-1)
-      return
-    }
-    navigate('/chat', { state: { selectedUsername: selectedUser?.username } })
+    navigate('/chat', {
+      replace: true,
+      state: { selectedUsername: selectedUser?.username },
+    })
   }
 
   const requestNotificationAccess = async () => {
