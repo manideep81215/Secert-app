@@ -24,6 +24,7 @@ import './ChatPageNew.css'
 const REALTIME_TOAST_ID = 'realtime-connection'
 const PRESENCE_LAST_SEEN_KEY = 'chat_presence_last_seen_v1'
 const EDIT_WINDOW_MS = 15 * 60 * 1000
+const MESSAGE_ACTION_LONG_PRESS_MS = 600
 
 function ChatPageNew() {
   const navigate = useNavigate()
@@ -64,12 +65,15 @@ function ChatPageNew() {
   const [pendingImagePreview, setPendingImagePreview] = useState(null)
   const [activeMediaPreview, setActiveMediaPreview] = useState(null)
   const [isMobileView, setIsMobileView] = useState(() => window.innerWidth <= 920)
+  const [isTouchDevice, setIsTouchDevice] = useState(
+    () => (typeof window !== 'undefined') && (window.matchMedia?.('(pointer: coarse)').matches || 'ontouchstart' in window)
+  )
   const [showMobileUsers, setShowMobileUsers] = useState(() => window.innerWidth <= 920)
   const [replyingTo, setReplyingTo] = useState(null)
   const [editingMessage, setEditingMessage] = useState(null)
   const [draggedMessage, setDraggedMessage] = useState(null)
   const [isDraggingMessage, setIsDraggingMessage] = useState(false)
-  const [swipePreview, setSwipePreview] = useState({ key: null, offset: 0 })
+  const [activeMessageActionsKey, setActiveMessageActionsKey] = useState(null)
   const [socket, setSocket] = useState(null)
   const [isRecordingVoice, setIsRecordingVoice] = useState(false)
   const [recordingSeconds, setRecordingSeconds] = useState(0)
@@ -85,7 +89,7 @@ function ChatPageNew() {
   const typingTimeoutRef = useRef(null)
   const typingStateRef = useRef(false)
   const sendAckTimeoutsRef = useRef({})
-  const swipeReplyRef = useRef({ active: false, pointerId: null, startX: 0, startY: 0, message: null, key: null })
+  const messageLongPressRef = useRef({ timerId: null, key: null, startX: 0, startY: 0, moved: false, triggered: false })
   const mediaRecorderRef = useRef(null)
   const recordingStreamRef = useRef(null)
   const recordingChunksRef = useRef([])
@@ -290,6 +294,7 @@ function ChatPageNew() {
     const onResize = () => {
       const mobile = window.innerWidth <= 920
       setIsMobileView(mobile)
+      setIsTouchDevice(window.matchMedia?.('(pointer: coarse)').matches || 'ontouchstart' in window)
       if (!mobile) {
         setShowMobileUsers(false)
       } else if (!selectedUserRef.current) {
@@ -1488,6 +1493,7 @@ function ChatPageNew() {
       preview: message.text || '',
     })
     setInputValue(message.text || '')
+    setActiveMessageActionsKey(null)
   }
 
   const cancelEditingMessage = () => {
@@ -1522,6 +1528,7 @@ function ChatPageNew() {
   const handleReply = (message) => {
     setEditingMessage(null)
     setReplyingTo(message)
+    setActiveMessageActionsKey(null)
   }
 
   const handleDragStart = (event, message) => {
@@ -1549,54 +1556,45 @@ function ChatPageNew() {
     }
   }
 
-  const clearSwipePreview = () => {
-    setSwipePreview({ key: null, offset: 0 })
-  }
-
   const handleMessagePointerDown = (event, message, messageKey) => {
     if (event.pointerType !== 'touch') return
     const target = event.target
     if (!(target instanceof HTMLElement)) return
     if (!target.closest('.message-content')) return
     if (target.closest('button, a, audio, video, input, textarea')) return
-    const edgeSafeZone = 18
-    if (event.clientX <= edgeSafeZone || event.clientX >= window.innerWidth - edgeSafeZone) return
-    swipeReplyRef.current = {
-      active: true,
-      pointerId: event.pointerId,
+    if (messageLongPressRef.current.timerId) {
+      clearTimeout(messageLongPressRef.current.timerId)
+    }
+    messageLongPressRef.current = {
+      timerId: setTimeout(() => {
+        setActiveMessageActionsKey(messageKey)
+        messageLongPressRef.current.triggered = true
+      }, MESSAGE_ACTION_LONG_PRESS_MS),
+      key: messageKey,
       startX: event.clientX,
       startY: event.clientY,
-      message,
-      key: messageKey,
+      moved: false,
+      triggered: false,
     }
-    setSwipePreview({ key: messageKey, offset: 0 })
   }
 
   const handleMessagePointerMove = (event) => {
-    const state = swipeReplyRef.current
-    if (!state.active || state.pointerId !== event.pointerId) return
-    const dx = event.clientX - state.startX
-    const dy = event.clientY - state.startY
-    if (Math.abs(dy) > 24) {
-      swipeReplyRef.current = { active: false, pointerId: null, startX: 0, startY: 0, message: null, key: null }
-      clearSwipePreview()
-      return
-    }
-
-    const rightSwipe = Math.max(0, Math.min(dx, 90))
-    setSwipePreview({ key: state.key, offset: rightSwipe })
-
-    if (dx > 72 && Math.abs(dx) > Math.abs(dy) * 1.2) {
-      event.preventDefault()
-      setReplyingTo(state.message)
-      swipeReplyRef.current = { active: false, pointerId: null, startX: 0, startY: 0, message: null, key: null }
-      clearSwipePreview()
+    const state = messageLongPressRef.current
+    if (!state?.timerId) return
+    const dx = Math.abs(event.clientX - state.startX)
+    const dy = Math.abs(event.clientY - state.startY)
+    if (dx > 10 || dy > 10) {
+      clearTimeout(state.timerId)
+      messageLongPressRef.current = { timerId: null, key: null, startX: 0, startY: 0, moved: true, triggered: false }
     }
   }
 
   const handleMessagePointerEnd = () => {
-    swipeReplyRef.current = { active: false, pointerId: null, startX: 0, startY: 0, message: null, key: null }
-    clearSwipePreview()
+    const state = messageLongPressRef.current
+    if (state?.timerId) {
+      clearTimeout(state.timerId)
+    }
+    messageLongPressRef.current = { timerId: null, key: null, startX: 0, startY: 0, moved: false, triggered: false }
   }
 
   const renderMessageMedia = (message) => {
@@ -1785,6 +1783,14 @@ function ChatPageNew() {
           className="messages-area"
           onDragOver={handleDragOver}
           onDrop={handleDrop}
+          onScroll={() => setActiveMessageActionsKey(null)}
+          onClick={(event) => {
+            const target = event.target
+            if (!(target instanceof HTMLElement)) return
+            if (!target.closest('.message')) {
+              setActiveMessageActionsKey(null)
+            }
+          }}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.3 }}
@@ -1797,17 +1803,13 @@ function ChatPageNew() {
               <motion.div
                 key={messageKey}
                 className={`message ${message.sender}`}
-                draggable={true}
+                draggable={!isTouchDevice}
                 onDragStart={(event) => handleDragStart(event, message)}
                 onDragEnd={handleDragEnd}
                 onPointerDown={(event) => handleMessagePointerDown(event, message, messageKey)}
                 onPointerMove={handleMessagePointerMove}
                 onPointerUp={handleMessagePointerEnd}
                 onPointerCancel={handleMessagePointerEnd}
-                style={{
-                  transform: swipePreview.key === messageKey ? `translateX(${swipePreview.offset}px)` : undefined,
-                  transition: swipePreview.key === messageKey ? 'none' : 'transform 0.14s ease',
-                }}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
@@ -1835,8 +1837,11 @@ function ChatPageNew() {
                     <div className="message-media-fallback">{`${getTypeIcon(message.type)} ${message.text}`.trim()}</div>
                   )}
                   <span className="message-time">{getMessageFooterLabel(message)}</span>
+                  {shouldShowSeenInline && index === lastOutgoingIndex && activeMessageActionsKey !== messageKey && (
+                    <span className="message-seen-inline">Seen</span>
+                  )}
                 </div>
-                <div className="message-actions">
+                <div className={`message-actions ${activeMessageActionsKey === messageKey ? 'active' : ''}`}>
                   <button
                     className="btn-reply"
                     onClick={() => handleReply(message)}
@@ -1853,9 +1858,6 @@ function ChatPageNew() {
                     <button className="btn-resend" onClick={() => handleResendMessage(message)} title="Resend" aria-label="Resend">{icons.resend}</button>
                   )}
                 </div>
-                {shouldShowSeenInline && index === lastOutgoingIndex && (
-                  <div className="message-seen-inline">Seen</div>
-                )}
               </motion.div>
             )})}
           </AnimatePresence>

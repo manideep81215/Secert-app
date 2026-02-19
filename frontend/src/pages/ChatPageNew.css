@@ -562,6 +562,10 @@
   opacity: 1;
 }
 
+.message-actions.active {
+  opacity: 1;
+}
+
 .message.user .message-actions {
   order: -1;
 }
@@ -1720,17 +1724,17 @@
 }
 
 .message-seen-inline {
-  margin-top: 0.1rem;
-  margin-right: 0.35rem;
-  margin-left: auto;
+  margin-top: 0.14rem;
+  margin-left: 0;
   width: fit-content;
   font-size: 0.74rem;
   color: rgba(60, 47, 31, 0.78);
   background: rgba(255, 255, 255, 0.58);
   border: 1px solid rgba(162, 122, 73, 0.25);
   border-radius: 0.8rem;
-  padding: 0.08rem 0.48rem;
+  padding: 0.06rem 0.44rem;
   line-height: 1.1;
+  display: inline-block;
 }
 
 /* Final mobile layout guardrails: keep composer visible and keep last message above it. */
@@ -1760,7 +1764,7 @@
   .chat-container .messages-area {
     flex: 1 1 auto;
     overflow-y: auto;
-    padding: 0.9rem 0.9rem calc(1.1rem + env(safe-area-inset-bottom)) 0.9rem;
+    padding: 0.9rem 0.9rem 2px 0.9rem;
   }
 
   .chat-container .input-area {
@@ -1777,7 +1781,7 @@
 
 @media (max-width: 680px) {
   .chat-container .messages-area {
-    padding: 0.75rem 0.7rem calc(1rem + env(safe-area-inset-bottom)) 0.7rem;
+    padding: 0.75rem 0.7rem 2px 0.7rem;
   }
 
   .chat-container .input-area {
