@@ -1,10 +1,14 @@
 .chat-info-page {
   width: 100%;
+  min-width: 100%;
+  max-width: 100%;
+  height: 100dvh;
   min-height: 100dvh;
   background: linear-gradient(180deg, #f9edd4 0%, #f1e0bb 100%);
   color: #4d2e1a;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .chat-info-header {
@@ -31,7 +35,11 @@
 }
 
 .chat-info-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
   padding: 1rem;
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
   gap: 0.9rem;
