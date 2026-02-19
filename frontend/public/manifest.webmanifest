@@ -2,9 +2,11 @@
   "name": "Simp Games Quest",
   "short_name": "Simp Quest",
   "description": "Realtime chat and mini games app.",
+  "id": "/",
   "start_url": "/#/",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui", "browser"],
   "background_color": "#efe4c8",
   "theme_color": "#6b8f38",
   "icons": [

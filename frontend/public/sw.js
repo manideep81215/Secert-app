@@ -46,3 +46,12 @@ self.addEventListener('notificationclick', (event) => {
     await self.clients.openWindow(targetUrl)
   })())
 })
+
+self.addEventListener('pushsubscriptionchange', (event) => {
+  event.waitUntil((async () => {
+    const clientsList = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+    for (const client of clientsList) {
+      client.postMessage({ type: 'push-subscription-change' })
+    }
+  })())
+})

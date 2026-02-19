@@ -116,15 +116,22 @@ function App() {
         syncPushSubscription()
       }
     }
+    const onSwMessage = (event) => {
+      if (event?.data?.type === 'push-subscription-change') {
+        syncPushSubscription()
+      }
+    }
 
     syncPushSubscription()
     window.addEventListener('focus', syncPushSubscription)
     window.addEventListener('online', syncPushSubscription)
+    navigator.serviceWorker?.addEventListener?.('message', onSwMessage)
     document.addEventListener('visibilitychange', onVisibility)
     return () => {
       disposed = true
       window.removeEventListener('focus', syncPushSubscription)
       window.removeEventListener('online', syncPushSubscription)
+      navigator.serviceWorker?.removeEventListener?.('message', onSwMessage)
       document.removeEventListener('visibilitychange', onVisibility)
     }
   }, [flow?.token])

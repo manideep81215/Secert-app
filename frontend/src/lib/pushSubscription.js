@@ -15,12 +15,16 @@ export async function ensurePushSubscription(token) {
   if (!token) return false
   if (typeof window === 'undefined') return false
   if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return false
+  if (!window.isSecureContext) return false
   if (Notification.permission !== 'granted') return false
 
   const config = await getPushPublicKey()
   if (!config?.enabled || !config?.publicKey) return false
 
-  const registration = await navigator.serviceWorker.ready
+  let registration = await navigator.serviceWorker.getRegistration('/sw.js')
+  if (!registration) {
+    registration = await navigator.serviceWorker.ready
+  }
   if (!registration?.pushManager) return false
 
   let subscription = await registration.pushManager.getSubscription()
