@@ -93,10 +93,39 @@ function App() {
 
   useEffect(() => {
     if (!flow?.token) return
-    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return
-    ensurePushSubscription(flow.token).catch(() => {
-      // Ignore push subscription setup failures.
-    })
+
+    let disposed = false
+    let inFlight = false
+
+    const syncPushSubscription = async () => {
+      if (disposed || inFlight) return
+      if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return
+      inFlight = true
+      try {
+        await ensurePushSubscription(flow.token)
+      } catch {
+        // Ignore push subscription setup failures.
+      } finally {
+        inFlight = false
+      }
+    }
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        syncPushSubscription()
+      }
+    }
+
+    syncPushSubscription()
+    window.addEventListener('focus', syncPushSubscription)
+    window.addEventListener('online', syncPushSubscription)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      disposed = true
+      window.removeEventListener('focus', syncPushSubscription)
+      window.removeEventListener('online', syncPushSubscription)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
   }, [flow?.token])
 
   return (
@@ -143,7 +172,13 @@ function App() {
         </div>
       )}
 
-      <ToastContainer position="bottom-left" autoClose={1800} hideProgressBar />
+      <ToastContainer
+        position="bottom-left"
+        autoClose={1500}
+        hideProgressBar
+        limit={1}
+        pauseOnFocusLoss={false}
+      />
     </div>
   )
 }

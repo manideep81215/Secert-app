@@ -16,9 +16,12 @@ import {
   setNotifyCutoff,
 } from '../lib/notifications'
 import { ensurePushSubscription } from '../lib/pushSubscription'
+import { getPushPublicKey } from '../services/pushApi'
 import { API_BASE_URL, WS_CHAT_URL } from '../config/apiConfig'
 import { resetFlowState, useFlowState } from '../hooks/useFlowState'
 import './ChatPageNew.css'
+
+const REALTIME_TOAST_ID = 'realtime-connection'
 
 function ChatPageNew() {
   const navigate = useNavigate()
@@ -35,6 +38,18 @@ function ChatPageNew() {
   const [searchQuery, setSearchQuery] = useState('')
   const [showUserDetails, setShowUserDetails] = useState(false)
   const [showAttachMenu, setShowAttachMenu] = useState(false)
+  const [showPushDebug, setShowPushDebug] = useState(false)
+  const [pushDebug, setPushDebug] = useState({
+    loading: false,
+    notificationPermission: getNotificationPermissionState(),
+    serviceWorkerActive: false,
+    subscriptionExists: false,
+    pushKeyRegistered: false,
+    lastSyncAt: null,
+    error: '',
+  })
+  const [pendingImagePreview, setPendingImagePreview] = useState(null)
+  const [activeMediaPreview, setActiveMediaPreview] = useState(null)
   const [isMobileView, setIsMobileView] = useState(() => window.innerWidth <= 920)
   const [showMobileUsers, setShowMobileUsers] = useState(() => window.innerWidth <= 920)
   const [replyingTo, setReplyingTo] = useState(null)
@@ -324,9 +339,10 @@ function ChatPageNew() {
         username: authUsername,
         Authorization: `Bearer ${authToken}`,
       },
-      heartbeatIncoming: 20000,
-      heartbeatOutgoing: 20000,
-      reconnectDelay: 1000,
+      heartbeatIncoming: 10000,
+      heartbeatOutgoing: 10000,
+      reconnectDelay: 600,
+      connectionTimeout: 7000,
       onConnect: () => {
         client.publish({
           destination: '/app/user.online',
@@ -484,33 +500,51 @@ function ChatPageNew() {
     if (!flow.token || !flow.username || !users.length) return
 
     let cancelled = false
+    let syncing = false
 
     const notifyMissedWhileOffline = async () => {
-      for (const user of users) {
-        if (cancelled) return
-        try {
-          const cutoff = getNotifyCutoff(flow.username, user.username)
-          const rows = await getConversation(flow.token, user.username)
+      if (syncing) return
+      syncing = true
+      try {
+        for (const user of users) {
           if (cancelled) return
+          try {
+            const cutoff = getNotifyCutoff(flow.username, user.username)
+            const rows = await getConversation(flow.token, user.username)
+            if (cancelled) return
 
-          const missed = (rows || [])
-            .filter((row) => row?.sender === 'other')
-            .filter((row) => Number(row?.createdAt || 0) > cutoff)
+            const missed = (rows || [])
+              .filter((row) => row?.sender === 'other')
+              .filter((row) => Number(row?.createdAt || 0) > cutoff)
 
-          if (!missed.length) continue
+            if (!missed.length) continue
 
-          const latest = Math.max(...missed.map((row) => Number(row.createdAt || 0)))
-          setNotifyCutoff(flow.username, user.username, latest || Date.now())
-          await pushNotify(`@${formatUsername(user.username)}`, `${missed.length} new message${missed.length > 1 ? 's' : ''}`)
-        } catch {
-          // Ignore missed-notification sync failures per conversation.
+            const latest = Math.max(...missed.map((row) => Number(row.createdAt || 0)))
+            setNotifyCutoff(flow.username, user.username, latest || Date.now())
+            await pushNotify(`@${formatUsername(user.username)}`, `${missed.length} new message${missed.length > 1 ? 's' : ''}`)
+          } catch {
+            // Ignore missed-notification sync failures per conversation.
+          }
         }
+      } finally {
+        syncing = false
       }
     }
 
+    const onResume = () => {
+      if (document.visibilityState !== 'visible') return
+      notifyMissedWhileOffline()
+    }
+
     notifyMissedWhileOffline()
+    window.addEventListener('focus', notifyMissedWhileOffline)
+    window.addEventListener('online', notifyMissedWhileOffline)
+    document.addEventListener('visibilitychange', onResume)
     return () => {
       cancelled = true
+      window.removeEventListener('focus', notifyMissedWhileOffline)
+      window.removeEventListener('online', notifyMissedWhileOffline)
+      document.removeEventListener('visibilitychange', onResume)
     }
   }, [flow.token, flow.username, users])
 
@@ -574,10 +608,88 @@ function ChatPageNew() {
   }
 
   const notifyRealtimeIssue = (message) => {
+    if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
     const now = Date.now()
     if (now - wsErrorToastAtRef.current < 3000) return
     wsErrorToastAtRef.current = now
-    toast.error(message)
+    toast.clearWaitingQueue()
+    toast.error(message, {
+      toastId: REALTIME_TOAST_ID,
+      autoClose: 1500,
+    })
+  }
+
+  const clearPendingImagePreview = () => {
+    setPendingImagePreview((prev) => {
+      if (prev?.url) {
+        URL.revokeObjectURL(prev.url)
+      }
+      return null
+    })
+  }
+
+  const closeMediaPreview = () => {
+    setActiveMediaPreview(null)
+  }
+
+  const refreshPushDebug = async (reason = 'manual') => {
+    if (typeof window === 'undefined') return
+
+    const snapshot = {
+      loading: true,
+      notificationPermission: getNotificationPermissionState(),
+      serviceWorkerActive: false,
+      subscriptionExists: false,
+      pushKeyRegistered: false,
+      lastSyncAt: pushDebug.lastSyncAt,
+      error: '',
+    }
+    setPushDebug(snapshot)
+
+    try {
+      let registration = null
+      if ('serviceWorker' in navigator) {
+        registration = await navigator.serviceWorker.getRegistration('/sw.js')
+        if (!registration) {
+          registration = await navigator.serviceWorker.ready
+        }
+      }
+
+      const serviceWorkerActive = Boolean(registration?.active)
+      const subscription = registration?.pushManager ? await registration.pushManager.getSubscription() : null
+      const subscriptionExists = Boolean(subscription)
+
+      let pushKeyRegistered = false
+      if (flow?.token && snapshot.notificationPermission === 'granted') {
+        await ensurePushSubscription(flow.token)
+      }
+      const keyConfig = await getPushPublicKey()
+      pushKeyRegistered = Boolean(keyConfig?.enabled && keyConfig?.publicKey)
+
+      const next = {
+        loading: false,
+        notificationPermission: snapshot.notificationPermission,
+        serviceWorkerActive,
+        subscriptionExists,
+        pushKeyRegistered,
+        lastSyncAt: Date.now(),
+        error: '',
+      }
+      setPushDebug(next)
+      console.info('[push-debug]', { reason, ...next })
+    } catch (error) {
+      const next = {
+        loading: false,
+        notificationPermission: snapshot.notificationPermission,
+        serviceWorkerActive: snapshot.serviceWorkerActive,
+        subscriptionExists: snapshot.subscriptionExists,
+        pushKeyRegistered: snapshot.pushKeyRegistered,
+        lastSyncAt: Date.now(),
+        error: error?.message || 'Push debug check failed.',
+      }
+      setPushDebug(next)
+      console.warn('[push-debug]', { reason, ...next })
+    }
   }
 
   useEffect(() => {
@@ -596,6 +708,31 @@ function ChatPageNew() {
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [navigate])
+
+  useEffect(() => {
+    refreshPushDebug('mount')
+    const onFocus = () => refreshPushDebug('focus')
+    const onOnline = () => refreshPushDebug('online')
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return
+      refreshPushDebug('visible')
+    }
+
+    window.addEventListener('focus', onFocus)
+    window.addEventListener('online', onOnline)
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      window.removeEventListener('online', onOnline)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [flow?.token, notificationPermission])
+
+  useEffect(() => () => {
+    if (pendingImagePreview?.url) {
+      URL.revokeObjectURL(pendingImagePreview.url)
+    }
+  }, [pendingImagePreview?.url])
 
   const publishTyping = (typing, force = false) => {
     if (!socket?.connected || !selectedUser?.username) return
@@ -849,10 +986,26 @@ function ChatPageNew() {
 
   const handleFileUpload = async (event, type) => {
     const file = event?.target?.files?.[0]
-    await sendMediaFile(file, type)
+    if (!file) return
+
+    if (type === 'photo' && file.type?.startsWith('image/')) {
+      clearPendingImagePreview()
+      const previewUrl = URL.createObjectURL(file)
+      setPendingImagePreview({ file, url: previewUrl, name: file.name || 'image' })
+    } else {
+      await sendMediaFile(file, type)
+    }
+
     if (event?.target) {
       event.target.value = ''
     }
+  }
+
+  const confirmImagePreviewSend = async () => {
+    if (!pendingImagePreview?.file) return
+    const file = pendingImagePreview.file
+    clearPendingImagePreview()
+    await sendMediaFile(file, 'photo')
   }
 
   const stopVoiceRecording = () => {
@@ -1061,10 +1214,28 @@ function ChatPageNew() {
     if (!message?.type || !message.mediaUrl) return null
 
     if (message.type === 'image') {
-      return <img className="message-image-preview" src={message.mediaUrl} alt={message.fileName || 'image'} />
+      return (
+        <button
+          type="button"
+          className="message-media-open"
+          onClick={() => setActiveMediaPreview({ type: 'image', url: message.mediaUrl, name: message.fileName || 'image' })}
+          aria-label="Open image preview"
+        >
+          <img className="message-image-preview" src={message.mediaUrl} alt={message.fileName || 'image'} />
+        </button>
+      )
     }
     if (message.type === 'video') {
-      return <video className="message-video-preview" src={message.mediaUrl} controls preload="metadata" />
+      return (
+        <button
+          type="button"
+          className="message-media-open"
+          onClick={() => setActiveMediaPreview({ type: 'video', url: message.mediaUrl, name: message.fileName || 'video' })}
+          aria-label="Open video preview"
+        >
+          <video className="message-video-preview" src={message.mediaUrl} preload="metadata" />
+        </button>
+      )
     }
     if (message.type === 'voice') {
       return <audio className="message-audio-preview" src={message.mediaUrl} controls preload="metadata" />
@@ -1176,6 +1347,14 @@ function ChatPageNew() {
               N
             </button>
             <button
+              className={`btn-user-details ${showPushDebug ? 'notify-enabled' : ''}`}
+              onClick={() => setShowPushDebug((prev) => !prev)}
+              title="Push debug info"
+              aria-label="Push debug info"
+            >
+              D
+            </button>
+            <button
               className="btn-home-game"
               onClick={() => navigate('/games')}
               title="Go to dashboard"
@@ -1193,6 +1372,25 @@ function ChatPageNew() {
             </button>
           </div>
         </motion.div>
+
+        {showPushDebug && (
+          <div className="push-debug-panel">
+            <div className="push-debug-head">
+              <strong>Push Debug</strong>
+              <button type="button" onClick={() => refreshPushDebug('manual')} aria-label="Refresh push debug">Refresh</button>
+            </div>
+            <div className="push-debug-row"><span>Permission</span><b>{pushDebug.notificationPermission}</b></div>
+            <div className="push-debug-row"><span>SW Active</span><b>{pushDebug.serviceWorkerActive ? 'yes' : 'no'}</b></div>
+            <div className="push-debug-row"><span>Subscription</span><b>{pushDebug.subscriptionExists ? 'yes' : 'no'}</b></div>
+            <div className="push-debug-row"><span>Push Key</span><b>{pushDebug.pushKeyRegistered ? 'yes' : 'no'}</b></div>
+            <div className="push-debug-row">
+              <span>Last Sync</span>
+              <b>{pushDebug.lastSyncAt ? new Date(pushDebug.lastSyncAt).toLocaleTimeString() : '-'}</b>
+            </div>
+            {pushDebug.loading && <div className="push-debug-state">checking...</div>}
+            {pushDebug.error && <div className="push-debug-error">{pushDebug.error}</div>}
+          </div>
+        )}
 
         <motion.div
           className="messages-area"
@@ -1355,6 +1553,61 @@ function ChatPageNew() {
           />
         </motion.div>
       </div>
+
+      <AnimatePresence>
+        {activeMediaPreview && (
+          <motion.div
+            className="image-preview-modal"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <div className="image-preview-backdrop" onClick={closeMediaPreview} />
+            <motion.div
+              className="image-preview-sheet media-preview-sheet"
+              initial={{ y: 24, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 16, opacity: 0 }}
+            >
+              <div className="image-preview-title">{activeMediaPreview.type === 'video' ? 'Preview video' : 'Preview image'}</div>
+              {activeMediaPreview.type === 'video' ? (
+                <video className="media-preview-video" src={activeMediaPreview.url} controls autoPlay playsInline />
+              ) : (
+                <img src={activeMediaPreview.url} alt={activeMediaPreview.name} className="image-preview-full" />
+              )}
+              <div className="image-preview-actions">
+                <button type="button" className="image-preview-cancel" onClick={closeMediaPreview}>Close</button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {pendingImagePreview && (
+          <motion.div
+            className="image-preview-modal"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <div className="image-preview-backdrop" onClick={clearPendingImagePreview} />
+            <motion.div
+              className="image-preview-sheet"
+              initial={{ y: 24, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 16, opacity: 0 }}
+            >
+              <div className="image-preview-title">Preview image</div>
+              <img src={pendingImagePreview.url} alt={pendingImagePreview.name} className="image-preview-full" />
+              <div className="image-preview-actions">
+                <button type="button" className="image-preview-cancel" onClick={clearPendingImagePreview}>Cancel</button>
+                <button type="button" className="image-preview-send" onClick={confirmImagePreviewSend}>Send</button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {showUserDetails && (

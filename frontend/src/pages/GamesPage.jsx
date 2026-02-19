@@ -10,6 +10,8 @@ import { getNotifyCutoff, pushNotify, setNotifyCutoff } from '../lib/notificatio
 import { WS_CHAT_URL } from '../config/apiConfig'
 import './GamesPage.css'
 
+const REALTIME_TOAST_ID = 'realtime-connection'
+
 const GAME_ITEMS = [
   { id: 'rps', title: 'Rock / Paper / Scissors', icon: '/theme/icon-rock-paper-scissors.png', path: '/games/rps' },
   { id: 'coin', title: 'Heads / Tails', icon: '/theme/icon-coin.png', path: '/games/coin' },
@@ -22,10 +24,15 @@ function GamesPage() {
   const wsErrorToastAtRef = useRef(0)
 
   const notifyRealtimeIssue = (message) => {
+    if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
     const now = Date.now()
     if (now - wsErrorToastAtRef.current < 3000) return
     wsErrorToastAtRef.current = now
-    toast.error(message)
+    toast.clearWaitingQueue()
+    toast.error(message, {
+      toastId: REALTIME_TOAST_ID,
+      autoClose: 1500,
+    })
   }
 
   useEffect(() => {
@@ -45,9 +52,10 @@ function GamesPage() {
         username: authUsername,
         Authorization: `Bearer ${authToken}`,
       },
-      heartbeatIncoming: 20000,
-      heartbeatOutgoing: 20000,
-      reconnectDelay: 1200,
+      heartbeatIncoming: 10000,
+      heartbeatOutgoing: 10000,
+      reconnectDelay: 700,
+      connectionTimeout: 7000,
       onConnect: () => {
         client.subscribe('/user/queue/messages', async (frame) => {
           try {
@@ -96,8 +104,11 @@ function GamesPage() {
     if (!flow.username || !flow.token) return
 
     let cancelled = false
+    let syncing = false
 
     const notifyMissedWhileOffline = async () => {
+      if (syncing) return
+      syncing = true
       try {
         const everyone = await getAllUsers(flow.token)
         const peers = (everyone || []).filter(
@@ -129,12 +140,25 @@ function GamesPage() {
           return
         }
         // Ignore missed-notification sync failures on dashboard.
+      } finally {
+        syncing = false
       }
     }
 
+    const onResume = () => {
+      if (document.visibilityState !== 'visible') return
+      notifyMissedWhileOffline()
+    }
+
     notifyMissedWhileOffline()
+    window.addEventListener('focus', notifyMissedWhileOffline)
+    window.addEventListener('online', notifyMissedWhileOffline)
+    document.addEventListener('visibilitychange', onResume)
     return () => {
       cancelled = true
+      window.removeEventListener('focus', notifyMissedWhileOffline)
+      window.removeEventListener('online', notifyMissedWhileOffline)
+      document.removeEventListener('visibilitychange', onResume)
     }
   }, [flow.username, flow.token])
 

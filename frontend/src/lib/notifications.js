@@ -1,5 +1,23 @@
 const CHAT_NOTIFY_CUTOFFS_KEY = 'chat_notify_cutoffs_v1'
 
+function isCapacitorNative() {
+  if (typeof window === 'undefined') return false
+  const cap = window.Capacitor
+  if (!cap) return false
+  if (typeof cap.isNativePlatform === 'function') return cap.isNativePlatform()
+  return cap.getPlatform?.() === 'android' || cap.getPlatform?.() === 'ios'
+}
+
+async function getCapacitorLocalNotifications() {
+  try {
+    const moduleName = '@capacitor/local-notifications'
+    const mod = await import(/* @vite-ignore */ moduleName)
+    return mod.LocalNotifications || null
+  } catch {
+    return null
+  }
+}
+
 function readNotifyCutoffs() {
   if (typeof window === 'undefined') return {}
   try {
@@ -40,6 +58,20 @@ export function setNotifyCutoff(meUsername, peerUsername, cutoffMs) {
 }
 
 export async function ensureNotificationPermission(interactive = false) {
+  if (isCapacitorNative()) {
+    const localNotifications = await getCapacitorLocalNotifications()
+    if (!localNotifications) return false
+    try {
+      const status = await localNotifications.checkPermissions()
+      if (status?.display === 'granted') return true
+      if (!interactive) return false
+      const requested = await localNotifications.requestPermissions()
+      return requested?.display === 'granted'
+    } catch {
+      return false
+    }
+  }
+
   if (typeof window === 'undefined' || !('Notification' in window)) return false
   if (Notification.permission === 'granted') return true
   if (Notification.permission === 'denied') return false
@@ -54,6 +86,7 @@ export async function ensureNotificationPermission(interactive = false) {
 }
 
 export function getNotificationPermissionState() {
+  if (isCapacitorNative()) return 'native'
   if (typeof window === 'undefined' || !('Notification' in window)) return 'unsupported'
   return Notification.permission || 'default'
 }
@@ -77,6 +110,29 @@ export function getNotificationBlockedHelp() {
 export async function pushNotify(title, body) {
   const hasPermission = await ensureNotificationPermission(false)
   if (!hasPermission) return false
+
+  if (isCapacitorNative()) {
+    const localNotifications = await getCapacitorLocalNotifications()
+    if (!localNotifications) return false
+    try {
+      await localNotifications.schedule({
+        notifications: [
+          {
+            id: Math.floor(Date.now() % 2147483000),
+            title: title || 'New message',
+            body: body || '',
+            schedule: { at: new Date(Date.now() + 100) },
+            smallIcon: 'ic_launcher',
+            actionTypeId: 'chat',
+            extra: { url: '/#/chat' },
+          },
+        ],
+      })
+      return true
+    } catch {
+      return false
+    }
+  }
 
   const chatUrl = `${window.location.origin}/#/chat`
 
