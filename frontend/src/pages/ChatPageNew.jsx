@@ -74,6 +74,7 @@ function ChatPageNew() {
   const [draggedMessage, setDraggedMessage] = useState(null)
   const [isDraggingMessage, setIsDraggingMessage] = useState(false)
   const [activeMessageActionsKey, setActiveMessageActionsKey] = useState(null)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [socket, setSocket] = useState(null)
   const [isRecordingVoice, setIsRecordingVoice] = useState(false)
   const [recordingSeconds, setRecordingSeconds] = useState(0)
@@ -109,6 +110,11 @@ function ChatPageNew() {
     if (normalized === 'Unknown') return '?'
     if (normalized.length === 1) return normalized.toUpperCase()
     return `${normalized[0]}${normalized[normalized.length - 1]}`.toUpperCase()
+  }
+  const getUserDisplayName = (user) => {
+    const name = (user?.name || '').trim()
+    if (name) return name
+    return formatUsername(user?.username)
   }
   const getTimeLabel = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   const getConversationKey = (peerUsername) => `${(flow.username || '').toLowerCase()}::${(peerUsername || '').toLowerCase()}`
@@ -291,6 +297,10 @@ function ChatPageNew() {
   }, [selectedUser?.username])
 
   useEffect(() => {
+    setShowDeleteConfirm(false)
+  }, [selectedUser?.username])
+
+  useEffect(() => {
     const onResize = () => {
       const mobile = window.innerWidth <= 920
       setIsMobileView(mobile)
@@ -370,6 +380,7 @@ function ChatPageNew() {
           .map((user) => ({
             id: user.id,
             username: (user.username || '').trim(),
+            name: (user.name || '').trim(),
             status: 'offline',
             lastMessage: '',
             timestamp: '',
@@ -1059,6 +1070,10 @@ function ChatPageNew() {
       }),
     [users, searchQuery, statusMap, typingMap, presenceTick]
   )
+  const detailMediaItems = useMemo(
+    () => messages.filter((msg) => msg.type && (msg.type === 'image' || msg.type === 'video') && msg.mediaUrl),
+    [messages]
+  )
 
   useEffect(() => {
     const requestedUserId = location.state?.selectedUserId
@@ -1501,10 +1516,13 @@ function ChatPageNew() {
     setInputValue('')
   }
 
+  const requestDeleteChatForMe = () => {
+    if (!selectedUser) return
+    setShowDeleteConfirm(true)
+  }
+
   const handleDeleteChatForMe = () => {
     if (!selectedUser) return
-    const ok = window.confirm(`Delete chat with @${formatUsername(selectedUser.username)} for you only?`)
-    if (!ok) return
 
     const key = getConversationKey(selectedUser.username)
     const cutoffNow = Date.now()
@@ -1523,6 +1541,7 @@ function ChatPageNew() {
       )
     )
     toast.success('Chat deleted for you.')
+    setShowDeleteConfirm(false)
   }
 
   const handleReply = (message) => {
@@ -1638,7 +1657,7 @@ function ChatPageNew() {
   }
 
   return (
-    <div className={`chat-container ${showUserDetails ? 'details-open' : ''} ${selectedUser ? 'user-selected' : ''} ${showMobileUsers ? 'mobile-users-open' : ''}`}>
+    <div className={`chat-container ${selectedUser ? 'user-selected' : ''} ${showMobileUsers ? 'mobile-users-open' : ''}`}>
       <motion.div
         className="users-panel"
         initial={{ x: -300 }}
@@ -1655,6 +1674,11 @@ function ChatPageNew() {
             placeholder="Search users..."
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="none"
+            spellCheck={false}
+            inputMode="text"
           />
         </div>
         <div className="users-list">
@@ -1674,9 +1698,9 @@ function ChatPageNew() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
               >
-                <div className="user-avatar">{getAvatarLabel(user.username)}</div>
+                <div className="user-avatar">{getAvatarLabel(getUserDisplayName(user))}</div>
                 <div className="user-info">
-                  <div className="user-name">@{formatUsername(user.username)}</div>
+                  <div className="user-name">{getUserDisplayName(user)}</div>
                   <div className="user-last-msg">{user._isTyping ? 'typing...' : (user.lastMessage || 'No messages yet')}</div>
                 </div>
                 <div className={`user-status ${user._presence.status === 'online' ? 'online' : 'offline'}`} />
@@ -1707,7 +1731,7 @@ function ChatPageNew() {
             ←
           </button>
           <div className="chat-header-left">
-            <div className="chat-user-avatar">{selectedUser ? getAvatarLabel(selectedUser.username) : '?'}</div>
+            <div className="chat-user-avatar">{selectedUser ? getAvatarLabel(getUserDisplayName(selectedUser)) : '?'}</div>
             <div className="chat-user-info">
               <button
                 type="button"
@@ -1717,7 +1741,7 @@ function ChatPageNew() {
                 aria-label={selectedUser ? 'Open user details' : 'Select a user'}
                 disabled={!selectedUser}
               >
-                {selectedUser ? `@${formatUsername(selectedUser.username)}` : 'Select a user'}
+                {selectedUser ? getUserDisplayName(selectedUser) : 'Select a user'}
               </button>
               <div className={`chat-user-status ${selectedPresence.status === 'online' ? 'online' : 'offline'}`}>
                 {selectedPresence.status === 'online' ? 'online' : toLongLastSeen(selectedPresence.lastSeenAt)}
@@ -1941,6 +1965,12 @@ function ChatPageNew() {
                 value={inputValue}
                 onChange={handleInputChange}
                 onKeyDown={(event) => event.key === 'Enter' && handleSendMessage()}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="none"
+                spellCheck={false}
+                inputMode="text"
+                enterKeyHint="send"
               />
               <button
                 className={`btn-voice-inline ${isRecordingVoice ? 'recording' : ''}`}
@@ -1991,6 +2021,13 @@ function ChatPageNew() {
                 <img src={activeMediaPreview.url} alt={activeMediaPreview.name} className="image-preview-full" />
               )}
               <div className="image-preview-actions">
+                <a
+                  href={activeMediaPreview.url}
+                  download={activeMediaPreview.name || (activeMediaPreview.type === 'video' ? 'video' : 'image')}
+                  className="image-preview-send"
+                >
+                  Download
+                </a>
                 <button type="button" className="image-preview-cancel" onClick={closeMediaPreview}>Close</button>
               </div>
             </motion.div>
@@ -2038,13 +2075,15 @@ function ChatPageNew() {
               <button className="btn-close" onClick={() => setShowUserDetails(false)}>X</button>
             </div>
             <div className="details-content">
-              <div className="details-avatar">{selectedUser ? getAvatarLabel(selectedUser.username) : '?'}</div>
-              <h2 className="details-name">{selectedUser ? `@${formatUsername(selectedUser.username)}` : '-'}</h2>
+              <div className="details-avatar">
+                <span className="details-avatar-name">{selectedUser ? getUserDisplayName(selectedUser) : '?'}</span>
+              </div>
+              <h2 className="details-name">{selectedUser ? getUserDisplayName(selectedUser) : '-'}</h2>
               <div className="details-quick-actions">
                 <button
                   type="button"
                   className="details-quick-btn"
-                  onClick={handleDeleteChatForMe}
+                  onClick={requestDeleteChatForMe}
                   title="Delete chat for me"
                   aria-label="Delete chat for me"
                   disabled={!selectedUser}
@@ -2079,7 +2118,7 @@ function ChatPageNew() {
                   title="Back to chat"
                   aria-label="Back to chat"
                 >
-                  <span className="details-quick-icon">i</span>
+                  <span className="details-quick-icon">←</span>
                   <span className="details-quick-label">Back</span>
                 </button>
               </div>
@@ -2094,39 +2133,68 @@ function ChatPageNew() {
               <div className="details-section">
                 <h4>Contact Information</h4>
                 <div className="detail-item">
-                  <span className="detail-label">Username:</span>
-                  <span className="detail-value">{selectedUser ? selectedUser.username : '-'}</span>
+                  <span className="detail-label">Name:</span>
+                  <span className="detail-value">{selectedUser ? getUserDisplayName(selectedUser) : '-'}</span>
                 </div>
-              </div>
-
-              <div className="details-section">
-                <h4>About</h4>
-                <p className="details-bio">Realtime chat user loaded from database.</p>
               </div>
 
               <div className="details-section">
                 <h4>Media</h4>
                 <div className="media-grid">
-                  {messages
-                    .filter((msg) => msg.type && (msg.type === 'image' || msg.type === 'video') && msg.mediaUrl)
-                    .map((msg, idx) => (
-                      <a
-                        key={idx}
-                        className="media-item"
-                        href={msg.mediaUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        title={msg.fileName || (msg.type === 'image' ? 'Image' : 'Video')}
-                      >
-                        {msg.type === 'image' ? '🖼️' : '🎬'}
-                      </a>
-                    ))}
+                  {detailMediaItems.map((msg, idx) => (
+                    <button
+                      key={`${msg.mediaUrl || idx}-${idx}`}
+                      type="button"
+                      className="media-item"
+                      title={msg.fileName || (msg.type === 'image' ? 'Image' : 'Video')}
+                      onClick={() => setActiveMediaPreview({
+                        type: msg.type === 'video' ? 'video' : 'image',
+                        url: msg.mediaUrl,
+                        name: msg.fileName || (msg.type === 'video' ? 'video' : 'image'),
+                      })}
+                    >
+                      {msg.type === 'image' ? (
+                        <img className="media-thumb" src={msg.mediaUrl} alt={msg.fileName || 'image'} loading="lazy" />
+                      ) : (
+                        <video className="media-thumb media-video-thumb" src={msg.mediaUrl} preload="metadata" muted playsInline />
+                      )}
+                      <span className="media-type-badge">{msg.type === 'video' ? 'Video' : 'Image'}</span>
+                    </button>
+                  ))}
                 </div>
-                {messages.filter((msg) => msg.type && (msg.type === 'image' || msg.type === 'video') && msg.mediaUrl).length === 0 && (
+                {detailMediaItems.length === 0 && (
                   <p className="details-bio">No media shared yet.</p>
                 )}
               </div>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showDeleteConfirm && (
+          <motion.div
+            className="confirm-modal"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <div className="confirm-modal-backdrop" onClick={() => setShowDeleteConfirm(false)} />
+            <motion.div
+              className="confirm-modal-card"
+              initial={{ y: 24, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 16, opacity: 0 }}
+            >
+              <div className="confirm-modal-title">Delete chat?</div>
+              <div className="confirm-modal-text">
+                Delete chat with {selectedUser ? getUserDisplayName(selectedUser) : 'this user'} for you only?
+              </div>
+              <div className="confirm-modal-actions">
+                <button type="button" className="confirm-cancel" onClick={() => setShowDeleteConfirm(false)}>Cancel</button>
+                <button type="button" className="confirm-danger" onClick={handleDeleteChatForMe}>Delete</button>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -2135,3 +2203,4 @@ function ChatPageNew() {
 }
 
 export default ChatPageNew
+
