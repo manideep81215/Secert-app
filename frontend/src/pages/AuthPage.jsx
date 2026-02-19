@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import { useFlowState } from '../hooks/useFlowState'
@@ -83,28 +84,56 @@ function AuthPage() {
   }
 
   return (
-    <section className="auth-showcase">
-      <div className="theme-top">
+    <motion.section
+      className="auth-showcase"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.35 }}
+    >
+      <motion.div
+        className="theme-top"
+        initial={{ y: -14, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.35, delay: 0.05 }}
+      >
         <div className="game-logo">
           <img className="game-logo-image" src={THEME_ASSETS.logo} alt="Simp Games Quest" />
         </div>
-      </div>
+      </motion.div>
 
-      <div className="card-below-logo">
-        <article className="parchment-board">
+      <motion.div
+        className="card-below-logo"
+        initial={{ y: 18, opacity: 0, scale: 0.98 }}
+        animate={{ y: 0, opacity: 1, scale: 1 }}
+        transition={{ duration: 0.4, delay: 0.08 }}
+      >
+        <motion.article
+          className="parchment-board"
+          layout
+          transition={{ duration: 0.25 }}
+        >
           <h3 className="sign-title">{mode === 'login' ? 'Sign In' : 'Register'}</h3>
 
           <form className="parchment-form" onSubmit={submit}>
             <input className="input-fantasy" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Username" />
 
-            {mode === 'register' && (
-              <>
+            <AnimatePresence initial={false}>
+              {mode === 'register' && (
+                <motion.div
+                  key="register-fields"
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.22 }}
+                  style={{ overflow: 'hidden', display: 'grid', gap: '0.7rem' }}
+                >
                 <input className="input-fantasy" value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" />
                 <input className="input-fantasy" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone" />
                 <input className="input-fantasy" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" />
                 <input className="input-fantasy" type="date" value={dob} onChange={(e) => setDob(e.target.value)} />
-              </>
-            )}
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             <div className="password-wrap">
               <input
@@ -124,33 +153,46 @@ function AuthPage() {
               </button>
             </div>
 
-            {mode === 'register' && (
-              <div className="password-wrap">
-                <input
-                  className="input-fantasy"
-                  type={showConfirmPassword ? 'text' : 'password'}
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Confirm Password"
-                />
-                <button
-                  type="button"
-                  className="toggle-visibility"
-                  onClick={() => setShowConfirmPassword((prev) => !prev)}
-                  aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+            <AnimatePresence initial={false}>
+              {mode === 'register' && (
+                <motion.div
+                  key="confirm-password"
+                  className="password-wrap"
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  style={{ overflow: 'hidden' }}
                 >
-                  {showConfirmPassword ? HIDE_ICON : EYE_ICON}
-                </button>
-              </div>
-            )}
+                  <input
+                    className="input-fantasy"
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Confirm Password"
+                  />
+                  <button
+                    type="button"
+                    className="toggle-visibility"
+                    onClick={() => setShowConfirmPassword((prev) => !prev)}
+                    aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                  >
+                    {showConfirmPassword ? HIDE_ICON : EYE_ICON}
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
-            <button className="btn-enter" type="submit">{mode === 'login' ? 'Enter' : 'Create'}</button>
+            <motion.button className="btn-enter" type="submit" whileTap={{ scale: 0.97 }}>
+              {mode === 'login' ? 'Enter' : 'Create'}
+            </motion.button>
           </form>
 
           <p className="register-text">{mode === 'login' ? "Don't have an account?" : 'Already have an account?'}</p>
-          <button
+          <motion.button
             type="button"
             className="link-switch"
+            whileTap={{ scale: 0.98 }}
             onClick={() => {
               setMode((prev) => (prev === 'login' ? 'register' : 'login'))
               setConfirmPassword('')
@@ -158,11 +200,17 @@ function AuthPage() {
             }}
           >
             {mode === 'login' ? 'Register' : 'Sign In'}
-          </button>
-        </article>
-      </div>
+          </motion.button>
+        </motion.article>
+      </motion.div>
 
-      <div className="game-icon-row" aria-hidden="true">
+      <motion.div
+        className="game-icon-row"
+        aria-hidden="true"
+        initial={{ opacity: 0, y: -8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, delay: 0.12 }}
+      >
         <div className="game-icon-badge">
           <img className="game-icon-image" src={THEME_ASSETS.rps} alt="Rock Paper Scissors" />
         </div>
@@ -172,7 +220,7 @@ function AuthPage() {
         <div className="game-icon-badge">
           <img className="game-icon-image" src={THEME_ASSETS.coin} alt="Coin Toss" />
         </div>
-      </div>
+      </motion.div>
 
       <div className="theme-leaves" aria-hidden="true">
         <span className="leaf leaf-a" />
@@ -180,7 +228,7 @@ function AuthPage() {
         <span className="leaf leaf-c" />
         <span className="leaf leaf-d" />
       </div>
-    </section>
+    </motion.section>
   )
 }
 

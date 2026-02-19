@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useFlowState } from '../hooks/useFlowState'
 import { randomPick, winsAgainst } from '../lib/gameUtils'
-import { pushNotify } from '../lib/notifications'
 import './RpsGamePage.css'
 
 function RpsGamePage() {
@@ -17,7 +16,6 @@ function RpsGamePage() {
   const unlock = () => {
     if (flow.unlocked) return
     setFlow((prev) => ({ ...prev, unlocked: true }))
-    pushNotify('Hidden stage unlocked', 'Rock/Paper/Scissors victory opened it.')
   }
 
   const play = (pick) => {

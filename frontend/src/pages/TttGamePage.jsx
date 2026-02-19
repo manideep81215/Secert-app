@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useFlowState } from '../hooks/useFlowState'
 import { getTttWinner } from '../lib/gameUtils'
-import { pushNotify } from '../lib/notifications'
 import './TttGamePage.css'
 
 const PLAYER = 'X'
@@ -72,7 +71,6 @@ function TttGamePage() {
   const unlock = () => {
     if (flow.unlocked) return
     setFlow((prev) => ({ ...prev, unlocked: true }))
-    pushNotify('Hidden stage unlocked', 'Tic-Tac-Toe victory opened it.')
   }
 
   const play = (index) => {

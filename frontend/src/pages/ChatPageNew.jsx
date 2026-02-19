@@ -1730,7 +1730,14 @@ function ChatPageNew() {
           >
             ←
           </button>
-          <div className="chat-header-left">
+          <button
+            type="button"
+            className="chat-header-left chat-header-left-btn"
+            onClick={() => selectedUser && setShowUserDetails(true)}
+            title={selectedUser ? 'Open user details' : 'Select a user'}
+            aria-label={selectedUser ? 'Open user details' : 'Select a user'}
+            disabled={!selectedUser}
+          >
             <div className="chat-user-avatar">{selectedUser ? getAvatarLabel(getUserDisplayName(selectedUser)) : '?'}</div>
             <div className="chat-user-info">
               <button
@@ -1747,7 +1754,7 @@ function ChatPageNew() {
                 {selectedPresence.status === 'online' ? 'online' : toLongLastSeen(selectedPresence.lastSeenAt)}
               </div>
             </div>
-          </div>
+          </button>
           <div className="chat-header-actions">
             <button
               className="btn-home-game"
@@ -1965,6 +1972,11 @@ function ChatPageNew() {
                 value={inputValue}
                 onChange={handleInputChange}
                 onKeyDown={(event) => event.key === 'Enter' && handleSendMessage()}
+                onFocus={() => {
+                  setTimeout(() => {
+                    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+                  }, 300)
+                }}
                 autoComplete="off"
                 autoCorrect="off"
                 autoCapitalize="none"

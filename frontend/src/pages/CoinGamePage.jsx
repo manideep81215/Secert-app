@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useFlowState } from '../hooks/useFlowState'
 import { randomPick } from '../lib/gameUtils'
-import { pushNotify } from '../lib/notifications'
 import './CoinGamePage.css'
 
 function CoinGamePage() {
@@ -17,7 +16,6 @@ function CoinGamePage() {
   const unlock = () => {
     if (flow.unlocked) return
     setFlow((prev) => ({ ...prev, unlocked: true }))
-    pushNotify('Hidden stage unlocked', 'Heads/Tails victory opened it.')
   }
 
   const play = (guess) => {

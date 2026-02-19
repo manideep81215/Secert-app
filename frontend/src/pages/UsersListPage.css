@@ -2,9 +2,11 @@
   display: flex;
   flex-direction: column;
   width: 100%;
-  height: 100vh;
+  min-height: 100dvh;
+  height: 100dvh;
   background: linear-gradient(180deg, #6b563a 0%, #5a4a30 100%);
   overflow: hidden;
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 .users-header {
@@ -72,7 +74,7 @@
 .users-list-container {
   flex: 1;
   overflow-y: auto;
-  padding: 0.5rem 0.8rem;
+  padding: 0.5rem 0.8rem calc(0.5rem + env(safe-area-inset-bottom));
 }
 
 .users-list-container::-webkit-scrollbar {
