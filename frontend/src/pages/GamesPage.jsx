@@ -22,10 +22,19 @@ function GamesPage() {
   const navigate = useNavigate()
   const [flow, setFlow] = useFlowState()
   const wsErrorToastAtRef = useRef(0)
+  const wsResumeSuppressUntilRef = useRef(0)
+  const wsLastHiddenAtRef = useRef(Date.now())
+
+  const isAndroidLike = () => {
+    if (typeof navigator === 'undefined') return false
+    return /android/i.test(navigator.userAgent || '')
+  }
 
   const notifyRealtimeIssue = (message) => {
     if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
+    if (isAndroidLike()) return
     const now = Date.now()
+    if (now < Number(wsResumeSuppressUntilRef.current || 0)) return
     if (now - wsErrorToastAtRef.current < 3000) return
     wsErrorToastAtRef.current = now
     toast.clearWaitingQueue()
@@ -38,6 +47,30 @@ function GamesPage() {
   useEffect(() => {
     if (!flow.username || !flow.token) navigate('/auth')
   }, [flow.username, flow.token, navigate])
+
+  useEffect(() => {
+    const setResumeSuppression = (ms = 5000) => {
+      wsResumeSuppressUntilRef.current = Date.now() + ms
+    }
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        wsLastHiddenAtRef.current = Date.now()
+        return
+      }
+      setResumeSuppression(6000)
+    }
+    const onFocus = () => setResumeSuppression(4000)
+    const onPageShow = () => setResumeSuppression(6000)
+
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    window.addEventListener('focus', onFocus)
+    window.addEventListener('pageshow', onPageShow)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      window.removeEventListener('focus', onFocus)
+      window.removeEventListener('pageshow', onPageShow)
+    }
+  }, [])
 
   useEffect(() => {
     const authToken = (flow.token || '').trim()
@@ -86,7 +119,7 @@ function GamesPage() {
       },
       onWebSocketClose: (event) => {
         const code = event?.code ?? 'n/a'
-        if (code === 1000 || code === 1001) return
+        if (code === 1000 || code === 1001 || code === 1006) return
         const reason = event?.reason ? `: ${event.reason}` : ''
         notifyRealtimeIssue(`Dashboard realtime disconnected (${code})${reason}`)
       },

@@ -8,15 +8,11 @@ import { getMe } from '../services/authApi'
 import { getConversation, uploadMedia } from '../services/messagesApi'
 import { getAllUsers } from '../services/usersApi'
 import {
-  ensureNotificationPermission,
-  getNotificationBlockedHelp,
   getNotificationPermissionState,
   getNotifyCutoff,
   pushNotify,
   setNotifyCutoff,
 } from '../lib/notifications'
-import { ensurePushSubscription } from '../lib/pushSubscription'
-import { getPushPublicKey, sendTestPush } from '../services/pushApi'
 import { API_BASE_URL, WS_CHAT_URL } from '../config/apiConfig'
 import { resetFlowState, useFlowState } from '../hooks/useFlowState'
 import './ChatPageNew.css'
@@ -50,18 +46,7 @@ function ChatPageNew() {
   const [inputValue, setInputValue] = useState('')
   const [presenceTick, setPresenceTick] = useState(Date.now())
   const [searchQuery, setSearchQuery] = useState('')
-  const [showUserDetails, setShowUserDetails] = useState(false)
   const [showAttachMenu, setShowAttachMenu] = useState(false)
-  const [showPushDebug, setShowPushDebug] = useState(false)
-  const [pushDebug, setPushDebug] = useState({
-    loading: false,
-    notificationPermission: getNotificationPermissionState(),
-    serviceWorkerActive: false,
-    subscriptionExists: false,
-    pushKeyRegistered: false,
-    lastSyncAt: null,
-    error: '',
-  })
   const [pendingImagePreview, setPendingImagePreview] = useState(null)
   const [activeMediaPreview, setActiveMediaPreview] = useState(null)
   const [isMobileView, setIsMobileView] = useState(() => window.innerWidth <= 920)
@@ -74,7 +59,6 @@ function ChatPageNew() {
   const [draggedMessage, setDraggedMessage] = useState(null)
   const [isDraggingMessage, setIsDraggingMessage] = useState(false)
   const [activeMessageActionsKey, setActiveMessageActionsKey] = useState(null)
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [socket, setSocket] = useState(null)
   const [isRecordingVoice, setIsRecordingVoice] = useState(false)
   const [recordingSeconds, setRecordingSeconds] = useState(0)
@@ -294,10 +278,6 @@ function ChatPageNew() {
 
   useEffect(() => {
     setEditingMessage(null)
-  }, [selectedUser?.username])
-
-  useEffect(() => {
-    setShowDeleteConfirm(false)
   }, [selectedUser?.username])
 
   useEffect(() => {
@@ -804,25 +784,6 @@ function ChatPageNew() {
     }
   }, [])
 
-  const requestNotificationAccess = async () => {
-    const granted = await ensureNotificationPermission(true)
-    const current = granted ? 'granted' : (typeof Notification !== 'undefined' ? Notification.permission : 'unsupported')
-    setNotificationPermission(current)
-    if (granted) {
-      toast.success('Notifications enabled.')
-      await pushNotify('Notifications Enabled', 'You will get alerts for incoming and outgoing messages.')
-      if (flow?.token) {
-        await ensurePushSubscription(flow.token)
-      }
-      return
-    }
-    if (current === 'denied') {
-      toast.error(getNotificationBlockedHelp(), { autoClose: 5500 })
-    } else {
-      toast.error('Notification permission not granted.')
-    }
-  }
-
   const notifyRealtimeIssue = (message) => {
     if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
     const now = Date.now()
@@ -900,105 +861,6 @@ function ChatPageNew() {
     setActiveMediaPreview(null)
   }
 
-  const refreshPushDebug = async (reason = 'manual') => {
-    if (typeof window === 'undefined') return
-
-    const snapshot = {
-      loading: true,
-      notificationPermission: getNotificationPermissionState(),
-      serviceWorkerActive: false,
-      subscriptionExists: false,
-      pushKeyRegistered: false,
-      lastSyncAt: pushDebug.lastSyncAt,
-      error: '',
-    }
-    setPushDebug(snapshot)
-
-    try {
-      let registration = null
-      if ('serviceWorker' in navigator) {
-        registration = await navigator.serviceWorker.getRegistration('/sw.js')
-        if (!registration) {
-          registration = await navigator.serviceWorker.ready
-        }
-      }
-
-      const serviceWorkerActive = Boolean(registration?.active)
-
-      // Try to provision subscription first, then read actual subscription state.
-      let subscriptionError = ''
-      if (flow?.token && snapshot.notificationPermission === 'granted') {
-        try {
-          await ensurePushSubscription(flow.token)
-        } catch (error) {
-          subscriptionError = error?.message || 'Subscription setup failed.'
-        }
-      }
-
-      if (!registration && 'serviceWorker' in navigator) {
-        registration = await navigator.serviceWorker.getRegistration('/sw.js')
-      }
-      const subscription = registration?.pushManager ? await registration.pushManager.getSubscription() : null
-      const subscriptionExists = Boolean(subscription)
-
-      let pushKeyRegistered = false
-      let keyError = ''
-      try {
-        const keyConfig = await getPushPublicKey()
-        pushKeyRegistered = Boolean(keyConfig?.enabled && keyConfig?.publicKey)
-        if (!pushKeyRegistered) {
-          keyError = 'Push key not configured on server.'
-        }
-      } catch (error) {
-        keyError = error?.message || 'Push key check failed.'
-      }
-
-      const combinedError = [subscriptionError, keyError].filter(Boolean).join(' ')
-      const next = {
-        loading: false,
-        notificationPermission: snapshot.notificationPermission,
-        serviceWorkerActive,
-        subscriptionExists,
-        pushKeyRegistered,
-        lastSyncAt: Date.now(),
-        error: combinedError,
-      }
-      setPushDebug(next)
-      console.info('[push-debug]', { reason, ...next })
-    } catch (error) {
-      const next = {
-        loading: false,
-        notificationPermission: snapshot.notificationPermission,
-        serviceWorkerActive: snapshot.serviceWorkerActive,
-        subscriptionExists: snapshot.subscriptionExists,
-        pushKeyRegistered: snapshot.pushKeyRegistered,
-        lastSyncAt: Date.now(),
-        error: error?.message || 'Push debug check failed.',
-      }
-      setPushDebug(next)
-      console.warn('[push-debug]', { reason, ...next })
-    }
-  }
-
-  const handleSendTestPush = async () => {
-    if (!flow?.token) {
-      toast.error('Login required for test push.')
-      return
-    }
-    try {
-      const result = await sendTestPush(flow.token, {})
-      if (result?.success) {
-        toast.success(result?.message || 'Test push sent.')
-      } else {
-        toast.error(result?.message || 'Test push failed.')
-      }
-      refreshPushDebug('test-push')
-    } catch (error) {
-      const message = error?.response?.data?.message || error?.response?.data?.detail || 'Failed to send test push.'
-      toast.error(message)
-    }
-  }
-
   useEffect(() => {
     const onKeyDown = (event) => {
       const target = event.target
@@ -1015,25 +877,6 @@ function ChatPageNew() {
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [navigate])
-
-  useEffect(() => {
-    refreshPushDebug('mount')
-    const onFocus = () => refreshPushDebug('focus')
-    const onOnline = () => refreshPushDebug('online')
-    const onVisible = () => {
-      if (document.visibilityState !== 'visible') return
-      refreshPushDebug('visible')
-    }
-
-    window.addEventListener('focus', onFocus)
-    window.addEventListener('online', onOnline)
-    document.addEventListener('visibilitychange', onVisible)
-    return () => {
-      window.removeEventListener('focus', onFocus)
-      window.removeEventListener('online', onOnline)
-      document.removeEventListener('visibilitychange', onVisible)
-    }
-  }, [flow?.token, notificationPermission])
 
   useEffect(() => () => {
     if (pendingImagePreview?.url) {
@@ -1093,13 +936,47 @@ function ChatPageNew() {
     () => messages.filter((msg) => msg.type && (msg.type === 'image' || msg.type === 'video') && msg.mediaUrl),
     [messages]
   )
+  const openUserInfo = () => {
+    if (!selectedUser) return
+    navigate('/chat/info', {
+      state: {
+        selectedUser: {
+          id: selectedUser.id || null,
+          username: selectedUser.username || '',
+          name: selectedUser.name || '',
+        },
+        selectedPresence: {
+          status: selectedPresence.status || 'offline',
+          lastSeenAt: selectedPresence.lastSeenAt || null,
+        },
+        selectedTyping,
+        selectedSeen,
+        notificationPermission,
+        mediaItems: detailMediaItems.map((msg) => ({
+          type: msg.type,
+          mediaUrl: msg.mediaUrl,
+          fileName: msg.fileName || null,
+          createdAt: msg.createdAt || msg.clientCreatedAt || null,
+        })),
+      },
+    })
+  }
 
   useEffect(() => {
     const requestedUserId = location.state?.selectedUserId
     const requestedUsername = location.state?.selectedUsername
+    const shouldRefreshConversation = Boolean(location.state?.refreshConversation)
     const requestedFromQuery = new URLSearchParams(location.search).get('with')
     const normalizedFromQuery = requestedFromQuery ? formatUsername(requestedFromQuery).toLowerCase() : ''
-    if (!requestedUserId && !requestedUsername && !normalizedFromQuery) return
+    if (shouldRefreshConversation) {
+      setConversationClears(readConversationClears())
+    }
+    if (!requestedUserId && !requestedUsername && !normalizedFromQuery) {
+      if (shouldRefreshConversation) {
+        navigate('/chat', { replace: true })
+      }
+      return
+    }
     if (!users.length) return
 
     const nextSelectedUser = users.find((user) =>
@@ -1535,34 +1412,6 @@ function ChatPageNew() {
     setInputValue('')
   }
 
-  const requestDeleteChatForMe = () => {
-    if (!selectedUser) return
-    setShowDeleteConfirm(true)
-  }
-
-  const handleDeleteChatForMe = () => {
-    if (!selectedUser) return
-
-    const key = getConversationKey(selectedUser.username)
-    const cutoffNow = Date.now()
-    setConversationClears((prev) => {
-      const next = { ...prev, [key]: cutoffNow }
-      writeConversationClears(next)
-      return next
-    })
-    setMessages([])
-    setReplyingTo(null)
-    setUsers((prev) =>
-      prev.map((user) =>
-        user.username === selectedUser.username
-          ? { ...user, lastMessage: '', timestamp: '' }
-          : user
-      )
-    )
-    toast.success('Chat deleted for you.')
-    setShowDeleteConfirm(false)
-  }
-
   const handleReply = (message) => {
     setEditingMessage(null)
     setReplyingTo(message)
@@ -1751,13 +1600,13 @@ function ChatPageNew() {
           </button>
           <div
             className="chat-header-left chat-header-left-btn"
-            onClick={() => selectedUser && setShowUserDetails(true)}
-            onTouchEnd={() => selectedUser && setShowUserDetails(true)}
+            onClick={openUserInfo}
+            onTouchEnd={openUserInfo}
             onKeyDown={(event) => {
               if (!selectedUser) return
               if (event.key === 'Enter' || event.key === ' ') {
                 event.preventDefault()
-                setShowUserDetails(true)
+                openUserInfo()
               }
             }}
             title={selectedUser ? 'Open user details' : 'Select a user'}
@@ -1779,8 +1628,8 @@ function ChatPageNew() {
           <div className="chat-header-actions">
             <button
               className="btn-user-details"
-              onClick={() => selectedUser && setShowUserDetails(true)}
-              onTouchEnd={() => selectedUser && setShowUserDetails(true)}
+              onClick={openUserInfo}
+              onTouchEnd={openUserInfo}
               title="User info"
               aria-label="User info"
               disabled={!selectedUser}
@@ -1797,28 +1646,6 @@ function ChatPageNew() {
             </button>
           </div>
         </motion.div>
-
-        {showPushDebug && (
-          <div className="push-debug-panel">
-            <div className="push-debug-head">
-              <strong>Push Debug</strong>
-              <div>
-                <button type="button" onClick={handleSendTestPush} aria-label="Send test push">Send Test</button>
-                <button type="button" onClick={() => refreshPushDebug('manual')} aria-label="Refresh push debug">Refresh</button>
-              </div>
-            </div>
-            <div className="push-debug-row"><span>Permission</span><b>{pushDebug.notificationPermission}</b></div>
-            <div className="push-debug-row"><span>SW Active</span><b>{pushDebug.serviceWorkerActive ? 'yes' : 'no'}</b></div>
-            <div className="push-debug-row"><span>Subscription</span><b>{pushDebug.subscriptionExists ? 'yes' : 'no'}</b></div>
-            <div className="push-debug-row"><span>Push Key</span><b>{pushDebug.pushKeyRegistered ? 'yes' : 'no'}</b></div>
-            <div className="push-debug-row">
-              <span>Last Sync</span>
-              <b>{pushDebug.lastSyncAt ? new Date(pushDebug.lastSyncAt).toLocaleTimeString() : '-'}</b>
-            </div>
-            {pushDebug.loading && <div className="push-debug-state">checking...</div>}
-            {pushDebug.error && <div className="push-debug-error">{pushDebug.error}</div>}
-          </div>
-        )}
 
         <motion.div
           className="messages-area"
@@ -2105,148 +1932,11 @@ function ChatPageNew() {
             </motion.div>
           </motion.div>
         )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {showUserDetails && (
-          <motion.div
-            className="user-details-panel"
-            initial={{ x: 300 }}
-            animate={{ x: 0 }}
-            exit={{ x: 300 }}
-            transition={{ duration: 0.3 }}
-          >
-            <div className="details-header">
-              <h3>User Details</h3>
-              <button className="btn-close" onClick={() => setShowUserDetails(false)}>X</button>
-            </div>
-            <div className="details-content">
-              <div className="details-avatar">
-                <span className="details-avatar-name">{selectedUser ? getUserDisplayName(selectedUser) : '?'}</span>
-              </div>
-              <h2 className="details-name">{selectedUser ? getUserDisplayName(selectedUser) : '-'}</h2>
-              <div className="details-quick-actions">
-                <button
-                  type="button"
-                  className="details-quick-btn"
-                  onClick={requestDeleteChatForMe}
-                  title="Delete chat for me"
-                  aria-label="Delete chat for me"
-                  disabled={!selectedUser}
-                >
-                  <span className="details-quick-icon">{icons.delete}</span>
-                  <span className="details-quick-label">Delete</span>
-                </button>
-                <button
-                  type="button"
-                  className={`details-quick-btn ${notificationPermission === 'granted' ? 'active' : ''}`}
-                  onClick={requestNotificationAccess}
-                  title={notificationPermission === 'granted' ? 'Notifications enabled' : 'Enable notifications'}
-                  aria-label="Enable notifications"
-                >
-                  <span className="details-quick-icon">N</span>
-                  <span className="details-quick-label">Notify</span>
-                </button>
-                <button
-                  type="button"
-                  className={`details-quick-btn ${showPushDebug ? 'active' : ''}`}
-                  onClick={() => setShowPushDebug((prev) => !prev)}
-                  title="Push debug info"
-                  aria-label="Push debug info"
-                >
-                  <span className="details-quick-icon">D</span>
-                  <span className="details-quick-label">Debug</span>
-                </button>
-                <button
-                  type="button"
-                  className="details-quick-btn"
-                  onClick={() => setShowUserDetails(false)}
-                  title="Back to chat"
-                  aria-label="Back to chat"
-                >
-                  <span className="details-quick-icon">←</span>
-                  <span className="details-quick-label">Back</span>
-                </button>
-              </div>
-              <p className="details-status">
-                {selectedTyping
-                  ? 'typing...'
-                  : (selectedPresence.status === 'online'
-                      ? `${selectedSeen ? 'Seen · ' : ''}online`
-                      : `${selectedSeen ? 'Seen · ' : ''}${toLongLastSeen(selectedPresence.lastSeenAt)}`)}
-              </p>
-
-              <div className="details-section">
-                <h4>Contact Information</h4>
-                <div className="detail-item">
-                  <span className="detail-label">Name:</span>
-                  <span className="detail-value">{selectedUser ? getUserDisplayName(selectedUser) : '-'}</span>
-                </div>
-              </div>
-
-              <div className="details-section">
-                <h4>Media</h4>
-                <div className="media-grid">
-                  {detailMediaItems.map((msg, idx) => (
-                    <button
-                      key={`${msg.mediaUrl || idx}-${idx}`}
-                      type="button"
-                      className="media-item"
-                      title={msg.fileName || (msg.type === 'image' ? 'Image' : 'Video')}
-                      onClick={() => setActiveMediaPreview({
-                        type: msg.type === 'video' ? 'video' : 'image',
-                        url: msg.mediaUrl,
-                        name: msg.fileName || (msg.type === 'video' ? 'video' : 'image'),
-                      })}
-                    >
-                      {msg.type === 'image' ? (
-                        <img className="media-thumb" src={msg.mediaUrl} alt={msg.fileName || 'image'} loading="lazy" />
-                      ) : (
-                        <video className="media-thumb media-video-thumb" src={msg.mediaUrl} preload="metadata" muted playsInline />
-                      )}
-                      <span className="media-type-badge">{msg.type === 'video' ? 'Video' : 'Image'}</span>
-                    </button>
-                  ))}
-                </div>
-                {detailMediaItems.length === 0 && (
-                  <p className="details-bio">No media shared yet.</p>
-                )}
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {showDeleteConfirm && (
-          <motion.div
-            className="confirm-modal"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            <div className="confirm-modal-backdrop" onClick={() => setShowDeleteConfirm(false)} />
-            <motion.div
-              className="confirm-modal-card"
-              initial={{ y: 24, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 16, opacity: 0 }}
-            >
-              <div className="confirm-modal-title">Delete chat?</div>
-              <div className="confirm-modal-text">
-                Delete chat with {selectedUser ? getUserDisplayName(selectedUser) : 'this user'} for you only?
-              </div>
-              <div className="confirm-modal-actions">
-                <button type="button" className="confirm-cancel" onClick={() => setShowDeleteConfirm(false)}>Cancel</button>
-                <button type="button" className="confirm-danger" onClick={handleDeleteChatForMe}>Delete</button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
+      </AnimatePresence>
+</div>
   )
 }
 
 export default ChatPageNew
+
 

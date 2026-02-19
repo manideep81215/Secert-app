@@ -10,6 +10,7 @@ import TttGamePage from './pages/TttGamePage'
 import VerifyPage from './pages/VerifyPage'
 import UsersListPage from './pages/UsersListPage'
 import ChatPageNew from './pages/ChatPageNew'
+import ChatInfoPage from './pages/ChatInfoPage'
 import ProfilePage from './pages/ProfilePage'
 import { useFlowState } from './hooks/useFlowState'
 import { ensurePushSubscription } from './lib/pushSubscription'
@@ -34,7 +35,7 @@ function App() {
     location.pathname === '/profile' ||
     location.pathname === '/verify' ||
     location.pathname === '/users' ||
-    location.pathname === '/chat'
+    location.pathname.startsWith('/chat')
 
   useEffect(() => {
     const IOS_HELP_DISMISSED_KEY = 'ios_install_help_dismissed'
@@ -143,6 +144,7 @@ function App() {
               <Route path="/verify" element={<VerifyPage />} />
               <Route path="/users" element={<UsersListPage />} />
               <Route path="/chat" element={<ChatPageNew />} />
+              <Route path="/chat/info" element={<ChatInfoPage />} />
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="*" element={<Navigate to="/auth" replace />} />
             </Routes>
