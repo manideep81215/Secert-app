@@ -108,6 +108,7 @@ public class ChatMessageController {
   private ConversationMessageDto toDto(ChatMessageEntity row, String meUsername) {
     boolean isSender = meUsername.equalsIgnoreCase(row.getFromUsername());
     return new ConversationMessageDto(
+        row.getId(),
         isSender ? "user" : "other",
         row.getFromUsername(),
         row.getMessage(),
@@ -116,6 +117,8 @@ public class ChatMessageController {
         row.getMediaUrl(),
         row.getMimeType(),
         row.getCreatedAt() != null ? row.getCreatedAt().toEpochMilli() : null,
+        row.isEdited(),
+        row.getEditedAt() != null ? row.getEditedAt().toEpochMilli() : null,
         row.getReplyText(),
         row.getReplySenderName());
   }
@@ -145,6 +148,7 @@ public class ChatMessageController {
   }
 
   public record ConversationMessageDto(
+      Long id,
       String sender,
       String senderName,
       String text,
@@ -153,6 +157,8 @@ public class ChatMessageController {
       String mediaUrl,
       String mimeType,
       Long createdAt,
+      Boolean edited,
+      Long editedAt,
       String replyText,
       String replySenderName) {
   }

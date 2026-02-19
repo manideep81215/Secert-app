@@ -52,6 +52,12 @@ public class ChatMessageEntity {
   @Column(nullable = false, updatable = false)
   private Instant createdAt;
 
+  @Column(nullable = false)
+  private boolean edited = false;
+
+  @Column
+  private Instant editedAt;
+
   @PrePersist
   public void prePersist() {
     if (createdAt == null) {
@@ -137,5 +143,21 @@ public class ChatMessageEntity {
 
   public Instant getCreatedAt() {
     return createdAt;
+  }
+
+  public boolean isEdited() {
+    return edited;
+  }
+
+  public void setEdited(boolean edited) {
+    this.edited = edited;
+  }
+
+  public Instant getEditedAt() {
+    return editedAt;
+  }
+
+  public void setEditedAt(Instant editedAt) {
+    this.editedAt = editedAt;
   }
 }

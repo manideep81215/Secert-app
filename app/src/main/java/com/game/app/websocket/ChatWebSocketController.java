@@ -18,6 +18,7 @@ import com.game.app.service.PushNotificationService;
 
 @Controller
 public class ChatWebSocketController {
+  private static final long EDIT_WINDOW_MILLIS = 15 * 60 * 1000L;
 
   private final SimpMessagingTemplate messagingTemplate;
   private final ChatMessageRepository chatMessageRepository;
@@ -65,6 +66,7 @@ public class ChatWebSocketController {
         normalizedTo,
         "/queue/messages",
         new IncomingMessage(
+            entity.getId(),
             normalizedFrom,
             payload.message(),
             payload.type(),
@@ -76,7 +78,9 @@ public class ChatWebSocketController {
                 : buildReplyPreview(payload.replyText(), payload.replySenderName()),
             payload.replyText(),
             payload.replySenderName(),
-            entity.getCreatedAt() != null ? entity.getCreatedAt().toEpochMilli() : Instant.now().toEpochMilli()));
+            entity.getCreatedAt() != null ? entity.getCreatedAt().toEpochMilli() : Instant.now().toEpochMilli(),
+            entity.isEdited(),
+            entity.getEditedAt() != null ? entity.getEditedAt().toEpochMilli() : null));
 
     messagingTemplate.convertAndSendToUser(
         normalizedFrom,
@@ -95,6 +99,56 @@ public class ChatWebSocketController {
           preview,
           "/#/chat?with=" + normalizedFrom);
     }
+  }
+
+  @MessageMapping("/chat.edit")
+  public void editMessage(EditMessage payload, Principal principal) {
+    if (payload == null || payload.messageId() == null || payload.message() == null || payload.message().isBlank()) {
+      return;
+    }
+
+    String editor = principal != null ? principal.getName() : payload.fromUsername();
+    if (editor == null || editor.isBlank()) {
+      return;
+    }
+
+    String normalizedEditor = normalizeUsername(editor);
+    ChatMessageEntity entity = chatMessageRepository.findById(payload.messageId()).orElse(null);
+    if (entity == null) {
+      messagingTemplate.convertAndSendToUser(normalizedEditor, "/queue/edit-ack", new EditAck(payload.messageId(), false, "Message not found"));
+      return;
+    }
+
+    String normalizedFrom = normalizeUsername(entity.getFromUsername());
+    if (!normalizedEditor.equals(normalizedFrom)) {
+      messagingTemplate.convertAndSendToUser(normalizedEditor, "/queue/edit-ack", new EditAck(payload.messageId(), false, "Not allowed"));
+      return;
+    }
+
+    Instant createdAt = entity.getCreatedAt() != null ? entity.getCreatedAt() : Instant.now();
+    long ageMillis = Math.max(0L, Instant.now().toEpochMilli() - createdAt.toEpochMilli());
+    if (ageMillis > EDIT_WINDOW_MILLIS) {
+      messagingTemplate.convertAndSendToUser(normalizedEditor, "/queue/edit-ack", new EditAck(payload.messageId(), false, "Edit window expired"));
+      return;
+    }
+
+    entity.setMessage(payload.message());
+    entity.setEdited(true);
+    entity.setEditedAt(Instant.now());
+    entity = chatMessageRepository.save(entity);
+
+    String normalizedTo = normalizeUsername(entity.getToUsername());
+    MessageEditPayload event = new MessageEditPayload(
+        entity.getId(),
+        normalizedFrom,
+        entity.getMessage(),
+        true,
+        entity.getEditedAt() != null ? entity.getEditedAt().toEpochMilli() : Instant.now().toEpochMilli(),
+        entity.getCreatedAt() != null ? entity.getCreatedAt().toEpochMilli() : Instant.now().toEpochMilli());
+
+    messagingTemplate.convertAndSendToUser(normalizedTo, "/queue/message-edits", event);
+    messagingTemplate.convertAndSendToUser(normalizedFrom, "/queue/message-edits", event);
+    messagingTemplate.convertAndSendToUser(normalizedFrom, "/queue/edit-ack", new EditAck(entity.getId(), true, null));
   }
 
   @MessageMapping("/user.online")
@@ -209,6 +263,7 @@ public class ChatWebSocketController {
       String replySenderName) {}
 
   public record IncomingMessage(
+      Long id,
       String fromUsername,
       String message,
       String type,
@@ -218,7 +273,9 @@ public class ChatWebSocketController {
       ReplyPreview replyingTo,
       String replyText,
       String replySenderName,
-      Long createdAt) {}
+      Long createdAt,
+      Boolean edited,
+      Long editedAt) {}
 
   public record ReplyPreview(String text, String senderName) {}
 
@@ -231,4 +288,11 @@ public class ChatWebSocketController {
   public record TypingPayload(String fromUsername, boolean typing) {}
 
   public record SendAck(String tempId, boolean success, Long messageId, Long createdAt) {}
+
+  public record EditMessage(Long messageId, String message, String fromUsername) {}
+
+  public record MessageEditPayload(Long messageId, String fromUsername, String message, boolean edited, Long editedAt,
+      Long createdAt) {}
+
+  public record EditAck(Long messageId, boolean success, String reason) {}
 }

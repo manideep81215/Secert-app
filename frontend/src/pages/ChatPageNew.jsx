@@ -130,6 +130,7 @@ function ChatPageNew() {
     reply: '\u21A9',
     delete: '\u2715',
     edit: '\u270E',
+    resend: '\u21BB',
     send: '\u27A4',
     game: '\uD83C\uDFAE',
   }
@@ -160,6 +161,7 @@ function ChatPageNew() {
     return textValue || 'New message'
   }
   const getMessageCreatedAtMs = (message) => Number(message?.createdAt || message?.clientCreatedAt || 0)
+  const isMessageFailed = (message) => message?.deliveryStatus === 'failed'
   const getMessageEditKey = (message) => {
     if (!message) return ''
     if (message.tempId) return `temp:${message.tempId}`
@@ -170,10 +172,18 @@ function ChatPageNew() {
   const isSameMessage = (message, key) => getMessageEditKey(message) === key
   const canEditMessage = (message) => {
     if (!message || message.sender !== 'user') return false
+    if (isMessageFailed(message)) return false
     if (message.type && message.type !== 'text') return false
+    if (!message.messageId) return false
     const createdAt = getMessageCreatedAtMs(message)
     if (!createdAt) return false
     return (Date.now() - createdAt) <= EDIT_WINDOW_MS
+  }
+  const getMessageFooterLabel = (message) => {
+    if (isMessageFailed(message)) return `Not sent · ${message.timestamp}`
+    if (message?.deliveryStatus === 'uploading') return `Sending... · ${message.timestamp}`
+    if (message?.edited) return `edited · ${message.timestamp}`
+    return message?.timestamp || getTimeLabel()
   }
   const createTempId = () => (window.crypto?.randomUUID?.() || `${Date.now()}_${Math.random().toString(16).slice(2)}`)
   const MAX_IMAGE_BYTES = 8 * 1024 * 1024
@@ -269,6 +279,45 @@ function ChatPageNew() {
   }, [isMobileView, selectedUser])
 
   useEffect(() => {
+    if (typeof document === 'undefined' || typeof window === 'undefined') return undefined
+
+    const setChatViewportHeight = () => {
+      const vv = window.visualViewport
+      const nextHeight = vv ? Math.round(vv.height) : window.innerHeight
+      document.documentElement.style.setProperty('--chat-vh', `${nextHeight}px`)
+    }
+
+    setChatViewportHeight()
+    window.addEventListener('resize', setChatViewportHeight)
+    window.addEventListener('orientationchange', setChatViewportHeight)
+    window.visualViewport?.addEventListener('resize', setChatViewportHeight)
+    window.visualViewport?.addEventListener('scroll', setChatViewportHeight)
+    return () => {
+      window.removeEventListener('resize', setChatViewportHeight)
+      window.removeEventListener('orientationchange', setChatViewportHeight)
+      window.visualViewport?.removeEventListener('resize', setChatViewportHeight)
+      window.visualViewport?.removeEventListener('scroll', setChatViewportHeight)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.Capacitor) return
+    if (window.Capacitor.getPlatform?.() !== 'ios') return
+    const hideAccessoryBar = async () => {
+      try {
+        const moduleName = '@capacitor/keyboard'
+        const mod = await import(/* @vite-ignore */ moduleName)
+        const keyboard = mod?.Keyboard
+        if (!keyboard?.setAccessoryBarVisible) return
+        await keyboard.setAccessoryBarVisible({ isVisible: false })
+      } catch {
+        // Ignore when Keyboard plugin is unavailable.
+      }
+    }
+    hideAccessoryBar()
+  }, [])
+
+  useEffect(() => {
     const interval = setInterval(() => {
       setPresenceTick(Date.now())
     }, 30000)
@@ -359,6 +408,7 @@ function ChatPageNew() {
           clientCreatedAt: Number(row.createdAt || 0) || null,
           timestamp: formatTimestamp(row.createdAt),
           edited: Boolean(row.edited || row.isEdited),
+          editedAt: Number(row.editedAt || 0) || null,
         }))
         setMessages(normalized)
         setReplyingTo(null)
@@ -455,6 +505,7 @@ function ChatPageNew() {
               senderName: formatUsername(fromUsername),
               messageId: data?.id,
               edited: Boolean(data?.edited || data?.isEdited),
+              editedAt: Number(data?.editedAt || 0) || null,
             }
             incoming.timestamp = formatTimestamp(incoming.createdAt)
             const incomingPreview = getMessagePreview(incoming.type, incoming.text, incoming.fileName)
@@ -534,7 +585,7 @@ function ChatPageNew() {
                   ? {
                       ...msg,
                       deliveryStatus: ack?.success ? 'sent' : 'failed',
-                      messageId: ack?.id || msg.messageId || null,
+                      messageId: ack?.messageId || ack?.id || msg.messageId || null,
                       createdAt: ack?.createdAt || msg.createdAt || null,
                       clientCreatedAt: ack?.createdAt || msg.clientCreatedAt || msg.createdAt || null,
                       timestamp: formatTimestamp(ack?.createdAt || msg.createdAt),
@@ -544,6 +595,43 @@ function ChatPageNew() {
             )
           } catch (error) {
             console.error('Failed parsing send ack payload', error)
+          }
+        })
+
+        client.subscribe('/user/queue/message-edits', (frame) => {
+          try {
+            const event = JSON.parse(frame.body)
+            const messageId = Number(event?.messageId || 0)
+            const nextText = event?.message
+            if (!messageId || !nextText) return
+            const nextEditedAt = Number(event?.editedAt || Date.now())
+            setMessages((prev) => prev.map((msg) => (
+              Number(msg?.messageId || 0) === messageId
+                ? {
+                    ...msg,
+                    text: nextText,
+                    edited: true,
+                    editedAt: nextEditedAt,
+                    timestamp: formatTimestamp(msg?.createdAt || msg?.clientCreatedAt),
+                  }
+                : msg
+            )))
+          } catch (error) {
+            console.error('Failed parsing message edit payload', error)
+          }
+        })
+
+        client.subscribe('/user/queue/edit-ack', (frame) => {
+          try {
+            const ack = JSON.parse(frame.body)
+            if (ack?.success) return
+            if (ack?.reason) {
+              toast.error(`Edit failed: ${ack.reason}`)
+            } else {
+              toast.error('Edit failed.')
+            }
+          } catch {
+            // Ignore invalid edit acks.
           }
         })
       },
@@ -908,15 +996,26 @@ function ChatPageNew() {
         setEditingMessage(null)
         return
       }
+      if (!socket?.connected) {
+        toast.error('Realtime server disconnected. Edit not sent.')
+        return
+      }
 
       setMessages((prev) => prev.map((msg) => (
         isSameMessage(msg, editingMessage.key)
           ? { ...msg, text, edited: true, editedAt: Date.now() }
           : msg
       )))
+      socket.publish({
+        destination: '/app/chat.edit',
+        body: JSON.stringify({
+          messageId: currentTarget.messageId,
+          message: text,
+          fromUsername: flow.username,
+        }),
+      })
       setInputValue('')
       setEditingMessage(null)
-      toast.success('Message edited.')
       publishTyping(false, true)
       return
     }
@@ -1242,6 +1341,51 @@ function ChatPageNew() {
     setMessages((prev) => prev.filter((msg) => msg !== targetMessage))
   }
 
+  const handleResendMessage = (message) => {
+    if (!selectedUser || !message || message.sender !== 'user') return
+    if (!isMessageFailed(message)) return
+    if (!socket?.connected) {
+      toast.error('Realtime server disconnected. Message not sent.')
+      return
+    }
+
+    const messageKey = getMessageEditKey(message)
+    const type = message.type || 'text'
+    const mediaUrl = message.mediaUrl || null
+    if (type !== 'text' && (!mediaUrl || String(mediaUrl).startsWith('blob:'))) {
+      toast.error('Cannot resend local media. Please upload the file again.')
+      return
+    }
+
+    const nextTempId = createTempId()
+    setMessages((prev) => prev.map((msg) => (
+      isSameMessage(msg, messageKey)
+        ? { ...msg, tempId: nextTempId, deliveryStatus: 'uploading' }
+        : msg
+    )))
+
+    socket.publish({
+      destination: '/app/chat.send',
+      body: JSON.stringify({
+        toUsername: selectedUser.username,
+        fromUsername: flow.username,
+        message: message.text || '',
+        tempId: nextTempId,
+        type,
+        fileName: message.fileName || null,
+        mediaUrl,
+        mimeType: message.mimeType || null,
+        replyingTo: message.replyingTo ? { text: message.replyingTo.text, senderName: message.replyingTo.senderName } : null,
+        replyText: message.replyingTo?.text || null,
+        replySenderName: message.replyingTo?.senderName || null,
+      }),
+    })
+    sendAckTimeoutsRef.current[nextTempId] = setTimeout(() => {
+      setMessages((prev) => prev.map((msg) => (msg.tempId === nextTempId ? { ...msg, deliveryStatus: 'failed' } : msg)))
+      delete sendAckTimeoutsRef.current[nextTempId]
+    }, 10000)
+  }
+
   const handleStartEdit = (message) => {
     if (!canEditMessage(message)) {
       toast.error('Message can only be edited within 15 minutes.')
@@ -1478,11 +1622,7 @@ function ChatPageNew() {
             <div className="chat-user-info">
               <div className="chat-user-name">{selectedUser ? `@${formatUsername(selectedUser.username)}` : 'Select a user'}</div>
               <div className={`chat-user-status ${selectedPresence.status === 'online' ? 'online' : 'offline'}`}>
-                {selectedTyping
-                  ? 'typing...'
-                  : (selectedPresence.status === 'online'
-                      ? `${selectedSeen ? 'Seen · ' : ''}online`
-                      : `${selectedSeen ? 'Seen · ' : ''}${toLongLastSeen(selectedPresence.lastSeenAt)}`)}
+                {selectedPresence.status === 'online' ? 'online' : toLongLastSeen(selectedPresence.lastSeenAt)}
               </div>
             </div>
           </div>
@@ -1561,6 +1701,7 @@ function ChatPageNew() {
           <AnimatePresence>
             {messages.map((message, index) => {
               const messageKey = `${index}-${message.createdAt || message.timestamp}-${message.text}`
+              const messageFailed = isMessageFailed(message)
               return (
               <motion.div
                 key={messageKey}
@@ -1602,14 +1743,23 @@ function ChatPageNew() {
                   {(message.type && message.type !== 'text' && !message.mediaUrl) && (
                     <div className="message-media-fallback">{`${getTypeIcon(message.type)} ${message.text}`.trim()}</div>
                   )}
-                  <span className="message-time">
-                    {message.edited ? `edited · ${message.timestamp}` : message.timestamp}
-                  </span>
+                  <span className="message-time">{getMessageFooterLabel(message)}</span>
                 </div>
                 <div className="message-actions">
-                  <button className="btn-reply" onClick={() => handleReply(message)} title="Reply" aria-label="Reply">{icons.reply}</button>
-                  {message.sender === 'user' && canEditMessage(message) && (
+                  <button
+                    className="btn-reply"
+                    onClick={() => handleReply(message)}
+                    title={messageFailed ? 'Cannot reply to unsent message' : 'Reply'}
+                    aria-label="Reply"
+                    disabled={messageFailed}
+                  >
+                    {icons.reply}
+                  </button>
+                  {message.sender === 'user' && !messageFailed && canEditMessage(message) && (
                     <button className="btn-edit" onClick={() => handleStartEdit(message)} title="Edit" aria-label="Edit">{icons.edit}</button>
+                  )}
+                  {message.sender === 'user' && messageFailed && (
+                    <button className="btn-resend" onClick={() => handleResendMessage(message)} title="Resend" aria-label="Resend">{icons.resend}</button>
                   )}
                   {message.sender === 'user' && (
                     <button className="btn-delete" onClick={() => deleteMessage(message)} title="Delete" aria-label="Delete">{icons.delete}</button>
@@ -1631,6 +1781,18 @@ function ChatPageNew() {
                   <span />
                   <span />
                 </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+          <AnimatePresence>
+            {selectedUser && !selectedTyping && selectedSeen && (
+              <motion.div
+                className="seen-indicator-row"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 8 }}
+              >
+                <span className="seen-indicator-label">Seen</span>
               </motion.div>
             )}
           </AnimatePresence>
