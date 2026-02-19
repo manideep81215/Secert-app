@@ -5,8 +5,8 @@
   grid-template-columns: 280px 1fr;
   width: 100%;
   min-width: 100%;
-  min-height: var(--chat-vh, 100dvh);
-  height: var(--chat-vh, 100dvh);
+  min-height: 100dvh;
+  height: 100dvh;
   background: #f5f5f5;
   gap: 0;
   overflow: hidden;
@@ -682,9 +682,8 @@
   border-top: 1px solid #f0f0f0;
   padding: 1rem 1.5rem;
   box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.02);
-  position: sticky;
-  bottom: 0;
-  z-index: 140;
+  position: relative;
+  z-index: 20;
 }
 
 .input-area.drop-target {
@@ -1130,7 +1129,7 @@
     display: flex;
     position: relative;
     width: 100%;
-    height: var(--chat-vh, 100dvh);
+    height: 100dvh;
     z-index: 5;
   }
 
@@ -1158,7 +1157,7 @@
     position: absolute;
     inset: 0;
     width: 100%;
-    height: var(--chat-vh, 100dvh);
+    height: 100dvh;
     z-index: 120;
   }
 
@@ -1172,14 +1171,24 @@
     inset: 0;
     width: 100%;
     max-width: 100%;
-    height: var(--chat-vh, 100dvh);
+    height: 100dvh;
     z-index: 110;
+    overflow: hidden;
+  }
+
+  .messages-area {
+    padding-bottom: calc(5.1rem + env(safe-area-inset-bottom));
   }
 
   .input-area {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
     padding-left: max(0.75rem, env(safe-area-inset-left));
     padding-right: max(0.75rem, env(safe-area-inset-right));
     padding-bottom: calc(0.55rem + env(safe-area-inset-bottom));
+    z-index: 140;
   }
 
   .message-input-shell {

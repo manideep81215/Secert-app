@@ -13,7 +13,9 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 
 import com.game.app.model.ChatMessageEntity;
+import com.game.app.model.ChatReadReceiptEntity;
 import com.game.app.repository.ChatMessageRepository;
+import com.game.app.repository.ChatReadReceiptRepository;
 import com.game.app.service.PushNotificationService;
 
 @Controller
@@ -22,6 +24,7 @@ public class ChatWebSocketController {
 
   private final SimpMessagingTemplate messagingTemplate;
   private final ChatMessageRepository chatMessageRepository;
+  private final ChatReadReceiptRepository chatReadReceiptRepository;
   private final PushNotificationService pushNotificationService;
   private final Set<String> onlineUsers = ConcurrentHashMap.newKeySet();
   private final Map<String, Long> lastSeenMap = new ConcurrentHashMap<>();
@@ -29,9 +32,11 @@ public class ChatWebSocketController {
   public ChatWebSocketController(
       SimpMessagingTemplate messagingTemplate,
       ChatMessageRepository chatMessageRepository,
+      ChatReadReceiptRepository chatReadReceiptRepository,
       PushNotificationService pushNotificationService) {
     this.messagingTemplate = messagingTemplate;
     this.chatMessageRepository = chatMessageRepository;
+    this.chatReadReceiptRepository = chatReadReceiptRepository;
     this.pushNotificationService = pushNotificationService;
   }
 
@@ -151,6 +156,50 @@ public class ChatWebSocketController {
     messagingTemplate.convertAndSendToUser(normalizedFrom, "/queue/edit-ack", new EditAck(entity.getId(), true, null));
   }
 
+  @MessageMapping("/chat.read")
+  public void readConversation(ReadReceiptMessage payload, Principal principal) {
+    if (payload == null || payload.peerUsername() == null || payload.peerUsername().isBlank()) {
+      return;
+    }
+
+    String reader = principal != null ? principal.getName() : payload.readerUsername();
+    if (reader == null || reader.isBlank()) {
+      return;
+    }
+
+    String normalizedReader = normalizeUsername(reader);
+    String normalizedPeer = normalizeUsername(payload.peerUsername());
+    if (normalizedPeer.isBlank() || normalizedPeer.equals(normalizedReader)) {
+      return;
+    }
+
+    long now = Instant.now().toEpochMilli();
+    long readAt = payload.readAt() != null && payload.readAt() > 0
+        ? Math.min(payload.readAt(), now)
+        : now;
+
+    ChatReadReceiptEntity receipt = chatReadReceiptRepository
+        .findByReaderUsernameAndPeerUsername(normalizedReader, normalizedPeer)
+        .orElseGet(() -> {
+          ChatReadReceiptEntity entity = new ChatReadReceiptEntity();
+          entity.setReaderUsername(normalizedReader);
+          entity.setPeerUsername(normalizedPeer);
+          entity.setLastReadAt(0L);
+          return entity;
+        });
+
+    long existing = receipt.getLastReadAt() != null ? receipt.getLastReadAt() : 0L;
+    if (readAt <= existing) {
+      return;
+    }
+
+    receipt.setLastReadAt(readAt);
+    chatReadReceiptRepository.save(receipt);
+
+    ReadReceiptPayload event = new ReadReceiptPayload(normalizedReader, normalizedPeer, readAt);
+    messagingTemplate.convertAndSendToUser(normalizedPeer, "/queue/read-receipts", event);
+  }
+
   @MessageMapping("/user.online")
   public void userOnline(UserStatusMessage payload, Principal principal) {
     String username = principal != null ? principal.getName() : (payload != null ? payload.username() : null);
@@ -161,6 +210,7 @@ public class ChatWebSocketController {
     lastSeenMap.remove(username);
     broadcastUserStatus(username, "online", null);
     syncOnlineUsersFor(username);
+    syncReadReceiptsFor(username);
   }
 
   @MessageMapping("/user.offline")
@@ -225,6 +275,18 @@ public class ChatWebSocketController {
           username,
           "/queue/user-status",
           new UserStatusPayload(entry.getKey(), "offline", entry.getValue()));
+    }
+  }
+
+  private void syncReadReceiptsFor(String username) {
+    for (ChatReadReceiptEntity receipt : chatReadReceiptRepository.findByPeerUsername(username)) {
+      messagingTemplate.convertAndSendToUser(
+          username,
+          "/queue/read-receipts",
+          new ReadReceiptPayload(
+              receipt.getReaderUsername(),
+              receipt.getPeerUsername(),
+              receipt.getLastReadAt()));
     }
   }
 
@@ -295,4 +357,8 @@ public class ChatWebSocketController {
       Long createdAt) {}
 
   public record EditAck(Long messageId, boolean success, String reason) {}
+
+  public record ReadReceiptMessage(String peerUsername, String readerUsername, Long readAt) {}
+
+  public record ReadReceiptPayload(String readerUsername, String peerUsername, Long readAt) {}
 }

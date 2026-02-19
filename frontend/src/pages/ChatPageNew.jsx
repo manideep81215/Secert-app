@@ -76,6 +76,7 @@ function ChatPageNew() {
   const [notificationPermission, setNotificationPermission] = useState(
     getNotificationPermissionState()
   )
+  const lastPublishedReadAtRef = useRef({})
   const mediaInputRef = useRef(null)
   const fileInputRef = useRef(null)
   const messagesEndRef = useRef(null)
@@ -250,6 +251,17 @@ function ChatPageNew() {
   const selectedSeen = selectedUser
     ? Number(seenAtMap[selectedUser.username] || 0) >= selectedLastOutgoingAt && selectedLastOutgoingAt > 0
     : false
+  const getLatestIncomingCreatedAt = (peerUsername) => {
+    if (!peerUsername) return 0
+    let latest = 0
+    for (const msg of messages) {
+      if (msg?.sender !== 'other') continue
+      if (formatUsername(msg?.senderName).toLowerCase() !== peerUsername.toLowerCase()) continue
+      const createdAt = Number(msg?.createdAt || msg?.clientCreatedAt || 0)
+      if (createdAt > latest) latest = createdAt
+    }
+    return latest
+  }
 
   useEffect(() => {
     selectedUserRef.current = selectedUser
@@ -277,28 +289,6 @@ function ChatPageNew() {
     if (!isMobileView) return
     setShowMobileUsers(!selectedUser)
   }, [isMobileView, selectedUser])
-
-  useEffect(() => {
-    if (typeof document === 'undefined' || typeof window === 'undefined') return undefined
-
-    const setChatViewportHeight = () => {
-      const vv = window.visualViewport
-      const nextHeight = vv ? Math.round(vv.height) : window.innerHeight
-      document.documentElement.style.setProperty('--chat-vh', `${nextHeight}px`)
-    }
-
-    setChatViewportHeight()
-    window.addEventListener('resize', setChatViewportHeight)
-    window.addEventListener('orientationchange', setChatViewportHeight)
-    window.visualViewport?.addEventListener('resize', setChatViewportHeight)
-    window.visualViewport?.addEventListener('scroll', setChatViewportHeight)
-    return () => {
-      window.removeEventListener('resize', setChatViewportHeight)
-      window.removeEventListener('orientationchange', setChatViewportHeight)
-      window.visualViewport?.removeEventListener('resize', setChatViewportHeight)
-      window.visualViewport?.removeEventListener('scroll', setChatViewportHeight)
-    }
-  }, [])
 
   useEffect(() => {
     if (typeof window === 'undefined' || !window.Capacitor) return
@@ -411,6 +401,12 @@ function ChatPageNew() {
           editedAt: Number(row.editedAt || 0) || null,
         }))
         setMessages(normalized)
+        const latestIncoming = normalized
+          .filter((msg) => msg.sender === 'other')
+          .reduce((max, msg) => Math.max(max, Number(msg.createdAt || msg.clientCreatedAt || 0)), 0)
+        if (latestIncoming && socket?.connected) {
+          publishReadReceipt(selectedUser.username, latestIncoming)
+        }
         setReplyingTo(null)
       })
       .catch((error) => {
@@ -428,6 +424,14 @@ function ChatPageNew() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'auto' })
   }, [messages])
+
+  useEffect(() => {
+    if (!selectedUser?.username || !socket?.connected) return
+    if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
+    const latestIncoming = getLatestIncomingCreatedAt(selectedUser.username)
+    if (!latestIncoming) return
+    publishReadReceipt(selectedUser.username, latestIncoming)
+  }, [messages, selectedUser?.username, socket?.connected])
 
   useEffect(() => {
     const authToken = (flow.token || '').trim()
@@ -464,10 +468,6 @@ function ChatPageNew() {
               updatePresenceLastSeen(username, Date.now())
             } else if (Number(lastSeenAt) > 0) {
               updatePresenceLastSeen(username, Number(lastSeenAt))
-            }
-            if (status === 'online' || Number(lastSeenAt) > 0) {
-              const stamp = Number(lastSeenAt) > 0 ? Number(lastSeenAt) : Date.now()
-              setSeenAtMap((prev) => ({ ...prev, [username]: Math.max(Number(prev[username] || 0), stamp) }))
             }
           } catch (error) {
             console.error('Failed parsing user status payload', error)
@@ -510,10 +510,6 @@ function ChatPageNew() {
             incoming.timestamp = formatTimestamp(incoming.createdAt)
             const incomingPreview = getMessagePreview(incoming.type, incoming.text, incoming.fileName)
             updatePresenceLastSeen(fromUsername, incomingCreatedAt || Date.now())
-            setSeenAtMap((prev) => ({
-              ...prev,
-              [fromUsername]: Math.max(Number(prev[fromUsername] || 0), Number(incomingCreatedAt || Date.now())),
-            }))
             if (!shouldSuppressChatNotification()) {
               await pushNotify(`@${formatUsername(fromUsername)}`, incomingPreview)
             }
@@ -556,13 +552,7 @@ function ChatPageNew() {
             const typing = Boolean(payload?.typing)
             if (!fromUsername) return
             setTypingMap((prev) => ({ ...prev, [fromUsername]: typing }))
-            if (typing) {
-              updatePresenceLastSeen(fromUsername, Date.now())
-              setSeenAtMap((prev) => ({
-                ...prev,
-                [fromUsername]: Math.max(Number(prev[fromUsername] || 0), Date.now()),
-              }))
-            }
+            if (typing) updatePresenceLastSeen(fromUsername, Date.now())
           } catch (error) {
             console.error('Failed parsing typing payload', error)
           }
@@ -632,6 +622,21 @@ function ChatPageNew() {
             }
           } catch {
             // Ignore invalid edit acks.
+          }
+        })
+
+        client.subscribe('/user/queue/read-receipts', (frame) => {
+          try {
+            const receipt = JSON.parse(frame.body)
+            const readerUsername = formatUsername(receipt?.readerUsername || '').toLowerCase()
+            const readAt = Number(receipt?.readAt || 0)
+            if (!readerUsername || !readAt) return
+            setSeenAtMap((prev) => ({
+              ...prev,
+              [readerUsername]: Math.max(Number(prev[readerUsername] || 0), readAt),
+            }))
+          } catch (error) {
+            console.error('Failed parsing read receipt payload', error)
           }
         })
       },
@@ -939,6 +944,24 @@ function ChatPageNew() {
         toUsername: selectedUser.username,
         fromUsername: flow.username,
         typing,
+      }),
+    })
+  }
+
+  const publishReadReceipt = (peerUsername, readAtMs) => {
+    if (!socket?.connected || !peerUsername) return
+    const nextReadAt = Number(readAtMs || 0)
+    if (!nextReadAt) return
+    const key = peerUsername.toLowerCase()
+    const alreadySent = Number(lastPublishedReadAtRef.current[key] || 0)
+    if (nextReadAt <= alreadySent) return
+    lastPublishedReadAtRef.current[key] = nextReadAt
+    socket.publish({
+      destination: '/app/chat.read',
+      body: JSON.stringify({
+        peerUsername,
+        readerUsername: flow.username,
+        readAt: nextReadAt,
       }),
     })
   }
