@@ -22,6 +22,8 @@ import { resetFlowState, useFlowState } from '../hooks/useFlowState'
 import './ChatPageNew.css'
 
 const REALTIME_TOAST_ID = 'realtime-connection'
+const PRESENCE_LAST_SEEN_KEY = 'chat_presence_last_seen_v1'
+const EDIT_WINDOW_MS = 15 * 60 * 1000
 
 function ChatPageNew() {
   const navigate = useNavigate()
@@ -30,6 +32,17 @@ function ChatPageNew() {
   const [users, setUsers] = useState([])
   const [statusMap, setStatusMap] = useState({})
   const [typingMap, setTypingMap] = useState({})
+  const [seenAtMap, setSeenAtMap] = useState({})
+  const [presenceLastSeenMap, setPresenceLastSeenMap] = useState(() => {
+    if (typeof window === 'undefined') return {}
+    try {
+      const raw = window.localStorage.getItem(PRESENCE_LAST_SEEN_KEY)
+      const parsed = raw ? JSON.parse(raw) : {}
+      return parsed && typeof parsed === 'object' ? parsed : {}
+    } catch {
+      return {}
+    }
+  })
   const [selectedUser, setSelectedUser] = useState(null)
   const [conversationClears, setConversationClears] = useState({})
   const [messages, setMessages] = useState([])
@@ -53,6 +66,7 @@ function ChatPageNew() {
   const [isMobileView, setIsMobileView] = useState(() => window.innerWidth <= 920)
   const [showMobileUsers, setShowMobileUsers] = useState(() => window.innerWidth <= 920)
   const [replyingTo, setReplyingTo] = useState(null)
+  const [editingMessage, setEditingMessage] = useState(null)
   const [draggedMessage, setDraggedMessage] = useState(null)
   const [isDraggingMessage, setIsDraggingMessage] = useState(false)
   const [swipePreview, setSwipePreview] = useState({ key: null, offset: 0 })
@@ -115,6 +129,7 @@ function ChatPageNew() {
     voice: '\uD83C\uDFA4',
     reply: '\u21A9',
     delete: '\u2715',
+    edit: '\u270E',
     send: '\u27A4',
     game: '\uD83C\uDFAE',
   }
@@ -144,6 +159,22 @@ function ChatPageNew() {
     if (messageType === 'file') return fileNameValue ? `Sent file: ${fileNameValue}` : 'Sent a file'
     return textValue || 'New message'
   }
+  const getMessageCreatedAtMs = (message) => Number(message?.createdAt || message?.clientCreatedAt || 0)
+  const getMessageEditKey = (message) => {
+    if (!message) return ''
+    if (message.tempId) return `temp:${message.tempId}`
+    if (message.messageId) return `id:${message.messageId}`
+    const created = getMessageCreatedAtMs(message)
+    return `local:${message.sender || 'x'}:${created}:${message.senderName || ''}`
+  }
+  const isSameMessage = (message, key) => getMessageEditKey(message) === key
+  const canEditMessage = (message) => {
+    if (!message || message.sender !== 'user') return false
+    if (message.type && message.type !== 'text') return false
+    const createdAt = getMessageCreatedAtMs(message)
+    if (!createdAt) return false
+    return (Date.now() - createdAt) <= EDIT_WINDOW_MS
+  }
   const createTempId = () => (window.crypto?.randomUUID?.() || `${Date.now()}_${Math.random().toString(16).slice(2)}`)
   const MAX_IMAGE_BYTES = 8 * 1024 * 1024
   const MAX_VIDEO_BYTES = 20 * 1024 * 1024
@@ -171,11 +202,15 @@ function ChatPageNew() {
     return `last seen ${days} day ago`
   }
   const getPresence = (username, fallback = 'offline') => {
+    const cachedLastSeenAt = Number(presenceLastSeenMap[username] || 0) || null
     const current = statusMap[username]
     if (current) {
-      return current
+      return {
+        ...current,
+        lastSeenAt: current.lastSeenAt || cachedLastSeenAt,
+      }
     }
-    return { status: fallback, lastSeenAt: null }
+    return { status: fallback, lastSeenAt: cachedLastSeenAt }
   }
   const getResolvedPresence = (username, fallback = 'offline') => {
     const presence = getPresence(username, fallback)
@@ -187,17 +222,32 @@ function ChatPageNew() {
       offlineSinceRef.current[username] = presence.lastSeenAt
       return presence
     }
-    if (!offlineSinceRef.current[username]) {
-      offlineSinceRef.current[username] = Date.now()
-    }
-    return { ...presence, lastSeenAt: offlineSinceRef.current[username] }
+    return presence
   }
   const selectedPresence = selectedUser ? getResolvedPresence(selectedUser.username, selectedUser.status) : { status: 'offline', lastSeenAt: null }
   const selectedTyping = selectedUser ? Boolean(typingMap[selectedUser.username]) : false
+  const getLastOutgoingAt = (peerUsername) => {
+    if (!peerUsername) return 0
+    let latest = 0
+    for (const msg of messages) {
+      if (msg?.sender !== 'user') continue
+      const createdAt = Number(msg?.createdAt || 0)
+      if (createdAt > latest) latest = createdAt
+    }
+    return latest
+  }
+  const selectedLastOutgoingAt = selectedUser ? getLastOutgoingAt(selectedUser.username) : 0
+  const selectedSeen = selectedUser
+    ? Number(seenAtMap[selectedUser.username] || 0) >= selectedLastOutgoingAt && selectedLastOutgoingAt > 0
+    : false
 
   useEffect(() => {
     selectedUserRef.current = selectedUser
   }, [selectedUser])
+
+  useEffect(() => {
+    setEditingMessage(null)
+  }, [selectedUser?.username])
 
   useEffect(() => {
     const onResize = () => {
@@ -304,8 +354,11 @@ function ChatPageNew() {
           mimeType: row.mimeType || null,
           replyingTo: row.replyText ? { text: row.replyText, senderName: row.replySenderName || row.senderName } : null,
           senderName: formatUsername(row.senderName),
+          messageId: row.id || null,
           createdAt: row.createdAt || null,
+          clientCreatedAt: Number(row.createdAt || 0) || null,
           timestamp: formatTimestamp(row.createdAt),
+          edited: Boolean(row.edited || row.isEdited),
         }))
         setMessages(normalized)
         setReplyingTo(null)
@@ -357,6 +410,15 @@ function ChatPageNew() {
             const lastSeenAt = payload?.lastSeenAt || null
             if (!username || !status) return
             setStatusMap((prev) => ({ ...prev, [username]: { status, lastSeenAt } }))
+            if (status === 'online') {
+              updatePresenceLastSeen(username, Date.now())
+            } else if (Number(lastSeenAt) > 0) {
+              updatePresenceLastSeen(username, Number(lastSeenAt))
+            }
+            if (status === 'online' || Number(lastSeenAt) > 0) {
+              const stamp = Number(lastSeenAt) > 0 ? Number(lastSeenAt) : Date.now()
+              setSeenAtMap((prev) => ({ ...prev, [username]: Math.max(Number(prev[username] || 0), stamp) }))
+            }
           } catch (error) {
             console.error('Failed parsing user status payload', error)
           }
@@ -388,12 +450,19 @@ function ChatPageNew() {
               mimeType: data?.mimeType || null,
               replyingTo: data?.replyingTo || (data?.replyText ? { text: data.replyText, senderName: data?.replySenderName || fromUsername } : null),
               createdAt: incomingCreatedAt || null,
+              clientCreatedAt: incomingCreatedAt || Date.now(),
               timestamp: getTimeLabel(),
               senderName: formatUsername(fromUsername),
               messageId: data?.id,
+              edited: Boolean(data?.edited || data?.isEdited),
             }
             incoming.timestamp = formatTimestamp(incoming.createdAt)
             const incomingPreview = getMessagePreview(incoming.type, incoming.text, incoming.fileName)
+            updatePresenceLastSeen(fromUsername, incomingCreatedAt || Date.now())
+            setSeenAtMap((prev) => ({
+              ...prev,
+              [fromUsername]: Math.max(Number(prev[fromUsername] || 0), Number(incomingCreatedAt || Date.now())),
+            }))
             if (!shouldSuppressChatNotification()) {
               await pushNotify(`@${formatUsername(fromUsername)}`, incomingPreview)
             }
@@ -436,6 +505,13 @@ function ChatPageNew() {
             const typing = Boolean(payload?.typing)
             if (!fromUsername) return
             setTypingMap((prev) => ({ ...prev, [fromUsername]: typing }))
+            if (typing) {
+              updatePresenceLastSeen(fromUsername, Date.now())
+              setSeenAtMap((prev) => ({
+                ...prev,
+                [fromUsername]: Math.max(Number(prev[fromUsername] || 0), Date.now()),
+              }))
+            }
           } catch (error) {
             console.error('Failed parsing typing payload', error)
           }
@@ -458,7 +534,9 @@ function ChatPageNew() {
                   ? {
                       ...msg,
                       deliveryStatus: ack?.success ? 'sent' : 'failed',
+                      messageId: ack?.id || msg.messageId || null,
                       createdAt: ack?.createdAt || msg.createdAt || null,
+                      clientCreatedAt: ack?.createdAt || msg.clientCreatedAt || msg.createdAt || null,
                       timestamp: formatTimestamp(ack?.createdAt || msg.createdAt),
                     }
                   : msg
@@ -626,6 +704,26 @@ function ChatPageNew() {
   const shouldSuppressChatNotification = () => {
     if (typeof document === 'undefined') return false
     return document.visibilityState === 'visible' && location.pathname === '/chat'
+  }
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      window.localStorage.setItem(PRESENCE_LAST_SEEN_KEY, JSON.stringify(presenceLastSeenMap))
+    } catch {
+      // Ignore localStorage write failures.
+    }
+  }, [presenceLastSeenMap])
+
+  const updatePresenceLastSeen = (username, timestampMs) => {
+    if (!username) return
+    const nextTs = Number(timestampMs || 0)
+    if (!nextTs) return
+    setPresenceLastSeenMap((prev) => {
+      const existing = Number(prev[username] || 0)
+      if (nextTs <= existing) return prev
+      return { ...prev, [username]: nextTs }
+    })
   }
 
   const clearPendingImagePreview = () => {
@@ -798,16 +896,44 @@ function ChatPageNew() {
     const text = inputValue.trim()
     if (!text || !selectedUser) return
 
+    if (editingMessage?.key) {
+      const currentTarget = messages.find((msg) => isSameMessage(msg, editingMessage.key))
+      if (!currentTarget) {
+        toast.error('Message not found for edit.')
+        setEditingMessage(null)
+        return
+      }
+      if (!canEditMessage(currentTarget)) {
+        toast.error('Message can only be edited within 15 minutes.')
+        setEditingMessage(null)
+        return
+      }
+
+      setMessages((prev) => prev.map((msg) => (
+        isSameMessage(msg, editingMessage.key)
+          ? { ...msg, text, edited: true, editedAt: Date.now() }
+          : msg
+      )))
+      setInputValue('')
+      setEditingMessage(null)
+      toast.success('Message edited.')
+      publishTyping(false, true)
+      return
+    }
+
     publishTyping(false, true)
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current)
     }
 
     const tempId = createTempId()
+    const createdAtNow = Date.now()
     const outgoing = {
       sender: 'user',
       text,
       timestamp: getTimeLabel(),
+      createdAt: createdAtNow,
+      clientCreatedAt: createdAtNow,
       senderName: formatUsername(flow.username || 'You'),
       replyingTo,
       tempId,
@@ -1116,6 +1242,24 @@ function ChatPageNew() {
     setMessages((prev) => prev.filter((msg) => msg !== targetMessage))
   }
 
+  const handleStartEdit = (message) => {
+    if (!canEditMessage(message)) {
+      toast.error('Message can only be edited within 15 minutes.')
+      return
+    }
+    setReplyingTo(null)
+    setEditingMessage({
+      key: getMessageEditKey(message),
+      preview: message.text || '',
+    })
+    setInputValue(message.text || '')
+  }
+
+  const cancelEditingMessage = () => {
+    setEditingMessage(null)
+    setInputValue('')
+  }
+
   const handleDeleteChatForMe = () => {
     if (!selectedUser) return
     const ok = window.confirm(`Delete chat with @${formatUsername(selectedUser.username)} for you only?`)
@@ -1141,6 +1285,7 @@ function ChatPageNew() {
   }
 
   const handleReply = (message) => {
+    setEditingMessage(null)
     setReplyingTo(message)
   }
 
@@ -1333,7 +1478,11 @@ function ChatPageNew() {
             <div className="chat-user-info">
               <div className="chat-user-name">{selectedUser ? `@${formatUsername(selectedUser.username)}` : 'Select a user'}</div>
               <div className={`chat-user-status ${selectedPresence.status === 'online' ? 'online' : 'offline'}`}>
-                {selectedTyping ? 'typing...' : (selectedPresence.status === 'online' ? 'online' : toLongLastSeen(selectedPresence.lastSeenAt))}
+                {selectedTyping
+                  ? 'typing...'
+                  : (selectedPresence.status === 'online'
+                      ? `${selectedSeen ? 'Seen · ' : ''}online`
+                      : `${selectedSeen ? 'Seen · ' : ''}${toLongLastSeen(selectedPresence.lastSeenAt)}`)}
               </div>
             </div>
           </div>
@@ -1453,10 +1602,15 @@ function ChatPageNew() {
                   {(message.type && message.type !== 'text' && !message.mediaUrl) && (
                     <div className="message-media-fallback">{`${getTypeIcon(message.type)} ${message.text}`.trim()}</div>
                   )}
-                  <span className="message-time">{message.timestamp}</span>
+                  <span className="message-time">
+                    {message.edited ? `edited · ${message.timestamp}` : message.timestamp}
+                  </span>
                 </div>
                 <div className="message-actions">
                   <button className="btn-reply" onClick={() => handleReply(message)} title="Reply" aria-label="Reply">{icons.reply}</button>
+                  {message.sender === 'user' && canEditMessage(message) && (
+                    <button className="btn-edit" onClick={() => handleStartEdit(message)} title="Edit" aria-label="Edit">{icons.edit}</button>
+                  )}
                   {message.sender === 'user' && (
                     <button className="btn-delete" onClick={() => deleteMessage(message)} title="Delete" aria-label="Delete">{icons.delete}</button>
                   )}
@@ -1482,6 +1636,23 @@ function ChatPageNew() {
           </AnimatePresence>
           <div ref={messagesEndRef} />
         </motion.div>
+
+        <AnimatePresence>
+          {editingMessage && (
+            <motion.div
+              className="reply-preview edit-preview"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 10 }}
+            >
+              <div className="reply-info">
+                <span className="reply-label">Editing message:</span>
+                <span className="reply-msg">{editingMessage.preview}</span>
+              </div>
+              <button className="btn-cancel-reply" onClick={cancelEditingMessage}>X</button>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <AnimatePresence>
           {replyingTo && (
@@ -1651,7 +1822,11 @@ function ChatPageNew() {
               <div className="details-avatar">{selectedUser ? getAvatarLabel(selectedUser.username) : '?'}</div>
               <h2 className="details-name">{selectedUser ? `@${formatUsername(selectedUser.username)}` : '-'}</h2>
               <p className="details-status">
-                {selectedTyping ? 'typing...' : (selectedPresence.status === 'online' ? 'online' : toLongLastSeen(selectedPresence.lastSeenAt))}
+                {selectedTyping
+                  ? 'typing...'
+                  : (selectedPresence.status === 'online'
+                      ? `${selectedSeen ? 'Seen · ' : ''}online`
+                      : `${selectedSeen ? 'Seen · ' : ''}${toLongLastSeen(selectedPresence.lastSeenAt)}`)}
               </p>
 
               <div className="details-section">

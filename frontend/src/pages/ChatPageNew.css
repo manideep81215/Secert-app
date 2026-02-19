@@ -571,7 +571,8 @@
 }
 
 .btn-reply,
-.btn-delete {
+.btn-delete,
+.btn-edit {
   width: 2rem;
   height: 2rem;
   border: none;
@@ -585,9 +586,14 @@
 }
 
 .btn-reply:hover,
-.btn-delete:hover {
+.btn-delete:hover,
+.btn-edit:hover {
   transform: scale(1.15);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.btn-edit {
+  color: #3d3d3d;
 }
 
 @keyframes slideIn {
@@ -611,6 +617,10 @@
   justify-content: space-between;
   align-items: center;
   margin: 0 1.5rem;
+}
+
+.edit-preview {
+  background: linear-gradient(135deg, #ffa94d 0%, #f08f2d 100%);
 }
 
 .reply-info {
@@ -669,6 +679,8 @@
   display: flex;
   gap: 0.8rem;
   align-items: center;
+  width: 100%;
+  min-width: 0;
 }
 
 .input-actions {
@@ -799,7 +811,7 @@
   flex: 1;
   border: none;
   background: transparent;
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-family: inherit;
   outline: none;
   padding: 0.8rem 0.8rem 0.8rem 0;
@@ -1142,9 +1154,25 @@
     display: flex;
     position: absolute;
     inset: 0;
-    width: 100vw;
+    width: 100%;
+    max-width: 100%;
     height: 100dvh;
     z-index: 110;
+  }
+
+  .input-area {
+    padding-left: max(0.75rem, env(safe-area-inset-left));
+    padding-right: max(0.75rem, env(safe-area-inset-right));
+    padding-bottom: calc(0.55rem + env(safe-area-inset-bottom));
+  }
+
+  .message-input-shell {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .btn-send {
+    flex: 0 0 auto;
   }
 }
 
@@ -1163,7 +1191,10 @@
   }
 
   .input-area {
-    padding: 0.8rem 1rem;
+    padding-top: 0.8rem;
+    padding-left: max(0.7rem, env(safe-area-inset-left));
+    padding-right: max(0.7rem, env(safe-area-inset-right));
+    padding-bottom: calc(0.65rem + env(safe-area-inset-bottom));
   }
 
   .message-content {
@@ -1175,6 +1206,8 @@
     flex-direction: row;
     gap: 0.45rem;
     align-items: center;
+    width: 100%;
+    min-width: 0;
   }
 
   .btn-plus {
@@ -1183,6 +1216,14 @@
 
   .attach-desktop-btn {
     display: none;
+  }
+}
+
+/* Prevent iOS Safari auto-zoom on focused inputs. */
+@supports (-webkit-touch-callout: none) {
+  .message-input,
+  .users-search input {
+    font-size: 16px;
   }
 }
 
