@@ -91,6 +91,8 @@ function ChatPageNew() {
   const recordingChunksRef = useRef([])
   const recordingTimerRef = useRef(null)
   const wsErrorToastAtRef = useRef(0)
+  const wsResumeSuppressUntilRef = useRef(0)
+  const wsLastHiddenAtRef = useRef(typeof Date !== 'undefined' ? Date.now() : 0)
   const offlineSinceRef = useRef({})
   const CLEAR_CUTOFFS_KEY = 'chat_clear_cutoffs_v1'
 
@@ -249,7 +251,7 @@ function ChatPageNew() {
   }
   const selectedLastOutgoingAt = selectedUser ? getLastOutgoingAt(selectedUser.username) : 0
   const selectedSeen = selectedUser
-    ? Number(seenAtMap[selectedUser.username] || 0) >= selectedLastOutgoingAt && selectedLastOutgoingAt > 0
+    ? Number(seenAtMap[(selectedUser.username || '').toLowerCase()] || 0) >= selectedLastOutgoingAt && selectedLastOutgoingAt > 0
     : false
   const getLatestIncomingCreatedAt = (peerUsername) => {
     if (!peerUsername) return 0
@@ -628,8 +630,10 @@ function ChatPageNew() {
         client.subscribe('/user/queue/read-receipts', (frame) => {
           try {
             const receipt = JSON.parse(frame.body)
-            const readerUsername = formatUsername(receipt?.readerUsername || '').toLowerCase()
-            const readAt = Number(receipt?.readAt || 0)
+            const readerUsername = formatUsername(
+              receipt?.readerUsername || receipt?.fromUsername || receipt?.username || ''
+            ).toLowerCase()
+            const readAt = Number(receipt?.readAt || receipt?.seenAt || receipt?.createdAt || 0)
             if (!readerUsername || !readAt) return
             setSeenAtMap((prev) => ({
               ...prev,
@@ -641,11 +645,17 @@ function ChatPageNew() {
         })
       },
       onWebSocketError: () => {
+        if (Date.now() < Number(wsResumeSuppressUntilRef.current || 0)) return
         notifyRealtimeIssue('Realtime connection error (websocket).')
       },
       onWebSocketClose: (event) => {
         const code = event?.code ?? 'n/a'
         if (code === 1000 || code === 1001) return
+        const now = Date.now()
+        const inResumeWindow = now < Number(wsResumeSuppressUntilRef.current || 0)
+        const recentlyBackgrounded = now - Number(wsLastHiddenAtRef.current || 0) < 20000
+        if ((code === 1006 || code === 1002) && (inResumeWindow || recentlyBackgrounded)) return
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) return
         const reason = event?.reason ? `: ${event.reason}` : ''
         notifyRealtimeIssue(`Realtime disconnected (${code})${reason}`)
       },
@@ -785,6 +795,8 @@ function ChatPageNew() {
   const notifyRealtimeIssue = (message) => {
     if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
     const now = Date.now()
+    if (now < Number(wsResumeSuppressUntilRef.current || 0)) return
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return
     if (now - wsErrorToastAtRef.current < 3000) return
     wsErrorToastAtRef.current = now
     toast.clearWaitingQueue()
@@ -798,6 +810,31 @@ function ChatPageNew() {
     if (typeof document === 'undefined') return false
     return document.visibilityState === 'visible' && location.pathname === '/chat'
   }
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    const setResumeSuppression = (ms = 5000) => {
+      wsResumeSuppressUntilRef.current = Date.now() + ms
+    }
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        wsLastHiddenAtRef.current = Date.now()
+        return
+      }
+      setResumeSuppression(6000)
+    }
+    const onFocus = () => setResumeSuppression(4000)
+    const onPageShow = () => setResumeSuppression(6000)
+
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    window.addEventListener('focus', onFocus)
+    window.addEventListener('pageshow', onPageShow)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      window.removeEventListener('focus', onFocus)
+      window.removeEventListener('pageshow', onPageShow)
+    }
+  }, [])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -856,16 +893,33 @@ function ChatPageNew() {
       }
 
       const serviceWorkerActive = Boolean(registration?.active)
+
+      // Try to provision subscription first, then read actual subscription state.
+      let subscriptionError = ''
+      if (flow?.token && snapshot.notificationPermission === 'granted') {
+        try {
+          await ensurePushSubscription(flow.token)
+        } catch (error) {
+          subscriptionError = error?.message || 'Subscription setup failed.'
+        }
+      }
+
+      if (!registration && 'serviceWorker' in navigator) {
+        registration = await navigator.serviceWorker.getRegistration('/sw.js')
+      }
       const subscription = registration?.pushManager ? await registration.pushManager.getSubscription() : null
       const subscriptionExists = Boolean(subscription)
 
       let pushKeyRegistered = false
-      if (flow?.token && snapshot.notificationPermission === 'granted') {
-        await ensurePushSubscription(flow.token)
+      let keyError = ''
+      try {
+        const keyConfig = await getPushPublicKey()
+        pushKeyRegistered = Boolean(keyConfig?.enabled && keyConfig?.publicKey)
+      } catch (error) {
+        keyError = error?.message || 'Push key check failed.'
       }
-      const keyConfig = await getPushPublicKey()
-      pushKeyRegistered = Boolean(keyConfig?.enabled && keyConfig?.publicKey)
 
+      const combinedError = [subscriptionError, keyError].filter(Boolean).join(' ')
       const next = {
         loading: false,
         notificationPermission: snapshot.notificationPermission,
@@ -873,7 +927,7 @@ function ChatPageNew() {
         subscriptionExists,
         pushKeyRegistered,
         lastSyncAt: Date.now(),
-        error: '',
+        error: combinedError,
       }
       setPushDebug(next)
       console.info('[push-debug]', { reason, ...next })
@@ -1360,10 +1414,6 @@ function ChatPageNew() {
     await startVoiceRecording()
   }
 
-  const deleteMessage = (targetMessage) => {
-    setMessages((prev) => prev.filter((msg) => msg !== targetMessage))
-  }
-
   const handleResendMessage = (message) => {
     if (!selectedUser || !message || message.sender !== 'user') return
     if (!isMessageFailed(message)) return
@@ -1783,9 +1833,6 @@ function ChatPageNew() {
                   )}
                   {message.sender === 'user' && messageFailed && (
                     <button className="btn-resend" onClick={() => handleResendMessage(message)} title="Resend" aria-label="Resend">{icons.resend}</button>
-                  )}
-                  {message.sender === 'user' && (
-                    <button className="btn-delete" onClick={() => deleteMessage(message)} title="Delete" aria-label="Delete">{icons.delete}</button>
                   )}
                 </div>
               </motion.div>

@@ -1718,3 +1718,56 @@
   border-radius: 0.8rem;
   padding: 0.12rem 0.5rem;
 }
+
+/* Final mobile layout guardrails: keep composer visible and keep last message above it. */
+.chat-container .chat-area {
+  min-height: 0;
+}
+
+.chat-container .messages-area {
+  min-height: 0;
+}
+
+@media (max-width: 920px) {
+  .chat-container {
+    background: #f8f2e3;
+  }
+
+  .chat-container:not(.mobile-users-open) .chat-area {
+    display: flex;
+    position: fixed;
+    inset: 0;
+    height: 100dvh;
+    min-height: 100dvh;
+    overflow: hidden;
+    background: #f8f2e3;
+  }
+
+  .chat-container .messages-area {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 0.9rem 0.9rem calc(1.1rem + env(safe-area-inset-bottom)) 0.9rem;
+  }
+
+  .chat-container .input-area {
+    position: sticky;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 140;
+    flex: 0 0 auto;
+    margin-top: auto;
+    padding: 0.45rem max(0.75rem, env(safe-area-inset-right)) calc(0.45rem + env(safe-area-inset-bottom)) max(0.75rem, env(safe-area-inset-left));
+  }
+}
+
+@media (max-width: 680px) {
+  .chat-container .messages-area {
+    padding: 0.75rem 0.7rem calc(1rem + env(safe-area-inset-bottom)) 0.7rem;
+  }
+
+  .chat-container .input-area {
+    padding-top: 0.45rem;
+    padding-bottom: calc(0.45rem + env(safe-area-inset-bottom));
+  }
+}
