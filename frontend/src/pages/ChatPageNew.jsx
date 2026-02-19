@@ -394,7 +394,9 @@ function ChatPageNew() {
             }
             incoming.timestamp = formatTimestamp(incoming.createdAt)
             const incomingPreview = getMessagePreview(incoming.type, incoming.text, incoming.fileName)
-            await pushNotify(`@${formatUsername(fromUsername)}`, incomingPreview)
+            if (!shouldSuppressChatNotification()) {
+              await pushNotify(`@${formatUsername(fromUsername)}`, incomingPreview)
+            }
             setNotifyCutoff(authUsername, fromUsername, incomingCreatedAt || Date.now())
 
             setUsers((prev) =>
@@ -521,7 +523,9 @@ function ChatPageNew() {
 
             const latest = Math.max(...missed.map((row) => Number(row.createdAt || 0)))
             setNotifyCutoff(flow.username, user.username, latest || Date.now())
-            await pushNotify(`@${formatUsername(user.username)}`, `${missed.length} new message${missed.length > 1 ? 's' : ''}`)
+            if (!shouldSuppressChatNotification()) {
+              await pushNotify(`@${formatUsername(user.username)}`, `${missed.length} new message${missed.length > 1 ? 's' : ''}`)
+            }
           } catch {
             // Ignore missed-notification sync failures per conversation.
           }
@@ -617,6 +621,11 @@ function ChatPageNew() {
       toastId: REALTIME_TOAST_ID,
       autoClose: 1500,
     })
+  }
+
+  const shouldSuppressChatNotification = () => {
+    if (typeof document === 'undefined') return false
+    return document.visibilityState === 'visible' && location.pathname === '/chat'
   }
 
   const clearPendingImagePreview = () => {
@@ -1454,6 +1463,22 @@ function ChatPageNew() {
                 </div>
               </motion.div>
             )})}
+          </AnimatePresence>
+          <AnimatePresence>
+            {selectedUser && selectedTyping && (
+              <motion.div
+                className="typing-indicator-row"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 8 }}
+              >
+                <div className="typing-indicator-bubble" aria-label="Typing indicator">
+                  <span />
+                  <span />
+                  <span />
+                </div>
+              </motion.div>
+            )}
           </AnimatePresence>
           <div ref={messagesEndRef} />
         </motion.div>

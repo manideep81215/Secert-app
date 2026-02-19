@@ -1597,3 +1597,43 @@
   border: 1px solid #dcc390;
   background: #101010;
 }
+
+.typing-indicator-row {
+  display: flex;
+  justify-content: flex-start;
+  padding: 0.1rem 0.2rem 0.25rem 0.2rem;
+}
+
+.typing-indicator-bubble {
+  min-width: 3rem;
+  height: 2rem;
+  border-radius: 1rem;
+  background: linear-gradient(180deg, #f7ad53 0%, #ea8d2e 100%);
+  border: 1px solid #d07a1f;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.24rem;
+  padding: 0 0.55rem;
+}
+
+.typing-indicator-bubble span {
+  width: 0.35rem;
+  height: 0.35rem;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  animation: typingDot 1s infinite ease-in-out;
+}
+
+.typing-indicator-bubble span:nth-child(2) {
+  animation-delay: 0.14s;
+}
+
+.typing-indicator-bubble span:nth-child(3) {
+  animation-delay: 0.28s;
+}
+
+@keyframes typingDot {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.55; }
+  40% { transform: translateY(-2px); opacity: 1; }
+}
