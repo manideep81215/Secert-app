@@ -135,7 +135,7 @@ function ChatPageNew() {
     file: '\u2398',
     voice: '\uD83C\uDFA4',
     reply: '\u21A9',
-    delete: '\u2715',
+    delete: '\uD83D\uDDD1',
     edit: '\u270E',
     resend: '\u21BB',
     send: '\u27A4',
@@ -1709,7 +1709,16 @@ function ChatPageNew() {
           <div className="chat-header-left">
             <div className="chat-user-avatar">{selectedUser ? getAvatarLabel(selectedUser.username) : '?'}</div>
             <div className="chat-user-info">
-              <div className="chat-user-name">{selectedUser ? `@${formatUsername(selectedUser.username)}` : 'Select a user'}</div>
+              <button
+                type="button"
+                className="chat-user-name chat-user-name-btn"
+                onClick={() => selectedUser && setShowUserDetails(true)}
+                title={selectedUser ? 'Open user details' : 'Select a user'}
+                aria-label={selectedUser ? 'Open user details' : 'Select a user'}
+                disabled={!selectedUser}
+              >
+                {selectedUser ? `@${formatUsername(selectedUser.username)}` : 'Select a user'}
+              </button>
               <div className={`chat-user-status ${selectedPresence.status === 'online' ? 'online' : 'offline'}`}>
                 {selectedPresence.status === 'online' ? 'online' : toLongLastSeen(selectedPresence.lastSeenAt)}
               </div>
@@ -1717,45 +1726,12 @@ function ChatPageNew() {
           </div>
           <div className="chat-header-actions">
             <button
-              className="btn-delete-chat"
-              onClick={handleDeleteChatForMe}
-              title="Delete chat for me"
-              aria-label="Delete chat for me"
-              disabled={!selectedUser}
-            >
-              {icons.delete}
-            </button>
-            <button
-              className={`btn-user-details ${notificationPermission === 'granted' ? 'notify-enabled' : ''}`}
-              onClick={requestNotificationAccess}
-              title={notificationPermission === 'granted' ? 'Notifications enabled' : 'Enable notifications'}
-              aria-label="Enable notifications"
-            >
-              N
-            </button>
-            <button
-              className={`btn-user-details ${showPushDebug ? 'notify-enabled' : ''}`}
-              onClick={() => setShowPushDebug((prev) => !prev)}
-              title="Push debug info"
-              aria-label="Push debug info"
-            >
-              D
-            </button>
-            <button
               className="btn-home-game"
               onClick={() => navigate('/games')}
               title="Go to dashboard"
               aria-label="Go to dashboard"
             >
               {icons.game}
-            </button>
-            <button
-              className="btn-user-details"
-              onClick={() => setShowUserDetails((prev) => !prev)}
-              title="User info"
-              aria-label="User info"
-            >
-              i
             </button>
           </div>
         </motion.div>
@@ -2064,6 +2040,49 @@ function ChatPageNew() {
             <div className="details-content">
               <div className="details-avatar">{selectedUser ? getAvatarLabel(selectedUser.username) : '?'}</div>
               <h2 className="details-name">{selectedUser ? `@${formatUsername(selectedUser.username)}` : '-'}</h2>
+              <div className="details-quick-actions">
+                <button
+                  type="button"
+                  className="details-quick-btn"
+                  onClick={handleDeleteChatForMe}
+                  title="Delete chat for me"
+                  aria-label="Delete chat for me"
+                  disabled={!selectedUser}
+                >
+                  <span className="details-quick-icon">{icons.delete}</span>
+                  <span className="details-quick-label">Delete</span>
+                </button>
+                <button
+                  type="button"
+                  className={`details-quick-btn ${notificationPermission === 'granted' ? 'active' : ''}`}
+                  onClick={requestNotificationAccess}
+                  title={notificationPermission === 'granted' ? 'Notifications enabled' : 'Enable notifications'}
+                  aria-label="Enable notifications"
+                >
+                  <span className="details-quick-icon">N</span>
+                  <span className="details-quick-label">Notify</span>
+                </button>
+                <button
+                  type="button"
+                  className={`details-quick-btn ${showPushDebug ? 'active' : ''}`}
+                  onClick={() => setShowPushDebug((prev) => !prev)}
+                  title="Push debug info"
+                  aria-label="Push debug info"
+                >
+                  <span className="details-quick-icon">D</span>
+                  <span className="details-quick-label">Debug</span>
+                </button>
+                <button
+                  type="button"
+                  className="details-quick-btn"
+                  onClick={() => setShowUserDetails(false)}
+                  title="Back to chat"
+                  aria-label="Back to chat"
+                >
+                  <span className="details-quick-icon">i</span>
+                  <span className="details-quick-label">Back</span>
+                </button>
+              </div>
               <p className="details-status">
                 {selectedTyping
                   ? 'typing...'
