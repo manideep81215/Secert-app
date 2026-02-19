@@ -1730,31 +1730,32 @@ function ChatPageNew() {
           >
             ←
           </button>
-          <button
-            type="button"
+          <div
             className="chat-header-left chat-header-left-btn"
             onClick={() => selectedUser && setShowUserDetails(true)}
+            onKeyDown={(event) => {
+              if (!selectedUser) return
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                setShowUserDetails(true)
+              }
+            }}
             title={selectedUser ? 'Open user details' : 'Select a user'}
             aria-label={selectedUser ? 'Open user details' : 'Select a user'}
-            disabled={!selectedUser}
+            role="button"
+            tabIndex={selectedUser ? 0 : -1}
+            aria-disabled={!selectedUser}
           >
             <div className="chat-user-avatar">{selectedUser ? getAvatarLabel(getUserDisplayName(selectedUser)) : '?'}</div>
             <div className="chat-user-info">
-              <button
-                type="button"
-                className="chat-user-name chat-user-name-btn"
-                onClick={() => selectedUser && setShowUserDetails(true)}
-                title={selectedUser ? 'Open user details' : 'Select a user'}
-                aria-label={selectedUser ? 'Open user details' : 'Select a user'}
-                disabled={!selectedUser}
-              >
+              <span className="chat-user-name chat-user-name-btn">
                 {selectedUser ? getUserDisplayName(selectedUser) : 'Select a user'}
-              </button>
+              </span>
               <div className={`chat-user-status ${selectedPresence.status === 'online' ? 'online' : 'offline'}`}>
                 {selectedPresence.status === 'online' ? 'online' : toLongLastSeen(selectedPresence.lastSeenAt)}
               </div>
             </div>
-          </button>
+          </div>
           <div className="chat-header-actions">
             <button
               className="btn-home-game"

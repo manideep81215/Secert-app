@@ -1414,9 +1414,9 @@
   }
 
   .chat-container .btn-home-game {
-    width: 2.45rem;
-    height: 2.45rem;
-    font-size: 1.12rem;
+    width: 2.85rem !important;
+    height: 2.85rem !important;
+    font-size: 1.3rem !important;
   }
 }
 
@@ -1431,7 +1431,7 @@
   }
 
   .chat-container .messages-area {
-    padding-bottom: 90px !important;
+    padding-bottom: 2px !important;
   }
 }
 
@@ -1961,6 +1961,12 @@
     flex: 1 1 auto;
     overflow-y: auto;
     padding: 0.9rem 0.9rem 2px 0.9rem;
+  }
+
+  .chat-container .btn-home-game {
+    width: 2.7rem !important;
+    height: 2.7rem !important;
+    font-size: 1.22rem !important;
   }
 
   .chat-container .input-area {
