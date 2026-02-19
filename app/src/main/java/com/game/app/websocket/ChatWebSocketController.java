@@ -9,6 +9,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.context.event.EventListener;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.messaging.simp.user.SimpUser;
+import org.springframework.messaging.simp.user.SimpUserRegistry;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 
@@ -23,6 +25,7 @@ public class ChatWebSocketController {
   private static final long EDIT_WINDOW_MILLIS = 15 * 60 * 1000L;
 
   private final SimpMessagingTemplate messagingTemplate;
+  private final SimpUserRegistry simpUserRegistry;
   private final ChatMessageRepository chatMessageRepository;
   private final ChatReadReceiptRepository chatReadReceiptRepository;
   private final PushNotificationService pushNotificationService;
@@ -31,10 +34,12 @@ public class ChatWebSocketController {
 
   public ChatWebSocketController(
       SimpMessagingTemplate messagingTemplate,
+      SimpUserRegistry simpUserRegistry,
       ChatMessageRepository chatMessageRepository,
       ChatReadReceiptRepository chatReadReceiptRepository,
       PushNotificationService pushNotificationService) {
     this.messagingTemplate = messagingTemplate;
+    this.simpUserRegistry = simpUserRegistry;
     this.chatMessageRepository = chatMessageRepository;
     this.chatReadReceiptRepository = chatReadReceiptRepository;
     this.pushNotificationService = pushNotificationService;
@@ -96,7 +101,7 @@ public class ChatWebSocketController {
             entity.getId(),
             entity.getCreatedAt() != null ? entity.getCreatedAt().toEpochMilli() : Instant.now().toEpochMilli()));
 
-    if (!onlineUsers.contains(normalizedTo)) {
+    if (!isUserConnected(normalizedTo)) {
       String preview = messagePreview(payload.message(), payload.type(), payload.fileName());
       pushNotificationService.notifyUser(
           normalizedTo,
@@ -206,11 +211,12 @@ public class ChatWebSocketController {
     if (username == null || username.isBlank()) {
       return;
     }
-    onlineUsers.add(username);
-    lastSeenMap.remove(username);
-    broadcastUserStatus(username, "online", null);
-    syncOnlineUsersFor(username);
-    syncReadReceiptsFor(username);
+    String normalized = normalizeUsername(username);
+    onlineUsers.add(normalized);
+    lastSeenMap.remove(normalized);
+    broadcastUserStatus(normalized, "online", null);
+    syncOnlineUsersFor(normalized);
+    syncReadReceiptsFor(normalized);
   }
 
   @MessageMapping("/user.offline")
@@ -219,10 +225,11 @@ public class ChatWebSocketController {
     if (username == null || username.isBlank()) {
       return;
     }
-    onlineUsers.remove(username);
+    String normalized = normalizeUsername(username);
+    onlineUsers.remove(normalized);
     long lastSeenAt = Instant.now().toEpochMilli();
-    lastSeenMap.put(username, lastSeenAt);
-    broadcastUserStatus(username, "offline", lastSeenAt);
+    lastSeenMap.put(normalized, lastSeenAt);
+    broadcastUserStatus(normalized, "offline", lastSeenAt);
   }
 
   @MessageMapping("/chat.typing")
@@ -251,11 +258,21 @@ public class ChatWebSocketController {
     }
 
     String username = principal.getName();
-    if (username != null && onlineUsers.remove(username)) {
+    String normalized = normalizeUsername(username);
+    if (!normalized.isBlank() && onlineUsers.remove(normalized)) {
       long lastSeenAt = Instant.now().toEpochMilli();
-      lastSeenMap.put(username, lastSeenAt);
-      broadcastUserStatus(username, "offline", lastSeenAt);
+      lastSeenMap.put(normalized, lastSeenAt);
+      broadcastUserStatus(normalized, "offline", lastSeenAt);
     }
+  }
+
+  private boolean isUserConnected(String normalizedUsername) {
+    if (normalizedUsername == null || normalizedUsername.isBlank()) return false;
+    SimpUser user = simpUserRegistry.getUser(normalizedUsername);
+    if (user != null && !user.getSessions().isEmpty()) {
+      return true;
+    }
+    return onlineUsers.contains(normalizedUsername);
   }
 
   private void broadcastUserStatus(String username, String status, Long lastSeenAt) {

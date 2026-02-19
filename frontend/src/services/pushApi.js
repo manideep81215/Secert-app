@@ -25,3 +25,10 @@ export async function unsubscribePush(token, endpoint) {
   })
   return data
 }
+
+export async function sendTestPush(token, payload = {}) {
+  const { data } = await pushClient.post('/test', payload, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  })
+  return data
+}

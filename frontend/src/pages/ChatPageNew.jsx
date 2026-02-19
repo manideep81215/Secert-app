@@ -16,7 +16,7 @@ import {
   setNotifyCutoff,
 } from '../lib/notifications'
 import { ensurePushSubscription } from '../lib/pushSubscription'
-import { getPushPublicKey } from '../services/pushApi'
+import { getPushPublicKey, sendTestPush } from '../services/pushApi'
 import { API_BASE_URL, WS_CHAT_URL } from '../config/apiConfig'
 import { resetFlowState, useFlowState } from '../hooks/useFlowState'
 import './ChatPageNew.css'
@@ -980,6 +980,25 @@ function ChatPageNew() {
     }
   }
 
+  const handleSendTestPush = async () => {
+    if (!flow?.token) {
+      toast.error('Login required for test push.')
+      return
+    }
+    try {
+      const result = await sendTestPush(flow.token, {})
+      if (result?.success) {
+        toast.success(result?.message || 'Test push sent.')
+      } else {
+        toast.error(result?.message || 'Test push failed.')
+      }
+      refreshPushDebug('test-push')
+    } catch (error) {
+      const message = error?.response?.data?.message || error?.response?.data?.detail || 'Failed to send test push.'
+      toast.error(message)
+    }
+  }
+
   useEffect(() => {
     const onKeyDown = (event) => {
       const target = event.target
@@ -1733,6 +1752,7 @@ function ChatPageNew() {
           <div
             className="chat-header-left chat-header-left-btn"
             onClick={() => selectedUser && setShowUserDetails(true)}
+            onTouchEnd={() => selectedUser && setShowUserDetails(true)}
             onKeyDown={(event) => {
               if (!selectedUser) return
               if (event.key === 'Enter' || event.key === ' ') {
@@ -1760,6 +1780,7 @@ function ChatPageNew() {
             <button
               className="btn-user-details"
               onClick={() => selectedUser && setShowUserDetails(true)}
+              onTouchEnd={() => selectedUser && setShowUserDetails(true)}
               title="User info"
               aria-label="User info"
               disabled={!selectedUser}
@@ -1781,7 +1802,10 @@ function ChatPageNew() {
           <div className="push-debug-panel">
             <div className="push-debug-head">
               <strong>Push Debug</strong>
-              <button type="button" onClick={() => refreshPushDebug('manual')} aria-label="Refresh push debug">Refresh</button>
+              <div>
+                <button type="button" onClick={handleSendTestPush} aria-label="Send test push">Send Test</button>
+                <button type="button" onClick={() => refreshPushDebug('manual')} aria-label="Refresh push debug">Refresh</button>
+              </div>
             </div>
             <div className="push-debug-row"><span>Permission</span><b>{pushDebug.notificationPermission}</b></div>
             <div className="push-debug-row"><span>SW Active</span><b>{pushDebug.serviceWorkerActive ? 'yes' : 'no'}</b></div>

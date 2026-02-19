@@ -1716,6 +1716,11 @@
   font-size: 0.8rem;
 }
 
+.push-debug-head > div {
+  display: flex;
+  gap: 0.35rem;
+}
+
 .push-debug-head button {
   border: 1px solid #cdac64;
   background: #ffe3b1;

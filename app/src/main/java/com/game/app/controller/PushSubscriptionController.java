@@ -71,6 +71,29 @@ public class PushSubscriptionController {
     return new PushSubscribeResponse(true);
   }
 
+  @PostMapping("/test")
+  public PushTestResponse testPush(
+      @RequestHeader(value = "Authorization", required = false) String authHeader,
+      @RequestBody(required = false) PushTestRequest payload) {
+    UserEntity me = requireAuthUser(authHeader);
+    if (!pushNotificationService.isPushEnabled()) {
+      return new PushTestResponse(false, "Push key not configured on server.");
+    }
+
+    String title = payload != null && payload.title() != null && !payload.title().isBlank()
+        ? payload.title().trim()
+        : "Test notification";
+    String body = payload != null && payload.body() != null && !payload.body().isBlank()
+        ? payload.body().trim()
+        : "Push is working even when app is closed.";
+    String url = payload != null && payload.url() != null && !payload.url().isBlank()
+        ? payload.url().trim()
+        : "/#/chat";
+
+    pushNotificationService.notifyUser(me.getUsername(), title, body, url);
+    return new PushTestResponse(true, "Test push dispatched.");
+  }
+
   private UserEntity requireAuthUser(String authHeader) {
     String token = extractToken(authHeader);
     Long tokenUserId = tokenStore.get(token);
@@ -100,4 +123,8 @@ public class PushSubscriptionController {
   public record PushSubscribeResponse(boolean success) {}
 
   public record PushUnsubscribeRequest(String endpoint) {}
+
+  public record PushTestRequest(String title, String body, String url) {}
+
+  public record PushTestResponse(boolean success, String message) {}
 }
