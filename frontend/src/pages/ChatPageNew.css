@@ -1719,6 +1719,20 @@
   padding: 0.12rem 0.5rem;
 }
 
+.message-seen-inline {
+  margin-top: 0.1rem;
+  margin-right: 0.35rem;
+  margin-left: auto;
+  width: fit-content;
+  font-size: 0.74rem;
+  color: rgba(60, 47, 31, 0.78);
+  background: rgba(255, 255, 255, 0.58);
+  border: 1px solid rgba(162, 122, 73, 0.25);
+  border-radius: 0.8rem;
+  padding: 0.08rem 0.48rem;
+  line-height: 1.1;
+}
+
 /* Final mobile layout guardrails: keep composer visible and keep last message above it. */
 .chat-container .chat-area {
   min-height: 0;

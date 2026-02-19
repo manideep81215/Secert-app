@@ -253,6 +253,19 @@ function ChatPageNew() {
   const selectedSeen = selectedUser
     ? Number(seenAtMap[(selectedUser.username || '').toLowerCase()] || 0) >= selectedLastOutgoingAt && selectedLastOutgoingAt > 0
     : false
+  const lastOutgoingIndex = useMemo(() => {
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      if (messages[index]?.sender === 'user') return index
+    }
+    return -1
+  }, [messages])
+  const shouldShowSeenInline = Boolean(
+    selectedUser &&
+    !selectedTyping &&
+    selectedSeen &&
+    lastOutgoingIndex >= 0 &&
+    lastOutgoingIndex === messages.length - 1
+  )
   const getLatestIncomingCreatedAt = (peerUsername) => {
     if (!peerUsername) return 0
     let latest = 0
@@ -328,10 +341,12 @@ function ChatPageNew() {
 
   useEffect(() => {
     if (!flow.token) return
-    getMe(flow.token).catch(() => {
-      toast.error('Session expired, login again.')
-      resetFlowState(setFlow)
-      navigate('/auth')
+    getMe(flow.token).catch((error) => {
+      if (error?.response?.status === 401) {
+        toast.error('Session expired, login again.')
+        resetFlowState(setFlow)
+        navigate('/auth')
+      }
     })
   }, [flow.token, setFlow, navigate])
 
@@ -915,6 +930,9 @@ function ChatPageNew() {
       try {
         const keyConfig = await getPushPublicKey()
         pushKeyRegistered = Boolean(keyConfig?.enabled && keyConfig?.publicKey)
+        if (!pushKeyRegistered) {
+          keyError = 'Push key not configured on server.'
+        }
       } catch (error) {
         keyError = error?.message || 'Push key check failed.'
       }
@@ -1835,6 +1853,9 @@ function ChatPageNew() {
                     <button className="btn-resend" onClick={() => handleResendMessage(message)} title="Resend" aria-label="Resend">{icons.resend}</button>
                   )}
                 </div>
+                {shouldShowSeenInline && index === lastOutgoingIndex && (
+                  <div className="message-seen-inline">Seen</div>
+                )}
               </motion.div>
             )})}
           </AnimatePresence>
@@ -1851,18 +1872,6 @@ function ChatPageNew() {
                   <span />
                   <span />
                 </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-          <AnimatePresence>
-            {selectedUser && !selectedTyping && selectedSeen && (
-              <motion.div
-                className="seen-indicator-row"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 8 }}
-              >
-                <span className="seen-indicator-label">Seen</span>
               </motion.div>
             )}
           </AnimatePresence>
