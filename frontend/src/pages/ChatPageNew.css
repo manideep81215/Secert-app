@@ -1969,6 +1969,19 @@
     font-size: 1.22rem !important;
   }
 
+  .chat-container.mobile-users-open .users-panel {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100dvh !important;
+    min-height: 100dvh !important;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .chat-container.mobile-users-open .users-list {
+    padding-bottom: calc(0.6rem + env(safe-area-inset-bottom));
+  }
+
   .chat-container .input-area {
     position: sticky;
     bottom: 0;

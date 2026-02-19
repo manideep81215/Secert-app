@@ -1758,6 +1758,15 @@ function ChatPageNew() {
           </div>
           <div className="chat-header-actions">
             <button
+              className="btn-user-details"
+              onClick={() => selectedUser && setShowUserDetails(true)}
+              title="User info"
+              aria-label="User info"
+              disabled={!selectedUser}
+            >
+              i
+            </button>
+            <button
               className="btn-home-game"
               onClick={() => navigate('/games')}
               title="Go to dashboard"
