@@ -6,7 +6,9 @@ import SockJS from 'sockjs-client'
 import { toast } from 'react-toastify'
 import { useFlowState } from '../hooks/useFlowState'
 import { getAllUsers } from '../services/usersApi'
+import { getConversation } from '../services/messagesApi'
 import { WS_CHAT_URL } from '../config/apiConfig'
+import { getNotifyCutoff, setNotifyCutoff } from '../lib/notifications'
 import './UsersListPage.css'
 
 function UsersListPage() {
@@ -32,20 +34,55 @@ function UsersListPage() {
     }
 
     const loadUsers = async () => {
+      const messagePreview = (row) => {
+        const type = row?.type || 'text'
+        if (type === 'image') return 'Sent an image'
+        if (type === 'video') return 'Sent a video'
+        if (type === 'voice') return 'Sent a voice message'
+        if (type === 'file') return row?.fileName ? `Sent file: ${row.fileName}` : 'Sent a file'
+        return row?.text || row?.message || 'No messages yet'
+      }
       try {
         const dbUsers = await getAllUsers(flow.token)
         const me = (flow.username || '').toLowerCase()
-        const filtered = (dbUsers || [])
+        const baseUsers = (dbUsers || [])
           .filter((user) => (user?.username || '').toLowerCase() !== me)
           .map((user) => ({
             id: user.id,
             username: user.username,
             status: 'offline',
             lastMessage: 'No messages yet',
-            lastMessageTime: 'now',
+            lastMessageTime: '-',
           }))
-        setUsers(filtered)
-        usersRef.current = filtered
+
+        const unreadNext = {}
+        const enrichedUsers = await Promise.all(baseUsers.map(async (user) => {
+          try {
+            const rows = await getConversation(flow.token, user.username)
+            const list = Array.isArray(rows) ? rows : []
+            const last = list[list.length - 1]
+            const incoming = list.filter((row) => row?.sender === 'other')
+            const cutoff = getNotifyCutoff(flow.username, user.username)
+            const unreadCount = incoming.filter((row) => Number(row?.createdAt || 0) > cutoff).length
+            if (unreadCount > 0) {
+              unreadNext[(user.username || '').toLowerCase()] = unreadCount
+            }
+
+            return {
+              ...user,
+              lastMessage: last ? messagePreview(last) : 'No messages yet',
+              lastMessageTime: last?.createdAt
+                ? new Date(last.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                : '-',
+            }
+          } catch {
+            return user
+          }
+        }))
+
+        setUnreadMap(unreadNext)
+        setUsers(enrichedUsers)
+        usersRef.current = enrichedUsers
       } catch (error) {
         console.error('Failed to load users', error)
         toast.error('Failed to load users')
@@ -188,6 +225,7 @@ function UsersListPage() {
                     delete next[key]
                     return next
                   })
+                  setNotifyCutoff(flow.username, user.username, Date.now())
                   navigate('/chat', { state: { selectedUserId: user.id, selectedUsername: user.username } })
                 }}
                 whileHover={{ backgroundColor: 'rgba(0,0,0,0.02)' }}
