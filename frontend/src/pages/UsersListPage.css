@@ -168,6 +168,15 @@
   margin-left: 0.5rem;
 }
 
+.user-card-unread-dot {
+  width: 0.56rem;
+  height: 0.56rem;
+  border-radius: 50%;
+  background: #ff2f2f;
+  box-shadow: 0 0 0 2px rgba(255, 47, 47, 0.2);
+  flex-shrink: 0;
+}
+
 .loading,
 .no-users {
   display: flex;

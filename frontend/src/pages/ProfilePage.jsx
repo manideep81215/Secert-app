@@ -260,7 +260,7 @@ function ProfilePage() {
           onTouchEnd={handleResetScoreMouseUp}
           disabled={isLoading}
         >
-          Reset Secret
+          Reset Score
         </button>
       </article>
 

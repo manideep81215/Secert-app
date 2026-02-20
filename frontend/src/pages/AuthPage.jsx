@@ -78,7 +78,10 @@ function AuthPage() {
       toast.success(response.message || `${mode === 'login' ? 'Welcome back' : 'Profile created'} ${response.username}`)
       navigate('/games')
     } catch (error) {
-      const message = error?.response?.data?.message || error?.response?.data?.detail || 'Authentication failed'
+      const status = Number(error?.response?.status || 0)
+      const message = status === 401
+        ? 'Invalid email or password'
+        : (error?.response?.data?.message || error?.response?.data?.detail || 'Authentication failed')
       toast.error(message)
     }
   }

@@ -1,9 +1,12 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
+import { Client } from '@stomp/stompjs'
+import SockJS from 'sockjs-client'
 import { toast } from 'react-toastify'
 import { useFlowState } from '../hooks/useFlowState'
 import { getAllUsers } from '../services/usersApi'
+import { WS_CHAT_URL } from '../config/apiConfig'
 import './UsersListPage.css'
 
 function UsersListPage() {
@@ -12,7 +15,11 @@ function UsersListPage() {
   const [users, setUsers] = useState([])
   const [searchQuery, setSearchQuery] = useState('')
   const [statusMap, setStatusMap] = useState({})
+  const [unreadMap, setUnreadMap] = useState({})
   const [loading, setLoading] = useState(true)
+  const usersRef = useRef([])
+  const tokenRef = useRef(flow.token || '')
+  const usernameRef = useRef(flow.username || '')
 
   useEffect(() => {
     if (!flow.token || !flow.username) {
@@ -38,6 +45,7 @@ function UsersListPage() {
             lastMessageTime: 'now',
           }))
         setUsers(filtered)
+        usersRef.current = filtered
       } catch (error) {
         console.error('Failed to load users', error)
         toast.error('Failed to load users')
@@ -49,6 +57,81 @@ function UsersListPage() {
     loadUsers()
   }, [flow.token, flow.username, flow.verified, navigate])
 
+  useEffect(() => {
+    usersRef.current = users
+  }, [users])
+
+  useEffect(() => {
+    tokenRef.current = flow.token || ''
+    usernameRef.current = flow.username || ''
+  }, [flow.token, flow.username])
+
+  useEffect(() => {
+    const authToken = (flow.token || '').trim()
+    const authUsername = (flow.username || '').trim()
+    if (!authToken || !authUsername) return
+
+    const previewFromPayload = (payload) => {
+      const type = payload?.type || 'text'
+      if (type === 'image') return 'Sent an image'
+      if (type === 'video') return 'Sent a video'
+      if (type === 'voice') return 'Sent a voice message'
+      if (type === 'file') return payload?.fileName ? `Sent file: ${payload.fileName}` : 'Sent a file'
+      return payload?.message || 'New message'
+    }
+
+    const client = new Client({
+      webSocketFactory: () => new SockJS(WS_CHAT_URL, null, {
+        transports: ['websocket', 'xhr-streaming', 'xhr-polling'],
+      }),
+      connectHeaders: {
+        username: authUsername,
+        Authorization: `Bearer ${authToken}`,
+      },
+      reconnectDelay: 1000,
+      heartbeatIncoming: 10000,
+      heartbeatOutgoing: 10000,
+      onConnect: () => {
+        client.subscribe('/user/queue/messages', (frame) => {
+          try {
+            const payload = JSON.parse(frame.body)
+            const fromUsername = (payload?.fromUsername || '').trim().toLowerCase()
+            if (!fromUsername) return
+
+            setUnreadMap((prev) => ({ ...prev, [fromUsername]: (prev[fromUsername] || 0) + 1 }))
+
+            const preview = previewFromPayload(payload)
+            const messageTime = new Date(Number(payload?.createdAt || Date.now()))
+              .toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+
+            setUsers((prev) => prev.map((user) => (
+              (user.username || '').toLowerCase() === fromUsername
+                ? { ...user, lastMessage: preview, lastMessageTime: messageTime }
+                : user
+            )))
+          } catch {
+            // Ignore malformed realtime payload.
+          }
+        })
+
+        client.subscribe('/topic/user-status', (frame) => {
+          try {
+            const payload = JSON.parse(frame.body)
+            const username = (payload?.username || '').trim()
+            const status = payload?.status
+            if (!username || !status) return
+            setStatusMap((prev) => ({ ...prev, [username.toLowerCase()]: status }))
+          } catch {
+            // Ignore malformed status payload.
+          }
+        })
+      },
+    })
+
+    client.activate()
+    return () => client.deactivate()
+  }, [flow.token, flow.username])
+
   const formatUsername = (username) => {
     return username ? username.charAt(0).toUpperCase() + username.slice(1).toLowerCase() : ''
   }
@@ -57,9 +140,9 @@ function UsersListPage() {
     return username ? username.substring(0, 2).toUpperCase() : '?'
   }
 
-  const filteredUsers = users.filter((user) =>
+  const filteredUsers = useMemo(() => users.filter((user) =>
     user.username.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  ), [users, searchQuery])
 
   return (
     <div className="users-list-page">
@@ -93,7 +176,16 @@ function UsersListPage() {
               <motion.div
                 key={user.id}
                 className="user-card"
-                onClick={() => navigate('/chat', { state: { selectedUserId: user.id, selectedUsername: user.username } })}
+                onClick={() => {
+                  const key = (user.username || '').toLowerCase()
+                  setUnreadMap((prev) => {
+                    if (!prev[key]) return prev
+                    const next = { ...prev }
+                    delete next[key]
+                    return next
+                  })
+                  navigate('/chat', { state: { selectedUserId: user.id, selectedUsername: user.username } })
+                }}
                 whileHover={{ backgroundColor: 'rgba(0,0,0,0.02)' }}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -102,9 +194,16 @@ function UsersListPage() {
                 <div className="user-avatar">{getAvatarLabel(user.username)}</div>
                 <div className="user-card-info">
                   <div className="user-card-name">@{formatUsername(user.username)}</div>
-                  <div className="user-card-last-msg">{user.lastMessage}</div>
+                  <div className="user-card-last-msg">
+                    {unreadMap[(user.username || '').toLowerCase()]
+                      ? `${unreadMap[(user.username || '').toLowerCase()] > 1 ? `${unreadMap[(user.username || '').toLowerCase()]} new messages` : 'New message'}`
+                      : user.lastMessage}
+                  </div>
                 </div>
-                <div className={`user-card-status ${user.status}`} />
+                <div className={`user-card-status ${(statusMap[(user.username || '').toLowerCase()] || user.status)}`} />
+                {Boolean(unreadMap[(user.username || '').toLowerCase()]) && (
+                  <span className="user-card-unread-dot" aria-label="New message" />
+                )}
                 <div className="user-card-time">{user.lastMessageTime}</div>
               </motion.div>
             ))}
