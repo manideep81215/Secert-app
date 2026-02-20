@@ -173,9 +173,13 @@ function UsersListPage() {
         ) : (
           <AnimatePresence>
             {filteredUsers.map((user) => (
+              (() => {
+                const unreadCount = unreadMap[(user.username || '').toLowerCase()] || 0
+                const hasUnread = unreadCount > 0
+                return (
               <motion.div
                 key={user.id}
-                className="user-card"
+                className={`user-card ${hasUnread ? 'unread' : ''}`}
                 onClick={() => {
                   const key = (user.username || '').toLowerCase()
                   setUnreadMap((prev) => {
@@ -195,17 +199,21 @@ function UsersListPage() {
                 <div className="user-card-info">
                   <div className="user-card-name">@{formatUsername(user.username)}</div>
                   <div className="user-card-last-msg">
-                    {unreadMap[(user.username || '').toLowerCase()]
-                      ? `${unreadMap[(user.username || '').toLowerCase()] > 1 ? `${unreadMap[(user.username || '').toLowerCase()]} new messages` : 'New message'}`
+                    {hasUnread
+                      ? (unreadCount > 1 ? `${unreadCount} new messages` : 'New message')
                       : user.lastMessage}
                   </div>
                 </div>
                 <div className={`user-card-status ${(statusMap[(user.username || '').toLowerCase()] || user.status)}`} />
-                {Boolean(unreadMap[(user.username || '').toLowerCase()]) && (
-                  <span className="user-card-unread-dot" aria-label="New message" />
+                {hasUnread && (
+                  <span className="user-card-unread-count" aria-label={`${unreadCount} unread`}>
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
                 )}
                 <div className="user-card-time">{user.lastMessageTime}</div>
               </motion.div>
+                )
+              })()
             ))}
           </AnimatePresence>
         )}

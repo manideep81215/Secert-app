@@ -168,13 +168,26 @@
   margin-left: 0.5rem;
 }
 
-.user-card-unread-dot {
-  width: 0.56rem;
-  height: 0.56rem;
+.user-card-unread-count {
+  min-width: 1.15rem;
+  height: 1.15rem;
+  padding: 0 0.28rem;
   border-radius: 50%;
   background: #ff2f2f;
-  box-shadow: 0 0 0 2px rgba(255, 47, 47, 0.2);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+  line-height: 1;
+  box-shadow: 0 0 0 2px rgba(255, 47, 47, 0.22);
   flex-shrink: 0;
+}
+
+.user-card.unread .user-card-name,
+.user-card.unread .user-card-last-msg {
+  font-weight: 800;
+  color: #fff4d9;
 }
 
 .loading,
