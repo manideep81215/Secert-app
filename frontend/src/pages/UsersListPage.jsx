@@ -238,15 +238,19 @@ function UsersListPage() {
                   <div className="user-card-name">@{formatUsername(user.username)}</div>
                   <div className="user-card-last-msg">
                     {hasUnread
-                      ? (unreadCount > 1 ? `${unreadCount} new messages` : 'New message')
+                      ? (
+                        <span className="user-card-unread-text">
+                          {unreadCount >= 5
+                            ? '4+ new messages'
+                            : `${unreadCount} new message${unreadCount > 1 ? 's' : ''}`}
+                        </span>
+                      )
                       : user.lastMessage}
                   </div>
                 </div>
                 <div className={`user-card-status ${(statusMap[(user.username || '').toLowerCase()] || user.status)}`} />
                 {hasUnread && (
-                  <span className="user-card-unread-count" aria-label={`${unreadCount} unread`}>
-                    {unreadCount > 99 ? '99+' : unreadCount}
-                  </span>
+                  <span className="user-card-unread-dot" aria-label={`${unreadCount} unread`} />
                 )}
                 <div className="user-card-time">{user.lastMessageTime}</div>
               </motion.div>
