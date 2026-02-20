@@ -1,15 +1,20 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
+import { Client } from '@stomp/stompjs'
+import SockJS from 'sockjs-client'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import {
   ensureNotificationPermission,
   getNotificationBlockedHelp,
   getNotificationPermissionState,
+  pushNotify,
+  setNotifyCutoff,
 } from '../lib/notifications'
 import { ensurePushSubscription } from '../lib/pushSubscription'
 import { getPushPublicKey, sendTestPush } from '../services/pushApi'
 import { useFlowState } from '../hooks/useFlowState'
+import { WS_CHAT_URL } from '../config/apiConfig'
 import './ChatInfoPage.css'
 
 const CLEAR_CUTOFFS_KEY = 'chat_clear_cutoffs_v1'
@@ -45,6 +50,19 @@ function ChatInfoPage() {
   })
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [activeMediaPreview, setActiveMediaPreview] = useState(null)
+  const toUserKey = (username) => (username || '').trim().toLowerCase()
+  const activeChatKey = () => `active_chat_peer_v1:${toUserKey(flow.username)}`
+
+  const shouldSuppressNotification = (fromUsername) => {
+    if (typeof window === 'undefined') return false
+    if (window.location?.pathname !== '/chat') return false
+    try {
+      const activePeer = window.localStorage.getItem(activeChatKey()) || ''
+      return activePeer && activePeer === toUserKey(fromUsername)
+    } catch {
+      return false
+    }
+  }
 
   useEffect(() => {
     if (selectedUser?.username) return
@@ -281,6 +299,54 @@ function ChatInfoPage() {
       document.removeEventListener('visibilitychange', onVisible)
     }
   }, [flow?.token, notificationPermission])
+
+  useEffect(() => {
+    const authToken = (flow.token || '').trim()
+    const authUsername = (flow.username || '').trim()
+    if (!authUsername || !authToken) return
+
+    const previewFromPayload = (payload) => {
+      const type = payload?.type || 'text'
+      if (type === 'image') return 'Sent an image'
+      if (type === 'video') return 'Sent a video'
+      if (type === 'voice') return 'Sent a voice message'
+      if (type === 'file') return payload?.fileName ? `Sent file: ${payload.fileName}` : 'Sent a file'
+      return payload?.message || 'New message'
+    }
+
+    const client = new Client({
+      webSocketFactory: () => new SockJS(WS_CHAT_URL, null, {
+        transports: ['websocket', 'xhr-streaming', 'xhr-polling'],
+      }),
+      connectHeaders: {
+        username: authUsername,
+        Authorization: `Bearer ${authToken}`,
+      },
+      reconnectDelay: 1000,
+      heartbeatIncoming: 10000,
+      heartbeatOutgoing: 10000,
+      onConnect: () => {
+        client.subscribe('/user/queue/messages', (frame) => {
+          try {
+            const payload = JSON.parse(frame.body)
+            const fromUsername = (payload?.fromUsername || '').trim()
+            if (!fromUsername) return
+
+            const preview = previewFromPayload(payload)
+            if (!shouldSuppressNotification(fromUsername)) {
+              pushNotify(`@${fromUsername}`, preview || 'New message')
+            }
+            setNotifyCutoff(authUsername, fromUsername, Number(payload?.createdAt || Date.now()))
+          } catch {
+            // Ignore malformed realtime payload.
+          }
+        })
+      },
+    })
+
+    client.activate()
+    return () => client.deactivate()
+  }, [flow.username, flow.token])
 
   if (!selectedUser) {
     return null

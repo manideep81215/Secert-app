@@ -19,6 +19,7 @@ import './ChatPageNew.css'
 
 const REALTIME_TOAST_ID = 'realtime-connection'
 const PRESENCE_LAST_SEEN_KEY = 'chat_presence_last_seen_v1'
+const ACTIVE_CHAT_PEER_KEY_PREFIX = 'active_chat_peer_v1:'
 const EDIT_WINDOW_MS = 15 * 60 * 1000
 const MESSAGE_ACTION_LONG_PRESS_MS = 600
 const TYPING_STALE_MS = 1400
@@ -104,6 +105,7 @@ function ChatPageNew() {
     return raw || 'Unknown'
   }
   const toUserKey = (username) => (username || '').trim().toLowerCase()
+  const activeChatKey = (meUsername) => `${ACTIVE_CHAT_PEER_KEY_PREFIX}${toUserKey(meUsername)}`
   const getAvatarLabel = (name) => {
     const normalized = formatUsername(name)
     if (normalized === 'Unknown') return '?'
@@ -291,6 +293,32 @@ function ChatPageNew() {
   useEffect(() => {
     selectedUserRef.current = selectedUser
   }, [selectedUser])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!flow.username) return
+    const key = activeChatKey(flow.username)
+    if (selectedUser?.username) {
+      try {
+        window.localStorage.setItem(key, toUserKey(selectedUser.username))
+      } catch {
+        // Ignore localStorage failures.
+      }
+    } else {
+      try {
+        window.localStorage.removeItem(key)
+      } catch {
+        // Ignore localStorage failures.
+      }
+    }
+    return () => {
+      try {
+        window.localStorage.removeItem(key)
+      } catch {
+        // Ignore localStorage failures.
+      }
+    }
+  }, [flow.username, selectedUser?.username])
 
   useEffect(() => {
     setEditingMessage(null)
@@ -565,7 +593,7 @@ function ChatPageNew() {
             incoming.timestamp = formatTimestamp(incoming.createdAt)
             const incomingPreview = getMessagePreview(incoming.type, incoming.text, incoming.fileName)
             updatePresenceLastSeen(fromUsername, incomingCreatedAt || Date.now())
-            if (!shouldSuppressChatNotification()) {
+            if (!shouldSuppressChatNotification(fromUsername)) {
               await pushNotify(`@${formatUsername(fromUsername)}`, incomingPreview)
             }
             setNotifyCutoff(authUsername, fromUsername, incomingCreatedAt || Date.now())
@@ -778,7 +806,7 @@ function ChatPageNew() {
 
             const latest = Math.max(...missed.map((row) => Number(row.createdAt || 0)))
             setNotifyCutoff(flow.username, user.username, latest || Date.now())
-            if (!shouldSuppressChatNotification()) {
+            if (!shouldSuppressChatNotification(user.username)) {
               await pushNotify(`@${formatUsername(user.username)}`, `${missed.length} new message${missed.length > 1 ? 's' : ''}`)
             }
           } catch {
@@ -863,9 +891,13 @@ function ChatPageNew() {
     })
   }
 
-  const shouldSuppressChatNotification = () => {
+  const shouldSuppressChatNotification = (fromUsername) => {
     if (typeof document === 'undefined') return false
-    return document.visibilityState === 'visible' && location.pathname === '/chat'
+    if (document.visibilityState !== 'visible') return false
+    if (location.pathname !== '/chat') return false
+    if (!fromUsername) return false
+    const activeUser = selectedUserRef.current?.username
+    return activeUser && toUserKey(activeUser) === toUserKey(fromUsername)
   }
 
   useEffect(() => {

@@ -8,7 +8,7 @@ import { useFlowState } from '../hooks/useFlowState'
 import { getAllUsers } from '../services/usersApi'
 import { getConversation } from '../services/messagesApi'
 import { WS_CHAT_URL } from '../config/apiConfig'
-import { getNotifyCutoff, setNotifyCutoff } from '../lib/notifications'
+import { getNotifyCutoff, pushNotify, setNotifyCutoff } from '../lib/notifications'
 import './UsersListPage.css'
 
 function UsersListPage() {
@@ -23,6 +23,19 @@ function UsersListPage() {
   const usersRef = useRef([])
   const tokenRef = useRef(flow.token || '')
   const usernameRef = useRef(flow.username || '')
+  const toUserKey = (username) => (username || '').trim().toLowerCase()
+  const activeChatKey = () => `active_chat_peer_v1:${toUserKey(flow.username)}`
+
+  const shouldSuppressNotification = (fromUsername) => {
+    if (typeof window === 'undefined') return false
+    if (window.location?.pathname !== '/chat') return false
+    try {
+      const activePeer = window.localStorage.getItem(activeChatKey()) || ''
+      return activePeer && activePeer === toUserKey(fromUsername)
+    } catch {
+      return false
+    }
+  }
 
   useEffect(() => {
     if (!flow.token || !flow.username) {
@@ -152,7 +165,8 @@ function UsersListPage() {
         client.subscribe('/user/queue/messages', (frame) => {
           try {
             const payload = JSON.parse(frame.body)
-            const fromUsername = (payload?.fromUsername || '').trim().toLowerCase()
+            const fromUsernameRaw = (payload?.fromUsername || '').trim()
+            const fromUsername = toUserKey(fromUsernameRaw)
             if (!fromUsername) return
 
             setUnreadMap((prev) => ({ ...prev, [fromUsername]: (prev[fromUsername] || 0) + 1 }))
@@ -166,6 +180,11 @@ function UsersListPage() {
                 ? { ...user, lastMessage: preview, lastMessageTime: messageTime }
                 : user
             )))
+
+            if (!shouldSuppressNotification(fromUsernameRaw)) {
+              pushNotify(`@${fromUsernameRaw}`, preview || 'New message')
+            }
+            setNotifyCutoff(flow.username, fromUsernameRaw, Number(payload?.createdAt || Date.now()))
           } catch {
             // Ignore malformed realtime payload.
           }
