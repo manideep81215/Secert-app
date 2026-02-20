@@ -1,14 +1,17 @@
 .app-wrap {
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .app-auth-route {
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .app-auth-max {
   width: 100%;
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .app-max {

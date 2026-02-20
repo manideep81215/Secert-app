@@ -35,7 +35,15 @@ function ChatPageNew() {
     try {
       const raw = window.localStorage.getItem(PRESENCE_LAST_SEEN_KEY)
       const parsed = raw ? JSON.parse(raw) : {}
-      return parsed && typeof parsed === 'object' ? parsed : {}
+      if (!parsed || typeof parsed !== 'object') return {}
+      const normalized = {}
+      Object.entries(parsed).forEach(([key, value]) => {
+        const userKey = (key || '').trim().toLowerCase()
+        const timestamp = Number(value || 0)
+        if (!userKey || !timestamp) return
+        normalized[userKey] = Math.max(Number(normalized[userKey] || 0), timestamp)
+      })
+      return normalized
     } catch {
       return {}
     }
@@ -89,6 +97,7 @@ function ChatPageNew() {
     const raw = (name || '').trim().replace(/^@+/, '')
     return raw || 'Unknown'
   }
+  const toUserKey = (username) => (username || '').trim().toLowerCase()
   const getAvatarLabel = (name) => {
     const normalized = formatUsername(name)
     if (normalized === 'Unknown') return '?'
@@ -189,7 +198,7 @@ function ChatPageNew() {
   const toShortLastSeen = (lastSeenAt) => {
     if (!lastSeenAt) return '-'
     const diffSeconds = Math.max(0, Math.floor((Date.now() - lastSeenAt) / 1000))
-    if (diffSeconds < 60) return 'now'
+    if (diffSeconds < 60) return '1m ago'
     const minutes = Math.floor(diffSeconds / 60)
     if (minutes < 60) return `${minutes}m ago`
     const hours = Math.floor(minutes / 60)
@@ -209,8 +218,9 @@ function ChatPageNew() {
     return `last seen ${days} day ago`
   }
   const getPresence = (username, fallback = 'offline') => {
-    const cachedLastSeenAt = Number(presenceLastSeenMap[username] || 0) || null
-    const current = statusMap[username]
+    const userKey = toUserKey(username)
+    const cachedLastSeenAt = Number(presenceLastSeenMap[userKey] || 0) || null
+    const current = statusMap[userKey]
     if (current) {
       return {
         ...current,
@@ -476,7 +486,9 @@ function ChatPageNew() {
             const status = payload?.status
             const lastSeenAt = payload?.lastSeenAt || null
             if (!username || !status) return
-            setStatusMap((prev) => ({ ...prev, [username]: { status, lastSeenAt } }))
+            const userKey = toUserKey(username)
+            if (!userKey) return
+            setStatusMap((prev) => ({ ...prev, [userKey]: { status, lastSeenAt } }))
             if (status === 'online') {
               updatePresenceLastSeen(username, Date.now())
             } else if (Number(lastSeenAt) > 0) {
@@ -838,13 +850,14 @@ function ChatPageNew() {
   }, [presenceLastSeenMap])
 
   const updatePresenceLastSeen = (username, timestampMs) => {
-    if (!username) return
+    const userKey = toUserKey(username)
+    if (!userKey) return
     const nextTs = Number(timestampMs || 0)
     if (!nextTs) return
     setPresenceLastSeenMap((prev) => {
-      const existing = Number(prev[username] || 0)
+      const existing = Number(prev[userKey] || 0)
       if (nextTs <= existing) return prev
-      return { ...prev, [username]: nextTs }
+      return { ...prev, [userKey]: nextTs }
     })
   }
 

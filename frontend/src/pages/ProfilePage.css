@@ -1,6 +1,7 @@
 .profile-page {
   min-height: 100vh;
   min-height: 100dvh;
+  height: 100dvh;
   padding: 0.8rem;
   background:
     radial-gradient(circle at 12% 18%, rgba(253, 251, 190, 0.45) 0%, rgba(253, 251, 190, 0) 34%),
@@ -79,6 +80,7 @@
   gap: 0.8rem;
   overflow-y: auto;
   overflow-x: hidden;
+  min-height: 0;
   max-height: 100%;
   width: 100%;
 }

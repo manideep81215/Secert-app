@@ -19,10 +19,12 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  min-height: 100dvh;
   background: radial-gradient(circle at 0% 10%, #fff2e9 0%, #e9fbf7 35%, #e6edf9 100%);
   color: var(--ink);
 }
 
 #root {
   min-height: 100vh;
+  min-height: 100dvh;
 }
