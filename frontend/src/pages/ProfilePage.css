@@ -1,6 +1,10 @@
 .profile-page {
+  width: 100%;
+  min-width: 100%;
   min-height: 100vh;
+  min-height: 100svh;
   min-height: 100dvh;
+  height: 100svh;
   height: 100dvh;
   padding: 0.8rem;
   background:
@@ -9,9 +13,10 @@
     radial-gradient(circle at 18% 86%, rgba(120, 220, 140, 0.3) 0%, rgba(120, 220, 140, 0) 30%),
     linear-gradient(180deg, #83d9ef 0%, #b7f1f5 50%, #b6e3a2 100%);
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 0.7rem;
   overflow: hidden;
+  overflow-x: hidden;
 }
 
 @media (min-width: 640px) {
@@ -81,6 +86,7 @@
   overflow-y: auto;
   overflow-x: hidden;
   min-height: 0;
+  height: 100%;
   max-height: 100%;
   width: 100%;
 }

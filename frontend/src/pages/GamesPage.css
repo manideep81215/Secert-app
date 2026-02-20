@@ -1,6 +1,8 @@
 .games-dashboard-page {
   min-height: 100vh;
+  min-height: 100svh;
   min-height: 100dvh;
+  height: 100svh;
   height: 100dvh;
   width: 100%;
   padding: 1rem;
@@ -10,7 +12,7 @@
     radial-gradient(circle at 18% 86%, rgba(120, 220, 140, 0.3) 0%, rgba(120, 220, 140, 0) 30%),
     linear-gradient(180deg, #83d9ef 0%, #b7f1f5 50%, #b6e3a2 100%);
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 0.9rem;
   overflow: hidden;
   overflow-x: hidden;
@@ -59,6 +61,7 @@
   gap: 0.85rem;
   align-items: start;
   min-height: 0;
+  height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
