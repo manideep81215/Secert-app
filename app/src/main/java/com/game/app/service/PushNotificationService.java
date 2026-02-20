@@ -22,11 +22,14 @@ import com.game.app.repository.PushSubscriptionRepository;
 
 import nl.martijndwars.webpush.Notification;
 import nl.martijndwars.webpush.PushService;
+import nl.martijndwars.webpush.Urgency;
 
 @Service
 public class PushNotificationService {
 
   private static final Logger log = LoggerFactory.getLogger(PushNotificationService.class);
+  private static final int PUSH_TTL_SECONDS = 24 * 60 * 60;
+  private static final Urgency PUSH_URGENCY = Urgency.HIGH;
 
   private final PushSubscriptionRepository pushSubscriptionRepository;
   private final String vapidPublicKey;
@@ -90,11 +93,14 @@ public class PushNotificationService {
         PushService service = new PushService(vapidPublicKey, vapidPrivateKey, vapidSubject);
         for (PushSubscriptionEntity subscription : subscriptions) {
           try {
-            Notification notification = new Notification(
-                subscription.getEndpoint(),
-                subscription.getP256dh(),
-                subscription.getAuth(),
-                payload.getBytes(StandardCharsets.UTF_8));
+            Notification notification = Notification.builder()
+                .endpoint(subscription.getEndpoint())
+                .userPublicKey(subscription.getP256dh())
+                .userAuth(subscription.getAuth())
+                .payload(payload.getBytes(StandardCharsets.UTF_8))
+                .ttl(PUSH_TTL_SECONDS)
+                .urgency(PUSH_URGENCY)
+                .build();
             service.send(notification);
           } catch (Exception sendError) {
             String message = sendError.getMessage() != null ? sendError.getMessage() : "";
