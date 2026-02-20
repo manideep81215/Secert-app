@@ -21,6 +21,7 @@ const REALTIME_TOAST_ID = 'realtime-connection'
 const PRESENCE_LAST_SEEN_KEY = 'chat_presence_last_seen_v1'
 const EDIT_WINDOW_MS = 15 * 60 * 1000
 const MESSAGE_ACTION_LONG_PRESS_MS = 600
+const TYPING_STALE_MS = 1400
 
 function ChatPageNew() {
   const navigate = useNavigate()
@@ -81,6 +82,8 @@ function ChatPageNew() {
   const attachMenuRef = useRef(null)
   const typingTimeoutRef = useRef(null)
   const typingStateRef = useRef(false)
+  const typingTargetRef = useRef(null)
+  const incomingTypingTimeoutsRef = useRef({})
   const sendAckTimeoutsRef = useRef({})
   const messageLongPressRef = useRef({ timerId: null, key: null, startX: 0, startY: 0, moved: false, triggered: false })
   const mediaRecorderRef = useRef(null)
@@ -577,7 +580,19 @@ function ChatPageNew() {
             const typing = Boolean(payload?.typing)
             if (!fromUsername) return
             setTypingMap((prev) => ({ ...prev, [fromUsername]: typing }))
-            if (typing) updatePresenceLastSeen(fromUsername, Date.now())
+            if (typing) {
+              updatePresenceLastSeen(fromUsername, Date.now())
+              if (incomingTypingTimeoutsRef.current[fromUsername]) {
+                clearTimeout(incomingTypingTimeoutsRef.current[fromUsername])
+              }
+              incomingTypingTimeoutsRef.current[fromUsername] = setTimeout(() => {
+                setTypingMap((prev) => ({ ...prev, [fromUsername]: false }))
+                delete incomingTypingTimeoutsRef.current[fromUsername]
+              }, TYPING_STALE_MS)
+            } else if (incomingTypingTimeoutsRef.current[fromUsername]) {
+              clearTimeout(incomingTypingTimeoutsRef.current[fromUsername])
+              delete incomingTypingTimeoutsRef.current[fromUsername]
+            }
           } catch (error) {
             console.error('Failed parsing typing payload', error)
           }
@@ -761,6 +776,8 @@ function ChatPageNew() {
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current)
       }
+      Object.values(incomingTypingTimeoutsRef.current).forEach((id) => clearTimeout(id))
+      incomingTypingTimeoutsRef.current = {}
       Object.values(sendAckTimeoutsRef.current).forEach((id) => clearTimeout(id))
       sendAckTimeoutsRef.current = {}
       stopRecordingTimer()
@@ -897,19 +914,73 @@ function ChatPageNew() {
     }
   }, [pendingImagePreview?.url])
 
-  const publishTyping = (typing, force = false) => {
-    if (!socket?.connected || !selectedUser?.username) return
-    if (!force && typingStateRef.current === typing) return
+  const publishTyping = (typing, force = false, targetUsername = null) => {
+    const toUsername = (targetUsername || selectedUser?.username || '').trim()
+    if (!toUsername) return
+    if (!socket?.connected) {
+      if (!typing) {
+        typingStateRef.current = false
+        if (typingTargetRef.current === toUsername) {
+          typingTargetRef.current = null
+        }
+      }
+      return
+    }
+    if (!force && typingTargetRef.current === toUsername && typingStateRef.current === typing) return
     typingStateRef.current = typing
+    typingTargetRef.current = typing ? toUsername : (typingTargetRef.current === toUsername ? null : typingTargetRef.current)
     socket.publish({
       destination: '/app/chat.typing',
       body: JSON.stringify({
-        toUsername: selectedUser.username,
+        toUsername,
         fromUsername: flow.username,
         typing,
       }),
     })
   }
+
+  useEffect(() => {
+    const nextUsername = selectedUser?.username || null
+    const activeTypingTarget = typingTargetRef.current
+    if (activeTypingTarget && activeTypingTarget !== nextUsername) {
+      publishTyping(false, true, activeTypingTarget)
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current)
+        typingTimeoutRef.current = null
+      }
+      typingStateRef.current = false
+    }
+  }, [selectedUser?.username, socket])
+
+  useEffect(() => {
+    const stopTypingOnSuspend = () => {
+      const activeTypingTarget = typingTargetRef.current || selectedUserRef.current?.username
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current)
+        typingTimeoutRef.current = null
+      }
+      if (activeTypingTarget) {
+        publishTyping(false, true, activeTypingTarget)
+      } else {
+        typingStateRef.current = false
+      }
+    }
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        stopTypingOnSuspend()
+      }
+    }
+
+    window.addEventListener('offline', stopTypingOnSuspend)
+    window.addEventListener('pagehide', stopTypingOnSuspend)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      window.removeEventListener('offline', stopTypingOnSuspend)
+      window.removeEventListener('pagehide', stopTypingOnSuspend)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+  }, [socket, selectedUser?.username])
 
   const publishReadReceipt = (peerUsername, readAtMs) => {
     if (!socket?.connected || !peerUsername) return
@@ -1113,8 +1184,9 @@ function ChatPageNew() {
     }
 
     if (hasText) {
+      const typingTarget = selectedUser.username
       typingTimeoutRef.current = setTimeout(() => {
-        publishTyping(false, true)
+        publishTyping(false, true, typingTarget)
       }, 1200)
     }
   }
