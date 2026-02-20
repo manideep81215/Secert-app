@@ -86,33 +86,82 @@ public class PushNotificationService {
     List<PushSubscriptionEntity> subscriptions = pushSubscriptionRepository.findByUsername(normalizedUser);
     if (subscriptions.isEmpty()) return;
 
-    String payload = "{\"title\":\"" + escapeJson(title) + "\",\"body\":\"" + escapeJson(body) + "\",\"url\":\"" + escapeJson(url) + "\"}";
+    String payload = buildPayload(title, body, url);
 
     CompletableFuture.runAsync(() -> {
       try {
         PushService service = new PushService(vapidPublicKey, vapidPrivateKey, vapidSubject);
         for (PushSubscriptionEntity subscription : subscriptions) {
-          try {
-            Notification notification = Notification.builder()
-                .endpoint(subscription.getEndpoint())
-                .userPublicKey(subscription.getP256dh())
-                .userAuth(subscription.getAuth())
-                .payload(payload.getBytes(StandardCharsets.UTF_8))
-                .ttl(PUSH_TTL_SECONDS)
-                .urgency(PUSH_URGENCY)
-                .build();
-            service.send(notification);
-          } catch (Exception sendError) {
-            String message = sendError.getMessage() != null ? sendError.getMessage() : "";
-            if (message.contains("410") || message.contains("404")) {
-              pushSubscriptionRepository.deleteById(subscription.getId());
-            }
-          }
+          sendToSubscription(service, subscription, payload);
         }
       } catch (Exception ignored) {
         // Ignore push broadcast failures.
       }
     });
+  }
+
+  public long countSubscriptions(String username) {
+    String normalizedUser = normalizeUsername(username);
+    return pushSubscriptionRepository.findByUsername(normalizedUser).size();
+  }
+
+  public PushSendResult sendTestNow(String username, String title, String body, String url) {
+    if (!isPushEnabled()) {
+      return new PushSendResult(false, 0, 0, "Push key not configured on server.");
+    }
+
+    String normalizedUser = normalizeUsername(username);
+    List<PushSubscriptionEntity> subscriptions = pushSubscriptionRepository.findByUsername(normalizedUser);
+    if (subscriptions.isEmpty()) {
+      return new PushSendResult(false, 0, 0, "No active push subscription for this user.");
+    }
+
+    String payload = buildPayload(title, body, url);
+    int attempted = 0;
+    int sent = 0;
+    try {
+      PushService service = new PushService(vapidPublicKey, vapidPrivateKey, vapidSubject);
+      for (PushSubscriptionEntity subscription : subscriptions) {
+        attempted += 1;
+        if (sendToSubscription(service, subscription, payload)) {
+          sent += 1;
+        }
+      }
+    } catch (Exception error) {
+      return new PushSendResult(false, attempted, sent, error.getMessage() != null ? error.getMessage() : "Push service error");
+    }
+
+    if (sent > 0) {
+      return new PushSendResult(true, attempted, sent, "Test push sent.");
+    }
+    return new PushSendResult(false, attempted, sent, "Push send failed for all subscriptions.");
+  }
+
+  private boolean sendToSubscription(PushService service, PushSubscriptionEntity subscription, String payload) {
+    try {
+      Notification notification = Notification.builder()
+          .endpoint(subscription.getEndpoint())
+          .userPublicKey(subscription.getP256dh())
+          .userAuth(subscription.getAuth())
+          .payload(payload.getBytes(StandardCharsets.UTF_8))
+          .ttl(PUSH_TTL_SECONDS)
+          .urgency(PUSH_URGENCY)
+          .build();
+      service.send(notification);
+      return true;
+    } catch (Exception sendError) {
+      String message = sendError.getMessage() != null ? sendError.getMessage() : "";
+      if (message.contains("410") || message.contains("404")) {
+        pushSubscriptionRepository.deleteById(subscription.getId());
+      }
+      return false;
+    }
+  }
+
+  private String buildPayload(String title, String body, String url) {
+    return "{\"title\":\"" + escapeJson(title)
+        + "\",\"body\":\"" + escapeJson(body)
+        + "\",\"url\":\"" + escapeJson(url) + "\"}";
   }
 
   private String normalizeUsername(String username) {
@@ -165,4 +214,6 @@ public class PushNotificationService {
   }
 
   private record VapidKeyPair(String publicKey, String privateKey) {}
+
+  public record PushSendResult(boolean success, int attempted, int sent, String message) {}
 }

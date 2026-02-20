@@ -7,6 +7,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.springframework.context.event.EventListener;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.messaging.simp.user.SimpUser;
@@ -29,6 +30,7 @@ public class ChatWebSocketController {
   private final ChatMessageRepository chatMessageRepository;
   private final ChatReadReceiptRepository chatReadReceiptRepository;
   private final PushNotificationService pushNotificationService;
+  private final boolean notifyWhenOnline;
   private final Set<String> onlineUsers = ConcurrentHashMap.newKeySet();
   private final Map<String, Long> lastSeenMap = new ConcurrentHashMap<>();
 
@@ -37,12 +39,14 @@ public class ChatWebSocketController {
       SimpUserRegistry simpUserRegistry,
       ChatMessageRepository chatMessageRepository,
       ChatReadReceiptRepository chatReadReceiptRepository,
-      PushNotificationService pushNotificationService) {
+      PushNotificationService pushNotificationService,
+      @Value("${app.push.notify-when-online:true}") boolean notifyWhenOnline) {
     this.messagingTemplate = messagingTemplate;
     this.simpUserRegistry = simpUserRegistry;
     this.chatMessageRepository = chatMessageRepository;
     this.chatReadReceiptRepository = chatReadReceiptRepository;
     this.pushNotificationService = pushNotificationService;
+    this.notifyWhenOnline = notifyWhenOnline;
   }
 
   @MessageMapping("/chat.send")
@@ -101,7 +105,7 @@ public class ChatWebSocketController {
             entity.getId(),
             entity.getCreatedAt() != null ? entity.getCreatedAt().toEpochMilli() : Instant.now().toEpochMilli()));
 
-    if (!isUserConnected(normalizedTo)) {
+    if (notifyWhenOnline || !isUserConnected(normalizedTo)) {
       String preview = messagePreview(payload.message(), payload.type(), payload.fileName());
       pushNotificationService.notifyUser(
           normalizedTo,

@@ -76,10 +76,6 @@ public class PushSubscriptionController {
       @RequestHeader(value = "Authorization", required = false) String authHeader,
       @RequestBody(required = false) PushTestRequest payload) {
     UserEntity me = requireAuthUser(authHeader);
-    if (!pushNotificationService.isPushEnabled()) {
-      return new PushTestResponse(false, "Push key not configured on server.");
-    }
-
     String title = payload != null && payload.title() != null && !payload.title().isBlank()
         ? payload.title().trim()
         : "Test notification";
@@ -90,8 +86,9 @@ public class PushSubscriptionController {
         ? payload.url().trim()
         : "/#/chat";
 
-    pushNotificationService.notifyUser(me.getUsername(), title, body, url);
-    return new PushTestResponse(true, "Test push dispatched.");
+    PushNotificationService.PushSendResult result =
+        pushNotificationService.sendTestNow(me.getUsername(), title, body, url);
+    return new PushTestResponse(result.success(), result.message());
   }
 
   private UserEntity requireAuthUser(String authHeader) {
