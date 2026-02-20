@@ -19,6 +19,7 @@ function UsersListPage() {
   const [statusMap, setStatusMap] = useState({})
   const [unreadMap, setUnreadMap] = useState({})
   const [loading, setLoading] = useState(true)
+  const [reloadTick, setReloadTick] = useState(0)
   const usersRef = useRef([])
   const tokenRef = useRef(flow.token || '')
   const usernameRef = useRef(flow.username || '')
@@ -92,7 +93,26 @@ function UsersListPage() {
     }
 
     loadUsers()
-  }, [flow.token, flow.username, flow.verified, navigate])
+  }, [flow.token, flow.username, flow.verified, navigate, reloadTick])
+
+  useEffect(() => {
+    if (!flow.token || !flow.username) return
+    const triggerRefresh = () => {
+      setReloadTick(Date.now())
+    }
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') return
+      triggerRefresh()
+    }
+    window.addEventListener('focus', triggerRefresh)
+    window.addEventListener('online', triggerRefresh)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      window.removeEventListener('focus', triggerRefresh)
+      window.removeEventListener('online', triggerRefresh)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+  }, [flow.token, flow.username])
 
   useEffect(() => {
     usersRef.current = users

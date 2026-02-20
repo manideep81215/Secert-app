@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
@@ -28,6 +28,7 @@ function AuthPage() {
   const [dob, setDob] = useState(flow.dob || '')
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [, startTransition] = useTransition()
 
   useEffect(() => {
     if (flow.username && flow.token) {
@@ -197,9 +198,11 @@ function AuthPage() {
             className="link-switch"
             whileTap={{ scale: 0.98 }}
             onClick={() => {
-              setMode((prev) => (prev === 'login' ? 'register' : 'login'))
-              setConfirmPassword('')
-              setShowConfirmPassword(false)
+              startTransition(() => {
+                setMode((prev) => (prev === 'login' ? 'register' : 'login'))
+                setConfirmPassword('')
+                setShowConfirmPassword(false)
+              })
             }}
           >
             {mode === 'login' ? 'Register' : 'Sign In'}

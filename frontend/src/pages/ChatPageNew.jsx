@@ -52,6 +52,8 @@ function ChatPageNew() {
   const [selectedUser, setSelectedUser] = useState(null)
   const [conversationClears, setConversationClears] = useState({})
   const [messages, setMessages] = useState([])
+  const [conversationReloadTick, setConversationReloadTick] = useState(0)
+  const [usersReloadTick, setUsersReloadTick] = useState(0)
   const [inputValue, setInputValue] = useState('')
   const [presenceTick, setPresenceTick] = useState(Date.now())
   const [searchQuery, setSearchQuery] = useState('')
@@ -389,7 +391,7 @@ function ChatPageNew() {
     }
 
     loadUsersFromDb()
-  }, [flow.token, flow.username, isMobileView])
+  }, [flow.token, flow.username, isMobileView, usersReloadTick])
 
   useEffect(() => {
     if (!flow.username) return
@@ -446,7 +448,27 @@ function ChatPageNew() {
         console.error('Failed loading conversation', error)
         toast.error('Failed to load conversation history.')
       })
-  }, [selectedUser, flow.token, conversationClears])
+  }, [selectedUser, flow.token, conversationClears, conversationReloadTick])
+
+  useEffect(() => {
+    if (!flow.token || !flow.username) return
+    const triggerRefresh = () => {
+      setUsersReloadTick(Date.now())
+      setConversationReloadTick(Date.now())
+    }
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') return
+      triggerRefresh()
+    }
+    window.addEventListener('focus', triggerRefresh)
+    window.addEventListener('online', triggerRefresh)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      window.removeEventListener('focus', triggerRefresh)
+      window.removeEventListener('online', triggerRefresh)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+  }, [flow.token, flow.username])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'auto' })
