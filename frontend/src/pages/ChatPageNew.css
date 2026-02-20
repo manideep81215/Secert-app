@@ -36,6 +36,7 @@
   flex-direction: column;
   overflow: hidden;
   box-shadow: 2px 0 8px rgba(0, 0, 0, 0.04);
+  animation: panelReveal 0.45s ease;
 }
 
 /* Hide chat area by default on mobile only */
@@ -44,6 +45,7 @@
   flex-direction: column;
   background: white;
   overflow: hidden;
+  animation: panelReveal 0.45s ease;
 }
 
 @media (max-width: 768px) {
@@ -87,6 +89,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  animation: headerFloatIn 0.4s ease;
 }
 
 .users-header h2 {
@@ -149,12 +152,14 @@
   margin: 0.4rem 0;
   border-radius: 0.8rem;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
   align-items: center;
 }
 
 .user-item:hover {
   background: #f0f0f0;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06);
 }
 
 .user-item.active {
@@ -411,6 +416,7 @@
   flex-direction: column;
   gap: 0.8rem;
   background: linear-gradient(180deg, #ffffff 0%, #fafafa 100%);
+  animation: fadeUp 0.45s ease;
 }
 
 .message {
@@ -436,6 +442,8 @@
   border-radius: 1.2rem;
   word-wrap: break-word;
   position: relative;
+  transform-origin: bottom;
+  animation: bubblePop 0.28s ease;
 }
 
 .message-content.has-media {
@@ -580,11 +588,13 @@
   display: flex;
   gap: 0.4rem;
   opacity: 0;
-  transition: all 0.2s ease;
+  transform: translateY(4px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
 .message:hover .message-actions {
   opacity: 1;
+  transform: translateY(0);
 }
 
 .message-actions.active {
@@ -642,6 +652,50 @@
   from {
     opacity: 0;
     transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes bubblePop {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes panelReveal {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes headerFloatIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
   }
   to {
     opacity: 1;
@@ -713,6 +767,7 @@
   box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.02);
   position: relative;
   z-index: 20;
+  animation: fadeUp 0.45s ease;
 }
 
 .input-area.drop-target {
@@ -2007,5 +2062,13 @@
   .chat-container .input-area {
     padding-top: 0.45rem;
     padding-bottom: calc(0.45rem + env(safe-area-inset-bottom));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
