@@ -93,6 +93,7 @@ function ChatPageNew() {
   const wsErrorToastAtRef = useRef(0)
   const wsResumeSuppressUntilRef = useRef(0)
   const wsLastHiddenAtRef = useRef(typeof Date !== 'undefined' ? Date.now() : 0)
+  const wsErrorTimerRef = useRef(null)
   const offlineSinceRef = useRef({})
   const CLEAR_CUTOFFS_KEY = 'chat_clear_cutoffs_v1'
 
@@ -477,6 +478,10 @@ function ChatPageNew() {
       reconnectDelay: 600,
       connectionTimeout: 7000,
       onConnect: () => {
+        if (wsErrorTimerRef.current) {
+          clearTimeout(wsErrorTimerRef.current)
+          wsErrorTimerRef.current = null
+        }
         client.publish({
           destination: '/app/user.online',
           body: JSON.stringify({ username: authUsername }),
@@ -684,7 +689,12 @@ function ChatPageNew() {
       },
       onWebSocketError: () => {
         if (Date.now() < Number(wsResumeSuppressUntilRef.current || 0)) return
-        notifyRealtimeIssue('Realtime connection error (websocket).')
+        if (wsErrorTimerRef.current) return
+        wsErrorTimerRef.current = setTimeout(() => {
+          wsErrorTimerRef.current = null
+          if (client.connected) return
+          notifyRealtimeIssue('Realtime connection error (websocket).')
+        }, 1500)
       },
       onWebSocketClose: (event) => {
         const code = event?.code ?? 'n/a'
@@ -707,6 +717,10 @@ function ChatPageNew() {
     setSocket(client)
 
     return () => {
+      if (wsErrorTimerRef.current) {
+        clearTimeout(wsErrorTimerRef.current)
+        wsErrorTimerRef.current = null
+      }
       if (client.connected) {
         client.publish({
           destination: '/app/user.offline',

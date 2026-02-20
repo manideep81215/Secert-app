@@ -24,6 +24,7 @@ function GamesPage() {
   const wsErrorToastAtRef = useRef(0)
   const wsResumeSuppressUntilRef = useRef(0)
   const wsLastHiddenAtRef = useRef(Date.now())
+  const wsErrorTimerRef = useRef(null)
 
   const isAndroidLike = () => {
     if (typeof navigator === 'undefined') return false
@@ -90,6 +91,10 @@ function GamesPage() {
       reconnectDelay: 700,
       connectionTimeout: 7000,
       onConnect: () => {
+        if (wsErrorTimerRef.current) {
+          clearTimeout(wsErrorTimerRef.current)
+          wsErrorTimerRef.current = null
+        }
         client.subscribe('/user/queue/messages', async (frame) => {
           try {
             const payload = JSON.parse(frame.body)
@@ -115,7 +120,13 @@ function GamesPage() {
         })
       },
       onWebSocketError: () => {
-        notifyRealtimeIssue('Realtime connection error on dashboard.')
+        if (Date.now() < Number(wsResumeSuppressUntilRef.current || 0)) return
+        if (wsErrorTimerRef.current) return
+        wsErrorTimerRef.current = setTimeout(() => {
+          wsErrorTimerRef.current = null
+          if (client.connected) return
+          notifyRealtimeIssue('Realtime connection error on dashboard.')
+        }, 1500)
       },
       onWebSocketClose: (event) => {
         const code = event?.code ?? 'n/a'
@@ -130,7 +141,13 @@ function GamesPage() {
     })
 
     client.activate()
-    return () => client.deactivate()
+    return () => {
+      if (wsErrorTimerRef.current) {
+        clearTimeout(wsErrorTimerRef.current)
+        wsErrorTimerRef.current = null
+      }
+      client.deactivate()
+    }
   }, [flow.username, flow.token])
 
   useEffect(() => {
