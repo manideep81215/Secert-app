@@ -3,7 +3,8 @@ import { PushNotifications } from '@capacitor/push-notifications'
 import { subscribeMobilePush, unsubscribeMobilePush } from '../services/pushApi'
 
 const MOBILE_PUSH_TOKEN_KEY = 'mobile_push_token_v1'
-const NATIVE_PUSH_CHANNEL_ID = 'chat_messages_v3'
+const NATIVE_PUSH_CHANNEL_ID = 'chat_messages_v5'
+const NATIVE_PUSH_SOUND = 'tecno_zone_snapchat.mp3'
 
 let listenersAttached = false
 let authTokenRef = ''
@@ -112,7 +113,7 @@ async function ensureNativePushChannel() {
       description: 'Incoming chat message alerts',
       importance: 5,
       visibility: 1,
-      sound: 'default',
+      sound: NATIVE_PUSH_SOUND,
     })
   } catch {
     // Ignore channel creation failures on unsupported devices.

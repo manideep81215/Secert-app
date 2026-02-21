@@ -94,7 +94,16 @@ function ChatPageNew() {
   const typingTargetRef = useRef(null)
   const incomingTypingTimeoutsRef = useRef({})
   const sendAckTimeoutsRef = useRef({})
-  const messageLongPressRef = useRef({ timerId: null, key: null, startX: 0, startY: 0, moved: false, triggered: false })
+  const messageLongPressRef = useRef({
+    timerId: null,
+    key: null,
+    message: null,
+    startX: 0,
+    startY: 0,
+    moved: false,
+    triggered: false,
+    swiped: false,
+  })
   const mediaRecorderRef = useRef(null)
   const recordingStreamRef = useRef(null)
   const recordingChunksRef = useRef([])
@@ -1665,9 +1674,8 @@ function ChatPageNew() {
     }
   }
 
-  const handleMessagePointerDown = (event, message, messageKey) => {
-    if (event.pointerType !== 'touch') return
-    const target = event.target
+  const beginTouchMessageGesture = (x, y, target, message, messageKey) => {
+    if (!isTouchDevice) return
     if (!(target instanceof HTMLElement)) return
     if (!target.closest('.message-content')) return
     if (target.closest('button, a, audio, video, input, textarea')) return
@@ -1680,22 +1688,55 @@ function ChatPageNew() {
         messageLongPressRef.current.triggered = true
       }, MESSAGE_ACTION_LONG_PRESS_MS),
       key: messageKey,
-      startX: event.clientX,
-      startY: event.clientY,
+      message,
+      startX: x,
+      startY: y,
       moved: false,
       triggered: false,
+      swiped: false,
+    }
+  }
+
+  const handleMessagePointerDown = (event, message, messageKey) => {
+    if (!isTouchDevice) return
+    beginTouchMessageGesture(event.clientX, event.clientY, event.target, message, messageKey)
+  }
+
+  const handleMessageTouchStart = (event, message, messageKey) => {
+    if (!isTouchDevice) return
+    const touch = event.touches?.[0]
+    if (!touch) return
+    beginTouchMessageGesture(touch.clientX, touch.clientY, event.target, message, messageKey)
+  }
+
+  const handleMessageGestureMove = (x, y) => {
+    const state = messageLongPressRef.current
+    if (!state?.timerId) return
+    const dx = x - state.startX
+    const dy = y - state.startY
+    if (!state.swiped && dx > 56 && Math.abs(dy) < 26 && state.message) {
+      clearTimeout(state.timerId)
+      setReplyingTo(state.message)
+      setActiveMessageActionsKey(null)
+      messageLongPressRef.current = { timerId: null, key: null, message: null, startX: 0, startY: 0, moved: true, triggered: false, swiped: true }
+      return
+    }
+    if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+      clearTimeout(state.timerId)
+      messageLongPressRef.current = { timerId: null, key: null, message: null, startX: 0, startY: 0, moved: true, triggered: false, swiped: false }
     }
   }
 
   const handleMessagePointerMove = (event) => {
-    const state = messageLongPressRef.current
-    if (!state?.timerId) return
-    const dx = Math.abs(event.clientX - state.startX)
-    const dy = Math.abs(event.clientY - state.startY)
-    if (dx > 10 || dy > 10) {
-      clearTimeout(state.timerId)
-      messageLongPressRef.current = { timerId: null, key: null, startX: 0, startY: 0, moved: true, triggered: false }
-    }
+    if (!isTouchDevice) return
+    handleMessageGestureMove(event.clientX, event.clientY)
+  }
+
+  const handleMessageTouchMove = (event) => {
+    if (!isTouchDevice) return
+    const touch = event.touches?.[0]
+    if (!touch) return
+    handleMessageGestureMove(touch.clientX, touch.clientY)
   }
 
   const handleMessagePointerEnd = () => {
@@ -1703,7 +1744,23 @@ function ChatPageNew() {
     if (state?.timerId) {
       clearTimeout(state.timerId)
     }
-    messageLongPressRef.current = { timerId: null, key: null, startX: 0, startY: 0, moved: false, triggered: false }
+    messageLongPressRef.current = { timerId: null, key: null, message: null, startX: 0, startY: 0, moved: false, triggered: false, swiped: false }
+  }
+
+  const handleMessageTouchEnd = () => {
+    const state = messageLongPressRef.current
+    if (state?.timerId) {
+      clearTimeout(state.timerId)
+    }
+    messageLongPressRef.current = { timerId: null, key: null, message: null, startX: 0, startY: 0, moved: false, triggered: false, swiped: false }
+  }
+
+  const handleMessageTap = (event, messageKey) => {
+    if (!isTouchDevice) return
+    const target = event.target
+    if (!(target instanceof HTMLElement)) return
+    if (target.closest('button, a, audio, video, input, textarea')) return
+    setActiveMessageActionsKey((prev) => (prev === messageKey ? null : messageKey))
   }
 
   const renderMessageMedia = (message) => {
@@ -1870,6 +1927,11 @@ function ChatPageNew() {
                 onPointerMove={handleMessagePointerMove}
                 onPointerUp={handleMessagePointerEnd}
                 onPointerCancel={handleMessagePointerEnd}
+                onTouchStart={(event) => handleMessageTouchStart(event, message, messageKey)}
+                onTouchMove={handleMessageTouchMove}
+                onTouchEnd={handleMessageTouchEnd}
+                onTouchCancel={handleMessageTouchEnd}
+                onClick={(event) => handleMessageTap(event, messageKey)}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}

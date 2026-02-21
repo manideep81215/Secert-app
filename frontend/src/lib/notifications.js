@@ -2,7 +2,8 @@ import { Capacitor } from '@capacitor/core'
 import { LocalNotifications } from '@capacitor/local-notifications'
 
 const CHAT_NOTIFY_CUTOFFS_KEY = 'chat_notify_cutoffs_v1'
-const NATIVE_CHAT_CHANNEL_ID = 'chat_messages_v3'
+const NATIVE_CHAT_CHANNEL_ID = 'chat_messages_v5'
+const NATIVE_CHAT_SOUND = 'tecno_zone_snapchat.mp3'
 const NOTIFY_DEDUP_WINDOW_MS = 1800
 let nativeNotificationSetupDone = false
 let lastNotifyMeta = { key: '', at: 0 }
@@ -34,7 +35,7 @@ async function ensureNativeNotificationSetup(localNotifications) {
       description: 'Incoming chat message alerts',
       importance: 5,
       visibility: 1,
-      sound: 'default',
+      sound: NATIVE_CHAT_SOUND,
     })
   } catch {
     // Ignore channel creation failures on unsupported/older devices.
@@ -158,7 +159,7 @@ export async function pushNotify(title, body) {
       body: body || '',
       channelId: NATIVE_CHAT_CHANNEL_ID,
       actionTypeId: 'chat',
-      sound: 'default',
+      sound: NATIVE_CHAT_SOUND,
       extra: { url: '/#/chat' },
     }
 

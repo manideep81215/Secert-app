@@ -110,7 +110,7 @@
 
 .snake-grid {
   position: relative;
-  z-index: 3;
+  z-index: 2;
   width: 100%;
   height: 100%;
   display: grid;
@@ -131,7 +131,7 @@
 }
 
 .snake-cell-number {
-  z-index: 5;
+  z-index: 4;
   position: absolute;
   top: 2px;
   left: 3px;
@@ -142,7 +142,7 @@
 }
 
 .snake-token {
-  z-index: 5;
+  z-index: 9;
   width: 24px;
   height: 24px;
   border-radius: 999px;
@@ -169,29 +169,29 @@
 .snake-overlay {
   position: absolute;
   inset: 0.48rem;
-  z-index: 2;
+  z-index: 7;
   pointer-events: none;
 }
 
 .ladder-rail {
   stroke: #8b5a2b;
-  stroke-width: 1.2;
+  stroke-width: 2.2;
   stroke-linecap: round;
-  opacity: 0.26;
+  opacity: 0.82;
 }
 
 .ladder-shadow {
   stroke: rgba(45, 27, 12, 0.38);
-  stroke-width: 1.03;
+  stroke-width: 1.7;
   stroke-linecap: round;
-  opacity: 0.18;
+  opacity: 0.52;
 }
 
 .ladder-rung {
   stroke: #f5b14b;
-  stroke-width: 1.08;
+  stroke-width: 1.9;
   stroke-linecap: round;
-  opacity: 0.24;
+  opacity: 0.8;
 }
 
 .ladder-line .ladder-rung:nth-child(odd) {
@@ -209,7 +209,7 @@
 .snake-path-shadow {
   fill: none;
   stroke: rgba(40, 79, 31, 0.6);
-  stroke-width: 1.95;
+  stroke-width: 2.65;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -217,7 +217,7 @@
 .snake-line {
   fill: none;
   stroke: url(#snakeBodyGreen);
-  stroke-width: 1.7;
+  stroke-width: 2.3;
   stroke-linecap: round;
   stroke-linejoin: round;
   opacity: 1;
@@ -226,7 +226,7 @@
 .snake-line-highlight {
   fill: none;
   stroke: rgba(221, 248, 189, 0.82);
-  stroke-width: 0.62;
+  stroke-width: 0.85;
   stroke-linecap: round;
   stroke-linejoin: round;
 }

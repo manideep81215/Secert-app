@@ -25,7 +25,7 @@ function RpsGamePage() {
     if (isResolving) return
     setIsResolving(true)
     setRound({ pick, cpu: null, draw: false, win: false })
-    await sleep(850)
+    await sleep(280)
 
     const cpu = randomPick(['rock', 'paper', 'scissors'])
     const draw = pick === cpu

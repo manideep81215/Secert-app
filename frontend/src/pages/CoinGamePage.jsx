@@ -25,7 +25,7 @@ function CoinGamePage() {
     if (isResolving) return
     setIsResolving(true)
     setRound({ guess, flip: null, win: false })
-    await sleep(850)
+    await sleep(280)
 
     const flip = randomPick(['heads', 'tails'])
     const win = flip === guess
