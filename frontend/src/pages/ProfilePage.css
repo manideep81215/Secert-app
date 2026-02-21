@@ -6,7 +6,7 @@
   min-height: 100dvh;
   height: 100svh;
   height: 100dvh;
-  padding: 0.8rem;
+  padding: calc(0.8rem + env(safe-area-inset-top)) 0.8rem 0.8rem;
   background:
     radial-gradient(circle at 12% 18%, rgba(253, 251, 190, 0.45) 0%, rgba(253, 251, 190, 0) 34%),
     radial-gradient(circle at 78% 36%, rgba(255, 183, 77, 0.3) 0%, rgba(255, 183, 77, 0) 36%),
@@ -21,7 +21,7 @@
 
 @media (min-width: 640px) {
   .profile-page {
-    padding: 1rem;
+    padding: calc(1rem + env(safe-area-inset-top)) 1rem 1rem;
     gap: 0.9rem;
   }
 }

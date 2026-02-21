@@ -57,6 +57,12 @@ function attachListeners() {
   if (listenersAttached || !isNativeMobile()) return
   listenersAttached = true
 
+  const isChatRouteOpen = () => {
+    if (typeof window === 'undefined') return false
+    const hash = (window.location.hash || '').toLowerCase()
+    return hash.startsWith('#/chat')
+  }
+
   PushNotifications.addListener('registration', async (token) => {
     const mobileToken = (token?.value || '').trim()
     if (!mobileToken) return
@@ -66,6 +72,15 @@ function attachListeners() {
 
   PushNotifications.addListener('registrationError', () => {
     // Ignore registration errors; app can retry on next resume/login.
+  })
+
+  PushNotifications.addListener('pushNotificationReceived', () => {
+    const isVisible = typeof document !== 'undefined' ? document.visibilityState === 'visible' : false
+    if (!isVisible) return
+    if (!isChatRouteOpen()) return
+    clearDeliveredNativePushNotifications().catch(() => {
+      // Ignore notification tray cleanup failures.
+    })
   })
 
   PushNotifications.addListener('pushNotificationActionPerformed', (action) => {

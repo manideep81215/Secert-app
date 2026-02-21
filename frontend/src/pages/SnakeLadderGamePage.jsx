@@ -236,10 +236,28 @@ function SnakeLadderGamePage() {
         <div className="snake-board-wrap">
           <div className="snake-board">
             <svg className="snake-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+              <defs>
+                <linearGradient id="ladderWood" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stopColor="#8b6237" />
+                  <stop offset="100%" stopColor="#5d3f24" />
+                </linearGradient>
+                <linearGradient id="snakeBodyGreen" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stopColor="#8ccf63" />
+                  <stop offset="55%" stopColor="#4f9e39" />
+                  <stop offset="100%" stopColor="#327328" />
+                </linearGradient>
+              </defs>
               {preset.ladders.map(([from, to]) => {
                 const a = toCellPoint(from)
                 const b = toCellPoint(to)
-                const rungCount = 5
+                const dx = b.x - a.x
+                const dy = b.y - a.y
+                const length = Math.max(1, Math.hypot(dx, dy))
+                const nx = -dy / length
+                const ny = dx / length
+                const railOffset = 1.22
+                const rungHalf = 1.06
+                const rungCount = Math.max(4, Math.min(8, Math.floor(length / 9)))
                 const rungPoints = Array.from({ length: rungCount }, (_, idx) => {
                   const t = (idx + 1) / (rungCount + 1)
                   return {
@@ -249,16 +267,18 @@ function SnakeLadderGamePage() {
                 })
                 return (
                   <g key={`ladder-${from}-${to}`} className="ladder-line">
-                    <line className="ladder-rail" x1={a.x - 1.1} y1={a.y} x2={b.x - 1.1} y2={b.y} />
-                    <line className="ladder-rail" x1={a.x + 1.1} y1={a.y} x2={b.x + 1.1} y2={b.y} />
+                    <line className="ladder-shadow" x1={a.x - nx * railOffset + 0.15} y1={a.y - ny * railOffset + 0.15} x2={b.x - nx * railOffset + 0.15} y2={b.y - ny * railOffset + 0.15} />
+                    <line className="ladder-shadow" x1={a.x + nx * railOffset + 0.15} y1={a.y + ny * railOffset + 0.15} x2={b.x + nx * railOffset + 0.15} y2={b.y + ny * railOffset + 0.15} />
+                    <line className="ladder-rail" x1={a.x - nx * railOffset} y1={a.y - ny * railOffset} x2={b.x - nx * railOffset} y2={b.y - ny * railOffset} />
+                    <line className="ladder-rail" x1={a.x + nx * railOffset} y1={a.y + ny * railOffset} x2={b.x + nx * railOffset} y2={b.y + ny * railOffset} />
                     {rungPoints.map((point, idx) => (
                       <line
                         key={`rung-${from}-${to}-${idx}`}
                         className="ladder-rung"
-                        x1={point.x - 1.05}
-                        y1={point.y}
-                        x2={point.x + 1.05}
-                        y2={point.y}
+                        x1={point.x - nx * rungHalf}
+                        y1={point.y - ny * rungHalf}
+                        x2={point.x + nx * rungHalf}
+                        y2={point.y + ny * rungHalf}
                       />
                     ))}
                   </g>
@@ -267,13 +287,20 @@ function SnakeLadderGamePage() {
               {preset.snakes.map(([from, to]) => {
                 const a = toCellPoint(from)
                 const b = toCellPoint(to)
-                const cx = (a.x + b.x) / 2 + (a.x > b.x ? -5 : 5)
+                const directionBias = (from + to) % 2 === 0 ? -1 : 1
+                const cx = (a.x + b.x) / 2 + directionBias * 4.8
+                const cy = (a.y + b.y) / 2
+                const pathD = `M ${a.x} ${a.y} Q ${cx} ${cy} ${b.x} ${b.y}`
                 return (
-                  <path
-                    key={`snake-${from}-${to}`}
-                    className="snake-line"
-                    d={`M ${a.x} ${a.y} Q ${cx} ${(a.y + b.y) / 2} ${b.x} ${b.y}`}
-                  />
+                  <g key={`snake-${from}-${to}`} className="snake-group">
+                    <path className="snake-path-shadow" d={pathD} />
+                    <path className="snake-line" d={pathD} />
+                    <path className="snake-line-highlight" d={pathD} />
+                    <circle className="snake-tail" cx={b.x} cy={b.y} r="1.06" />
+                    <circle className="snake-head" cx={a.x} cy={a.y} r="1.5" />
+                    <circle className="snake-eye" cx={a.x - 0.4} cy={a.y - 0.32} r="0.15" />
+                    <circle className="snake-eye" cx={a.x + 0.4} cy={a.y - 0.32} r="0.15" />
+                  </g>
                 )
               })}
             </svg>

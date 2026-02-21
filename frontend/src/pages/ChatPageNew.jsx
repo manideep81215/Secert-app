@@ -31,6 +31,7 @@ function ChatPageNew() {
   const [users, setUsers] = useState([])
   const [statusMap, setStatusMap] = useState({})
   const [typingMap, setTypingMap] = useState({})
+  const [unreadMap, setUnreadMap] = useState({})
   const [seenAtMap, setSeenAtMap] = useState({})
   const [presenceLastSeenMap, setPresenceLastSeenMap] = useState(() => {
     if (typeof window === 'undefined') return {}
@@ -109,8 +110,7 @@ function ChatPageNew() {
   const getAvatarLabel = (name) => {
     const normalized = formatUsername(name)
     if (normalized === 'Unknown') return '?'
-    if (normalized.length === 1) return normalized.toUpperCase()
-    return `${normalized[0]}${normalized[normalized.length - 1]}`.toUpperCase()
+    return normalized[0].toUpperCase()
   }
   const getUserDisplayName = (user) => {
     const name = (user?.name || '').trim()
@@ -322,6 +322,12 @@ function ChatPageNew() {
   useEffect(() => {
     selectedUserRef.current = selectedUser
   }, [selectedUser])
+
+  useEffect(() => {
+    const active = selectedUser?.username
+    if (!active) return
+    setUnreadMap((prev) => ({ ...prev, [toUserKey(active)]: false }))
+  }, [selectedUser?.username])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -651,6 +657,9 @@ function ChatPageNew() {
                 }
                 return [...prev, incoming]
               })
+              setUnreadMap((prev) => ({ ...prev, [toUserKey(fromUsername)]: false }))
+            } else {
+              setUnreadMap((prev) => ({ ...prev, [toUserKey(fromUsername)]: true }))
             }
           } catch (error) {
             console.error('Failed parsing message payload', error)
@@ -835,6 +844,7 @@ function ChatPageNew() {
 
             const latest = Math.max(...missed.map((row) => Number(row.createdAt || 0)))
             setNotifyCutoff(flow.username, user.username, latest || Date.now())
+            setUnreadMap((prev) => ({ ...prev, [toUserKey(user.username)]: true }))
             if (!shouldSuppressChatNotification(user.username)) {
               await pushNotify(`@${formatUsername(user.username)}`, `${missed.length} new message${missed.length > 1 ? 's' : ''}`)
             }
@@ -1103,14 +1113,16 @@ function ChatPageNew() {
         const presence = getResolvedPresence(user.username, user.status)
         const isTyping = Boolean(typingMap[user.username])
         const presenceTime = presence.status === 'online' ? 'online' : toShortLastSeen(presence.lastSeenAt)
+        const hasUnread = Boolean(unreadMap[toUserKey(user.username)])
         return {
           ...user,
           _presence: presence,
           _isTyping: isTyping,
+          _hasUnread: hasUnread,
           _presenceTime: presenceTime,
         }
       }),
-    [users, searchQuery, statusMap, typingMap, presenceTick]
+    [users, searchQuery, statusMap, typingMap, unreadMap, presenceTick]
   )
   const detailMediaItems = useMemo(
     () => messages.filter((msg) => msg.type && (msg.type === 'image' || msg.type === 'video') && msg.mediaUrl),
@@ -1738,6 +1750,7 @@ function ChatPageNew() {
                 className={`user-item ${selectedUser?.id === user.id ? 'active' : ''}`}
                 onClick={() => {
                   setSelectedUser(user)
+                  setUnreadMap((prev) => ({ ...prev, [toUserKey(user.username)]: false }))
                   if (isMobileView) {
                     setShowMobileUsers(false)
                   }
@@ -1749,7 +1762,7 @@ function ChatPageNew() {
               >
                 <div className="user-avatar">{getAvatarLabel(getUserDisplayName(user))}</div>
                 <div className="user-info">
-                  <div className="user-name">{getUserDisplayName(user)}</div>
+                  <div className={`user-name ${user._hasUnread ? 'new-message' : ''}`}>{getUserDisplayName(user)}</div>
                   <div className="user-last-msg">{user._isTyping ? 'typing...' : (user.lastMessage || 'No messages yet')}</div>
                 </div>
                 <div className={`user-status ${user._presence.status === 'online' ? 'online' : 'offline'}`} />
