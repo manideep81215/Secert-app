@@ -162,6 +162,9 @@ public class PushNotificationService {
     }
 
     CompletableFuture.runAsync(() -> {
+      // Avoid duplicate lock-screen notifications when a user has both
+      // mobile token(s) and web-push subscriptions for the same account.
+      if (!mobileTokens.isEmpty()) return;
       if (subscriptions.isEmpty()) return;
       try {
         PushService service = new PushService(vapidPublicKey, vapidPrivateKey, vapidSubject);
