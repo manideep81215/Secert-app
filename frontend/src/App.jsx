@@ -142,7 +142,7 @@ function App() {
             ? (window.localStorage.getItem(activeChatPeerKey) || '').trim()
             : ''
           const orderedBackMap = {
-            '/chat': '/users',
+            '/chat': '/profile',
             '/users': '/profile',
             '/verify': '/profile',
             '/profile': '/games',
@@ -152,6 +152,14 @@ function App() {
             navigate('/chat', {
               replace: true,
               state: activeChatPeer ? { selectedUsername: activeChatPeer } : undefined,
+            })
+            return
+          }
+
+          if (current === '/chat' && activeChatPeer) {
+            navigate('/chat', {
+              replace: true,
+              state: { openUsersList: true },
             })
             return
           }

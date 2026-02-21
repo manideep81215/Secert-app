@@ -1165,11 +1165,18 @@ function ChatPageNew() {
   }
 
   useEffect(() => {
+    const shouldOpenUsersList = Boolean(location.state?.openUsersList)
     const requestedUserId = location.state?.selectedUserId
     const requestedUsername = location.state?.selectedUsername
     const shouldRefreshConversation = Boolean(location.state?.refreshConversation)
     const requestedFromQuery = new URLSearchParams(location.search).get('with')
     const normalizedFromQuery = requestedFromQuery ? formatUsername(requestedFromQuery).toLowerCase() : ''
+    if (shouldOpenUsersList) {
+      setSelectedUser(null)
+      setShowMobileUsers(true)
+      navigate('/chat', { replace: true })
+      return
+    }
     if (shouldRefreshConversation) {
       setConversationClears(readConversationClears())
     }
@@ -1794,7 +1801,8 @@ function ChatPageNew() {
             className="btn-back-mobile"
             onClick={() => {
               if (isMobileView) {
-                navigate('/users')
+                setSelectedUser(null)
+                setShowMobileUsers(true)
                 return
               }
               setSelectedUser(null)
