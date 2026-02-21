@@ -923,12 +923,9 @@ function ChatPageNew() {
   const shouldSuppressChatNotification = (fromUsername) => {
     if (typeof document === 'undefined') return false
     if (document.visibilityState !== 'visible') return false
-    if (location.pathname !== '/chat') return false
-    if (!fromUsername) return false
-    const activeUser = selectedUserRef.current?.username
-    if (!activeUser) return false
-    if (isMobileView && showMobileUsers) return false
-    return toUserKey(activeUser) === toUserKey(fromUsername)
+    if (!location.pathname.startsWith('/chat')) return false
+    if (!fromUsername) return true
+    return true
   }
 
   useEffect(() => {

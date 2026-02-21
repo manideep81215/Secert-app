@@ -72,7 +72,7 @@ function App() {
 
     const routeHandlesOwnChatNotifications = (pathname) => {
       if (!pathname) return false
-      return pathname === '/chat'
+      return pathname.startsWith('/chat')
     }
 
     const previewFromPayload = (payload) => {
