@@ -482,11 +482,20 @@ function ChatPageNew() {
       const viewportHeight = Math.round(viewport?.height || window.innerHeight || 0)
       const viewportTop = Math.round(viewport?.offsetTop || 0)
       const effectiveHeight = viewportHeight + viewportTop
+      const innerHeight = Math.round(window.innerHeight || effectiveHeight)
 
       if (effectiveHeight > maxViewportHeightRef.current) {
         maxViewportHeightRef.current = effectiveHeight
       }
       const baseline = maxViewportHeightRef.current || effectiveHeight
+
+      // On iOS with webview resize enabled, fixed elements already follow the resized viewport.
+      // Use current viewport delta to avoid applying keyboard lift twice (which creates blank gap).
+      if (isIosPlatform) {
+        const liveOffset = Math.max(0, innerHeight - effectiveHeight)
+        return liveOffset > 40 ? liveOffset : 0
+      }
+
       const offset = Math.max(0, baseline - effectiveHeight)
       return offset > 40 ? offset : 0
     }
@@ -542,7 +551,7 @@ function ChatPageNew() {
         if (!keyboard?.addListener) return
         const onShow = (info) => {
           const nativeHeight = Number(info?.keyboardHeight || 0)
-          if (nativeHeight > 0) {
+          if (nativeHeight > 0 && (!isIosPlatform || typeof window.visualViewport === 'undefined')) {
             setKeyboardOffset(nativeHeight)
           }
           setIsKeyboardOpen(true)
@@ -747,7 +756,6 @@ function ChatPageNew() {
     const targetUsername = selectedUser.username
     const clearCutoff = getConversationClearCutoff(targetUsername)
     let cancelled = false
-    setMessages([])
     getConversation(flow.token, targetUsername)
       .then((rows) => {
         if (cancelled) return
@@ -773,7 +781,15 @@ function ChatPageNew() {
           edited: Boolean(row.edited || row.isEdited),
           editedAt: Number(row.editedAt || 0) || null,
         }))
-        setMessages(normalized)
+        setMessages((prev) => {
+          const pendingUploads = (prev || []).filter((msg) =>
+            msg?.sender === 'user' &&
+            msg?.deliveryStatus === 'uploading' &&
+            msg?.tempId
+          )
+          if (!pendingUploads.length) return normalized
+          return [...normalized, ...pendingUploads]
+        })
         const latestIncoming = normalized
           .filter((msg) => msg.sender === 'other')
           .reduce((max, msg) => Math.max(max, Number(msg.createdAt || msg.clientCreatedAt || 0)), 0)

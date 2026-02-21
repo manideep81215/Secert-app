@@ -19,6 +19,7 @@ function ProfilePage() {
   const [isLoading, setIsLoading] = useState(false)
   const longPressTimerRef = useRef(null)
   const longPressTriggeredRef = useRef(false)
+  const suppressNextClickRef = useRef(false)
   const wins = flow.wins || { rps: 0, coin: 0, ttt: 0 }
   const totalWins = useMemo(() => wins.rps + wins.coin + wins.ttt, [wins])
   const previousPage = location.state?.from || '/games'
@@ -103,6 +104,10 @@ function ProfilePage() {
   }
 
   const handleResetScoreClick = () => {
+    if (suppressNextClickRef.current) {
+      suppressNextClickRef.current = false
+      return
+    }
     if (longPressTriggeredRef.current) {
       longPressTriggeredRef.current = false
       return
@@ -111,8 +116,9 @@ function ProfilePage() {
     toast.success('Score reset successfully!')
   }
 
-  const handleResetScoreLongPressStart = () => {
+  const handleResetScoreLongPressStart = (event) => {
     if (isLoading) return
+    if (event?.pointerType === 'mouse' && event?.button !== 0) return
     longPressTriggeredRef.current = false
     if (longPressTimerRef.current) {
       clearTimeout(longPressTimerRef.current)
@@ -120,9 +126,10 @@ function ProfilePage() {
     }
     longPressTimerRef.current = setTimeout(() => {
       longPressTriggeredRef.current = true
+      suppressNextClickRef.current = true
       openSecretKeyModal()
       longPressTimerRef.current = null
-    }, 1200)
+    }, 1000)
   }
 
   const handleResetScoreLongPressEnd = () => {
@@ -268,12 +275,10 @@ function ProfilePage() {
         <button 
           className="profile-reset-secret-btn" 
           onClick={handleResetScoreClick}
-          onMouseDown={handleResetScoreLongPressStart}
-          onMouseUp={handleResetScoreLongPressEnd}
-          onMouseLeave={handleResetScoreLongPressEnd}
-          onTouchStart={handleResetScoreLongPressStart}
-          onTouchEnd={handleResetScoreLongPressEnd}
-          onTouchCancel={handleResetScoreLongPressEnd}
+          onPointerDown={handleResetScoreLongPressStart}
+          onPointerUp={handleResetScoreLongPressEnd}
+          onPointerLeave={handleResetScoreLongPressEnd}
+          onPointerCancel={handleResetScoreLongPressEnd}
           disabled={isLoading}
         >
           Reset Score
