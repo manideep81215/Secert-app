@@ -204,7 +204,7 @@ function SnakeLadderGamePage() {
       setStatus(`${playerKey === 'you' ? 'You' : 'Computer'} rolled ${roll}. Need exact number for 100.`)
     } else {
       setStatus(`${playerKey === 'you' ? 'You' : 'Computer'} rolled ${roll}. Moving...`)
-      await animateMoveTo(playerKey, landing, 260)
+      await animateMoveTo(playerKey, landing, 380)
       if (animationVersion !== animationVersionRef.current) return
     }
 
@@ -215,7 +215,7 @@ function SnakeLadderGamePage() {
       setStatus(`${isLadder ? 'Ladder up!' : 'Snake bite!'} ${landing} to ${target}.`)
       await waitFor(250)
       if (animationVersion !== animationVersionRef.current) return
-      await animateMoveTo(playerKey, target, 230)
+      await animateMoveTo(playerKey, target, 340)
       if (animationVersion !== animationVersionRef.current) return
       finalCell = target
     } else if (moved <= 100) {

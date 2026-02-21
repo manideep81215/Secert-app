@@ -164,7 +164,7 @@ function ProfilePage() {
           setShowSecretKeyModal(false)
           setSecretKey('')
           setTimeout(() => {
-            navigate('/chat')
+            navigate('/users')
           }, 500)
         } else {
           toast.error('Failed to create confirmation key')
@@ -197,7 +197,7 @@ function ProfilePage() {
             setShowSecretKeyModal(false)
             setSecretKey('')
             setTimeout(() => {
-              navigate('/chat')
+              navigate('/users')
             }, 500)
           } else {
             toast.error('Wrong confirmation key! Few chances left!')

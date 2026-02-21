@@ -2,7 +2,7 @@ import { Capacitor } from '@capacitor/core'
 import { LocalNotifications } from '@capacitor/local-notifications'
 
 const CHAT_NOTIFY_CUTOFFS_KEY = 'chat_notify_cutoffs_v1'
-const NATIVE_CHAT_CHANNEL_ID = 'chat_messages_v2'
+const NATIVE_CHAT_CHANNEL_ID = 'chat_messages_v3'
 const NOTIFY_DEDUP_WINDOW_MS = 1800
 let nativeNotificationSetupDone = false
 let lastNotifyMeta = { key: '', at: 0 }

@@ -177,21 +177,21 @@
   stroke: #8b5a2b;
   stroke-width: 1.2;
   stroke-linecap: round;
-  opacity: 0.48;
+  opacity: 0.26;
 }
 
 .ladder-shadow {
   stroke: rgba(45, 27, 12, 0.38);
   stroke-width: 1.03;
   stroke-linecap: round;
-  opacity: 0.34;
+  opacity: 0.18;
 }
 
 .ladder-rung {
   stroke: #f5b14b;
   stroke-width: 1.08;
   stroke-linecap: round;
-  opacity: 0.45;
+  opacity: 0.24;
 }
 
 .ladder-line .ladder-rung:nth-child(odd) {

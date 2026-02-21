@@ -7,6 +7,7 @@ import { toast } from 'react-toastify'
 import { getMe } from '../services/authApi'
 import { getConversation, uploadMedia } from '../services/messagesApi'
 import { getAllUsers } from '../services/usersApi'
+import ChatUsersPanel from './ChatUsersPanel'
 import {
   getNotificationPermissionState,
   getNotifyCutoff,
@@ -477,10 +478,18 @@ function ChatPageNew() {
   }, [conversationClears, flow.username])
 
   useEffect(() => {
-    if (!selectedUser) return
-    const clearCutoff = getConversationClearCutoff(selectedUser.username)
-    getConversation(flow.token, selectedUser.username)
+    if (!selectedUser) {
+      setMessages([])
+      return
+    }
+    const targetUsername = selectedUser.username
+    const clearCutoff = getConversationClearCutoff(targetUsername)
+    let cancelled = false
+    setMessages([])
+    getConversation(flow.token, targetUsername)
       .then((rows) => {
+        if (cancelled) return
+        if (selectedUserRef.current?.username !== targetUsername) return
         const filteredRows = (rows || []).filter((row) => {
           if (!clearCutoff) return true
           if (!row?.createdAt) return false
@@ -507,11 +516,12 @@ function ChatPageNew() {
           .filter((msg) => msg.sender === 'other')
           .reduce((max, msg) => Math.max(max, Number(msg.createdAt || msg.clientCreatedAt || 0)), 0)
         if (latestIncoming && socket?.connected) {
-          publishReadReceipt(selectedUser.username, latestIncoming)
+          publishReadReceipt(targetUsername, latestIncoming)
         }
         setReplyingTo(null)
       })
       .catch((error) => {
+        if (cancelled) return
         if (error?.response?.status === 401) {
           toast.error('Session expired. Please login again.')
           resetFlowState(setFlow)
@@ -521,6 +531,9 @@ function ChatPageNew() {
         console.error('Failed loading conversation', error)
         toast.error('Failed to load conversation history.')
       })
+    return () => {
+      cancelled = true
+    }
   }, [selectedUser, flow.token, conversationClears, conversationReloadTick])
 
   useEffect(() => {
@@ -942,6 +955,7 @@ function ChatPageNew() {
 
   const shouldSuppressChatNotification = (fromUsername) => {
     if (location.pathname !== '/chat') return false
+    if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return false
     if (!fromUsername) return true
     return true
   }
@@ -1732,66 +1746,27 @@ function ChatPageNew() {
     return null
   }
 
+  const handleSelectUserFromPanel = (user) => {
+    setSelectedUser(user)
+    setUnreadMap((prev) => ({ ...prev, [toUserKey(user.username)]: false }))
+    if (isMobileView) {
+      setShowMobileUsers(false)
+    }
+  }
+
   return (
     <div className={`chat-container ${selectedUser ? 'user-selected' : ''} ${showMobileUsers ? 'mobile-users-open' : ''}`}>
-      <motion.div
-        className="users-panel"
-        initial={{ x: -300 }}
-        animate={{ x: 0 }}
-        transition={{ duration: 0.3 }}
-      >
-        <div className="users-header">
-          <h2>Messages</h2>
-          <div className="users-header-actions">
-            <button className="btn-users-games" onClick={() => navigate('/games')} title="Go to dashboard" aria-label="Go to dashboard">
-              {icons.game}
-            </button>
-            <button className="btn-new-chat" onClick={() => setSelectedUser(filteredUsers[0] || null)}>+</button>
-          </div>
-        </div>
-        <div className="users-search">
-          <input
-            type="text"
-            placeholder="Search users..."
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="none"
-            spellCheck={false}
-            inputMode="text"
-          />
-        </div>
-        <div className="users-list">
-          <AnimatePresence>
-            {filteredUsers.map((user) => (
-              <motion.div
-                key={user.id}
-                className={`user-item ${selectedUser?.id === user.id ? 'active' : ''}`}
-                onClick={() => {
-                  setSelectedUser(user)
-                  setUnreadMap((prev) => ({ ...prev, [toUserKey(user.username)]: false }))
-                  if (isMobileView) {
-                    setShowMobileUsers(false)
-                  }
-                }}
-                whileHover={{ x: 10 }}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-              >
-                <div className="user-avatar">{getAvatarLabel(getUserDisplayName(user))}</div>
-                <div className="user-info">
-                  <div className={`user-name ${user._hasUnread ? 'new-message' : ''}`}>{getUserDisplayName(user)}</div>
-                  <div className="user-last-msg">{user._isTyping ? 'typing...' : (user.lastMessage || 'No messages yet')}</div>
-                </div>
-                <div className={`user-status ${user._presence.status === 'online' ? 'online' : 'offline'}`} />
-                <div className="user-time">{user._presenceTime}</div>
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        </div>
-      </motion.div>
+      <ChatUsersPanel
+        filteredUsers={filteredUsers}
+        selectedUserId={selectedUser?.id || null}
+        searchQuery={searchQuery}
+        onSearchQueryChange={setSearchQuery}
+        onOpenGames={() => navigate('/games')}
+        onStartNewChat={() => setSelectedUser(filteredUsers[0] || null)}
+        onSelectUser={handleSelectUserFromPanel}
+        getAvatarLabel={getAvatarLabel}
+        getUserDisplayName={getUserDisplayName}
+      />
 
       <div className="chat-area">
         <motion.div

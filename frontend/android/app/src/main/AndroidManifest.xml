@@ -40,7 +40,7 @@
             android:resource="@drawable/ic_stat_simp_games" />
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="chat_messages" />
+            android:value="chat_messages_v3" />
     </application>
 
     <!-- Permissions -->
