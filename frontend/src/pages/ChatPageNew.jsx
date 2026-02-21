@@ -267,10 +267,16 @@ function ChatPageNew() {
     return message?.timestamp || getTimeLabel()
   }
   const createTempId = () => (window.crypto?.randomUUID?.() || `${Date.now()}_${Math.random().toString(16).slice(2)}`)
-  const MAX_IMAGE_BYTES = 15 * 1024 * 1024
-  const MAX_VIDEO_BYTES = 150 * 1024 * 1024
-  const MAX_OTHER_BYTES = 40 * 1024 * 1024
-  const AUTO_COMPRESS_FILE_BYTES = 149 * 1024 * 1024
+  const MAX_MEDIA_BYTES = 200 * 1024 * 1024
+  const inferMediaKind = (inputFile) => {
+    const mime = (inputFile?.type || '').toLowerCase()
+    const name = (inputFile?.name || '').toLowerCase()
+    if (mime.startsWith('video/')) return 'video'
+    if (mime.startsWith('image/')) return 'image'
+    if (/\.(mp4|mov|m4v|webm|mkv|avi|3gp)$/i.test(name)) return 'video'
+    if (/\.(jpg|jpeg|png|gif|webp|heic|heif|bmp|svg)$/i.test(name)) return 'image'
+    return 'file'
+  }
   const gzipFile = async (inputFile) => {
     if (typeof window === 'undefined' || typeof window.CompressionStream === 'undefined') return null
     try {
@@ -287,6 +293,91 @@ function ChatPageNew() {
     } catch {
       return null
     }
+  }
+  const compressImageToLimit = async (inputFile, maxBytes) => {
+    if (typeof window === 'undefined') return null
+    try {
+      const sourceUrl = URL.createObjectURL(inputFile)
+      const image = await new Promise((resolve, reject) => {
+        const img = new Image()
+        img.onload = () => resolve(img)
+        img.onerror = () => reject(new Error('image-load-failed'))
+        img.src = sourceUrl
+      })
+      URL.revokeObjectURL(sourceUrl)
+
+      const baseWidth = Math.max(1, Number(image.naturalWidth || image.width || 0))
+      const baseHeight = Math.max(1, Number(image.naturalHeight || image.height || 0))
+      if (!baseWidth || !baseHeight) return null
+
+      const canvas = document.createElement('canvas')
+      const context = canvas.getContext('2d')
+      if (!context) return null
+
+      const qualitySteps = [0.92, 0.85, 0.78, 0.7, 0.62, 0.55, 0.48, 0.4]
+      let bestBlob = null
+
+      for (let scaleStep = 0; scaleStep < 6; scaleStep += 1) {
+        const scale = Math.max(0.28, 1 - (scaleStep * 0.14))
+        const width = Math.max(1, Math.round(baseWidth * scale))
+        const height = Math.max(1, Math.round(baseHeight * scale))
+        canvas.width = width
+        canvas.height = height
+        context.clearRect(0, 0, width, height)
+        context.drawImage(image, 0, 0, width, height)
+
+        for (const quality of qualitySteps) {
+          const blob = await new Promise((resolve) => {
+            canvas.toBlob(resolve, 'image/jpeg', quality)
+          })
+          if (!blob) continue
+          if (!bestBlob || blob.size < bestBlob.size) {
+            bestBlob = blob
+          }
+          if (blob.size <= maxBytes) {
+            const outputName = (inputFile.name || 'image').replace(/\.[^.]+$/, '') + '.jpg'
+            return new File([blob], outputName, {
+              type: 'image/jpeg',
+              lastModified: Date.now(),
+            })
+          }
+        }
+      }
+
+      if (bestBlob && bestBlob.size < inputFile.size) {
+        const outputName = (inputFile.name || 'image').replace(/\.[^.]+$/, '') + '.jpg'
+        return new File([bestBlob], outputName, {
+          type: 'image/jpeg',
+          lastModified: Date.now(),
+        })
+      }
+      return null
+    } catch {
+      return null
+    }
+  }
+  const compressMediaToLimit = async (inputFile, mediaType, maxBytes) => {
+    if (!inputFile || inputFile.size <= maxBytes) {
+      return { file: inputFile, compressed: false }
+    }
+
+    if (mediaType === 'image') {
+      const imageCompressed = await compressImageToLimit(inputFile, maxBytes)
+      if (imageCompressed && imageCompressed.size <= maxBytes) {
+        return { file: imageCompressed, compressed: true }
+      }
+      const gzipCompressed = await gzipFile(inputFile)
+      if (gzipCompressed && gzipCompressed.size <= maxBytes) {
+        return { file: gzipCompressed, compressed: true }
+      }
+      return null
+    }
+
+    const gzipCompressed = await gzipFile(inputFile)
+    if (gzipCompressed && gzipCompressed.size <= maxBytes) {
+      return { file: gzipCompressed, compressed: true }
+    }
+    return null
   }
   const toShortLastSeen = (lastSeenAt) => {
     if (!lastSeenAt) return '-'
@@ -1633,33 +1724,28 @@ function ChatPageNew() {
 
     let resolvedType = type
     if (type === 'photo') {
-      resolvedType = file.type?.startsWith('video') ? 'video' : 'image'
+      resolvedType = inferMediaKind(file)
     }
 
     let uploadFile = file
-    if (resolvedType === 'file' && file.size > AUTO_COMPRESS_FILE_BYTES) {
-      toast.info('Large file detected. Compressing before upload...')
-      const compressed = await gzipFile(file)
-      if (!compressed) {
-        toast.error('Could not compress this large file on this device.')
+    const maxBytes = MAX_MEDIA_BYTES
+    if (uploadFile.size > maxBytes) {
+      toast.info('Large media detected. Compressing to fit 200MB limit...')
+      const compressedResult = await compressMediaToLimit(uploadFile, resolvedType, maxBytes)
+      if (!compressedResult?.file) {
+        toast.error('Upload must be below 200MB. Compression could not reduce this media enough.')
         return
       }
-      if (compressed.size >= file.size) {
-        toast.error('Compression did not reduce file size. Please use a smaller file.')
-        return
+      uploadFile = compressedResult.file
+      if (compressedResult.compressed) {
+        const beforeMb = Math.round(file.size / (1024 * 1024))
+        const afterMb = Math.round(uploadFile.size / (1024 * 1024))
+        toast.info(`Compressed media from ${beforeMb}MB to ${afterMb}MB`)
       }
-      uploadFile = compressed
-      const beforeMb = Math.round(file.size / (1024 * 1024))
-      const afterMb = Math.round(compressed.size / (1024 * 1024))
-      toast.info(`Compressed file from ${beforeMb}MB to ${afterMb}MB`)
     }
 
-    const maxBytes = resolvedType === 'video'
-      ? MAX_VIDEO_BYTES
-      : (resolvedType === 'image' ? MAX_IMAGE_BYTES : MAX_OTHER_BYTES)
     if (uploadFile.size > maxBytes) {
-      const sizeMb = Math.round(maxBytes / (1024 * 1024))
-      toast.error(`File too large. Maximum ${sizeMb}MB allowed.`)
+      toast.error('Upload must be below 200MB.')
       return
     }
 
@@ -1747,7 +1833,7 @@ function ChatPageNew() {
         return
       }
       if (error?.response?.status === 413) {
-        toast.error('File exceeds upload limit (photo 15MB, file 40MB, video 150MB).')
+        toast.error('File exceeds upload limit (200MB max).')
         return
       }
       setMessages((prev) => prev.map((msg) => (msg.tempId === tempId ? { ...msg, deliveryStatus: 'failed' } : msg)))
@@ -1759,7 +1845,7 @@ function ChatPageNew() {
     const file = event?.target?.files?.[0]
     if (!file) return
 
-    if (type === 'photo' && file.type?.startsWith('image/')) {
+    if (type === 'photo' && inferMediaKind(file) === 'image') {
       clearPendingImagePreview()
       const previewUrl = URL.createObjectURL(file)
       setPendingImagePreview({ file, url: previewUrl, name: file.name || 'image' })

@@ -69,18 +69,12 @@ public class ChatMessageController {
     if (file == null || file.isEmpty()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "File is required");
     }
-    String mimeType = file.getContentType() != null ? file.getContentType() : MediaType.APPLICATION_OCTET_STREAM_VALUE;
-    boolean isVideo = mimeType.startsWith("video/");
-    boolean isImage = mimeType.startsWith("image/");
-    long maxBytes = isVideo
-        ? 150L * 1024L * 1024L
-        : (isImage ? 15L * 1024L * 1024L : 40L * 1024L * 1024L);
+    String mimeType = normalizeMimeType(file.getContentType(), file.getOriginalFilename());
+    long maxBytes = 200L * 1024L * 1024L;
     if (file.getSize() > maxBytes) {
       throw new ResponseStatusException(
           HttpStatus.PAYLOAD_TOO_LARGE,
-          isVideo
-              ? "Video exceeds 150MB limit"
-              : (isImage ? "Photo exceeds 15MB limit" : "File exceeds 40MB limit"));
+          "Media exceeds 200MB limit");
     }
 
     try {
@@ -150,6 +144,23 @@ public class ChatMessageController {
 
   private String normalizeUsername(String username) {
     return username == null ? "" : username.trim().toLowerCase();
+  }
+
+  private String normalizeMimeType(String contentType, String originalFilename) {
+    String rawType = contentType != null ? contentType.trim().toLowerCase() : "";
+    if (rawType.startsWith("video/") || rawType.startsWith("image/")) {
+      return rawType;
+    }
+
+    String name = originalFilename != null ? originalFilename.trim().toLowerCase() : "";
+    if (name.matches(".*\\.(mp4|mov|m4v|webm|mkv|avi|3gp)$")) {
+      return "video/mp4";
+    }
+    if (name.matches(".*\\.(jpg|jpeg|png|gif|webp|heic|heif|bmp|svg)$")) {
+      return "image/jpeg";
+    }
+
+    return MediaType.APPLICATION_OCTET_STREAM_VALUE;
   }
 
   public record ConversationMessageDto(
