@@ -14,7 +14,10 @@ import java.security.interfaces.ECPrivateKey;
 import java.security.interfaces.ECPublicKey;
 import java.security.spec.ECGenParameterSpec;
 import java.util.Base64;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
@@ -124,12 +127,18 @@ public class PushNotificationService {
   public void saveMobileToken(String username, String token, String platform) {
     if (token == null || token.isBlank()) return;
     String normalizedUser = normalizeUsername(username);
+    String normalizedPlatform = normalizePlatform(platform);
     Optional<MobilePushTokenEntity> existing = mobilePushTokenRepository.findByToken(token.trim());
     MobilePushTokenEntity entity = existing.orElseGet(MobilePushTokenEntity::new);
     entity.setUsername(normalizedUser);
     entity.setToken(token.trim());
-    entity.setPlatform(normalizePlatform(platform));
+    entity.setPlatform(normalizedPlatform);
     mobilePushTokenRepository.save(entity);
+    // Keep one active token per user/platform to prevent duplicate mobile pushes.
+    mobilePushTokenRepository.deleteByUsernameAndPlatformAndTokenNot(
+        normalizedUser,
+        normalizedPlatform,
+        token.trim());
   }
 
   public void removeMobileToken(String username, String token) {
@@ -146,7 +155,8 @@ public class PushNotificationService {
     List<PushSubscriptionEntity> subscriptions = webPushEnabled
         ? pushSubscriptionRepository.findByUsername(normalizedUser)
         : List.of();
-    List<MobilePushTokenEntity> mobileTokens = mobilePushTokenRepository.findByUsername(normalizedUser);
+    List<MobilePushTokenEntity> mobileTokens = collapseMobileTokens(
+        mobilePushTokenRepository.findByUsername(normalizedUser));
     if (subscriptions.isEmpty() && mobileTokens.isEmpty()) return;
 
     String payload = buildPayload(title, body, url);
@@ -364,6 +374,21 @@ public class PushNotificationService {
     } catch (Exception error) {
       log.warn("Unexpected FCM send error for user {}: {}", token.getUsername(), error.getMessage());
     }
+  }
+
+  private List<MobilePushTokenEntity> collapseMobileTokens(List<MobilePushTokenEntity> tokens) {
+    if (tokens == null || tokens.isEmpty()) return List.of();
+    Map<String, MobilePushTokenEntity> latestByPlatform = new LinkedHashMap<>();
+    tokens.stream()
+        .filter(token -> token != null && token.getToken() != null && !token.getToken().isBlank())
+        .sorted(Comparator.comparing(
+            MobilePushTokenEntity::getUpdatedAt,
+            Comparator.nullsFirst(Comparator.naturalOrder())).reversed())
+        .forEach(token -> {
+          String platform = normalizePlatform(token.getPlatform());
+          latestByPlatform.putIfAbsent(platform, token);
+        });
+    return List.copyOf(latestByPlatform.values());
   }
 
   private boolean isInvalidTokenError(FirebaseMessagingException error) {

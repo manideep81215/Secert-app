@@ -14,4 +14,6 @@ public interface MobilePushTokenRepository extends JpaRepository<MobilePushToken
   Optional<MobilePushTokenEntity> findByToken(String token);
 
   long deleteByUsernameAndToken(String username, String token);
+
+  long deleteByUsernameAndPlatformAndTokenNot(String username, String platform, String token);
 }

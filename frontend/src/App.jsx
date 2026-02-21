@@ -136,11 +136,25 @@ function App() {
         const mod = await import('@capacitor/app')
         if (disposed) return
         listenerHandle = await mod.App.addListener('backButton', () => {
+          const current = currentPathRef.current || ''
+          const orderedBackMap = {
+            '/chat/info': '/chat',
+            '/chat': '/users',
+            '/users': '/profile',
+            '/profile': '/games',
+          }
+
+          const mappedTarget = orderedBackMap[current]
+          if (mappedTarget && current !== mappedTarget) {
+            navigate(mappedTarget, { replace: true })
+            return
+          }
+
           const stack = routeHistoryRef.current
           if (stack.length > 1) {
             stack.pop()
             const previous = stack[stack.length - 1]
-            if (previous && previous !== currentPathRef.current) {
+            if (previous && previous !== current) {
               navigate(previous, { replace: true })
               return
             }
