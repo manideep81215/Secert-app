@@ -83,6 +83,7 @@ function ChatPageNew() {
   const [isRecordingVoice, setIsRecordingVoice] = useState(false)
   const [recordingSeconds, setRecordingSeconds] = useState(0)
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false)
+  const [keyboardOffset, setKeyboardOffset] = useState(0)
   const [notificationPermission, setNotificationPermission] = useState(
     getNotificationPermissionState()
   )
@@ -433,15 +434,46 @@ function ChatPageNew() {
       }
     }
 
+    const getKeyboardOffset = () => {
+      const viewport = window.visualViewport
+      if (!viewport) return 0
+      const offset = Math.round(window.innerHeight - (viewport.height + viewport.offsetTop))
+      return offset > 80 ? offset : 0
+    }
+
+    const syncKeyboardFromViewport = () => {
+      const offset = getKeyboardOffset()
+      setKeyboardOffset(offset)
+      setIsKeyboardOpen(offset > 0)
+      if (offset > 0) resetViewportScroll()
+    }
+
     const onFocusIn = (event) => {
       const target = event.target
       if (!(target instanceof HTMLElement)) return
       if (!target.closest('.message-input')) return
       setTimeout(resetViewportScroll, 0)
       setTimeout(resetViewportScroll, 120)
+      setTimeout(syncKeyboardFromViewport, 0)
+      setTimeout(syncKeyboardFromViewport, 220)
+    }
+
+    const onFocusOut = (event) => {
+      const target = event.target
+      if (!(target instanceof HTMLElement)) return
+      if (!target.closest('.message-input')) return
+      setTimeout(syncKeyboardFromViewport, 60)
+      setTimeout(syncKeyboardFromViewport, 260)
     }
 
     window.addEventListener('focusin', onFocusIn)
+    window.addEventListener('focusout', onFocusOut)
+
+    const viewport = window.visualViewport
+    viewport?.addEventListener('resize', syncKeyboardFromViewport)
+    viewport?.addEventListener('scroll', syncKeyboardFromViewport)
+    window.addEventListener('resize', syncKeyboardFromViewport)
+    window.addEventListener('orientationchange', syncKeyboardFromViewport)
 
     let isCancelled = false
     const handles = []
@@ -452,13 +484,19 @@ function ChatPageNew() {
         const mod = await import(/* @vite-ignore */ moduleName)
         const keyboard = mod?.Keyboard
         if (!keyboard?.addListener) return
-        const onShow = () => {
+        const onShow = (info) => {
+          const nativeHeight = Number(info?.keyboardHeight || 0)
+          if (nativeHeight > 0) {
+            setKeyboardOffset(nativeHeight)
+          }
           setIsKeyboardOpen(true)
           resetViewportScroll()
         }
         const onHide = () => {
+          setKeyboardOffset(0)
           setIsKeyboardOpen(false)
           resetViewportScroll()
+          syncKeyboardFromViewport()
         }
         const showHandle = await keyboard.addListener('keyboardWillShow', onShow)
         const didShowHandle = await keyboard.addListener('keyboardDidShow', onShow)
@@ -478,9 +516,15 @@ function ChatPageNew() {
     }
 
     setupKeyboardListeners()
+    syncKeyboardFromViewport()
     return () => {
       isCancelled = true
       window.removeEventListener('focusin', onFocusIn)
+      window.removeEventListener('focusout', onFocusOut)
+      viewport?.removeEventListener('resize', syncKeyboardFromViewport)
+      viewport?.removeEventListener('scroll', syncKeyboardFromViewport)
+      window.removeEventListener('resize', syncKeyboardFromViewport)
+      window.removeEventListener('orientationchange', syncKeyboardFromViewport)
       handles.forEach((handle) => handle?.remove?.())
     }
   }, [])
@@ -1898,7 +1942,10 @@ function ChatPageNew() {
   }
 
   return (
-    <div className={`chat-container ${selectedUser ? 'user-selected' : ''} ${showMobileUsers ? 'mobile-users-open' : ''} ${isKeyboardOpen ? 'keyboard-open' : ''}`}>
+    <div
+      className={`chat-container ${selectedUser ? 'user-selected' : ''} ${showMobileUsers ? 'mobile-users-open' : ''} ${isKeyboardOpen ? 'keyboard-open' : ''}`}
+      style={{ '--chat-keyboard-offset': `${Math.max(0, keyboardOffset)}px` }}
+    >
       <ChatUsersPanel
         filteredUsers={filteredUsers}
         selectedUserId={selectedUser?.id || null}
