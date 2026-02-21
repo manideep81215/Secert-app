@@ -248,9 +248,9 @@ function ChatPageNew() {
     return message?.timestamp || getTimeLabel()
   }
   const createTempId = () => (window.crypto?.randomUUID?.() || `${Date.now()}_${Math.random().toString(16).slice(2)}`)
-  const MAX_IMAGE_BYTES = 8 * 1024 * 1024
-  const MAX_VIDEO_BYTES = 30 * 1024 * 1024
-  const MAX_OTHER_BYTES = 20 * 1024 * 1024
+  const MAX_IMAGE_BYTES = 15 * 1024 * 1024
+  const MAX_VIDEO_BYTES = 150 * 1024 * 1024
+  const MAX_OTHER_BYTES = 40 * 1024 * 1024
   const toShortLastSeen = (lastSeenAt) => {
     if (!lastSeenAt) return '-'
     const diffSeconds = Math.max(0, Math.floor((Date.now() - lastSeenAt) / 1000))
@@ -1573,7 +1573,7 @@ function ChatPageNew() {
         return
       }
       if (error?.response?.status === 413) {
-        toast.error('File exceeds upload limit (photo 8MB, file 20MB, video 30MB).')
+        toast.error('File exceeds upload limit (photo 15MB, file 40MB, video 150MB).')
         return
       }
       setMessages((prev) => prev.map((msg) => (msg.tempId === tempId ? { ...msg, deliveryStatus: 'failed' } : msg)))
