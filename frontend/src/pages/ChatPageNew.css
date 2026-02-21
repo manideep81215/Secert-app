@@ -588,6 +588,50 @@
 }
 
 .message-video-preview {
+  width: min(210px, 100%);
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  object-position: center;
+  border-radius: 0.8rem;
+  display: block;
+}
+
+.message-video-thumb-shell {
+  width: min(210px, 100%);
+  aspect-ratio: 3 / 4;
+  position: relative;
+  border-radius: 0.8rem;
+  overflow: hidden;
+  background: #111;
+}
+
+.message-video-thumb-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+}
+
+.message-video-play-icon {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 2.35rem;
+  height: 2.35rem;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  font-size: 1rem;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.message-video-preview {
   max-width: min(380px, 100%);
   border-radius: 0.8rem;
   display: block;
@@ -629,6 +673,59 @@
   opacity: 0.7;
   margin-top: 0.4rem;
   display: block;
+}
+
+.message-reaction-badge {
+  position: absolute;
+  right: 0.3rem;
+  bottom: -0.6rem;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 999px;
+  padding: 0 0.35rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  font-size: 0.85rem;
+  line-height: 1;
+  z-index: 5;
+}
+
+.message.other .message-reaction-badge {
+  right: auto;
+  left: 0.3rem;
+}
+
+.reaction-tray {
+  position: fixed;
+  z-index: 360;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.35rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+}
+
+.reaction-tray-btn {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  border: 0;
+  background: transparent;
+  display: grid;
+  place-items: center;
+  font-size: 1.05rem;
+  cursor: pointer;
+}
+
+.reaction-tray-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
 }
 
 .message-actions {
@@ -2167,6 +2264,10 @@
     width: 100vw !important;
     height: 100dvh !important;
     overflow: hidden !important;
+  }
+
+  .chat-container[data-ios="true"]:not(.mobile-users-open) .chat-area {
+    height: var(--chat-viewport-height) !important;
   }
 
   .chat-container:not(.mobile-users-open) .chat-header {

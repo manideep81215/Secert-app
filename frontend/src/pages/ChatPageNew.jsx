@@ -24,8 +24,9 @@ const REALTIME_TOAST_ID = 'realtime-connection'
 const PRESENCE_LAST_SEEN_KEY = 'chat_presence_last_seen_v1'
 const ACTIVE_CHAT_PEER_KEY_PREFIX = 'active_chat_peer_v1:'
 const EDIT_WINDOW_MS = 15 * 60 * 1000
-const MESSAGE_ACTION_LONG_PRESS_MS = 600
+const MESSAGE_ACTION_LONG_PRESS_MS = 1000
 const TYPING_STALE_MS = 1400
+const QUICK_REACTIONS = ['❤️', '😂', '😮', '😢', '😡', '👍']
 
 function ChatPageNew() {
   const navigate = useNavigate()
@@ -84,6 +85,11 @@ function ChatPageNew() {
   const [recordingSeconds, setRecordingSeconds] = useState(0)
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false)
   const [keyboardOffset, setKeyboardOffset] = useState(0)
+  const [viewportHeight, setViewportHeight] = useState(() => (typeof window !== 'undefined' ? window.innerHeight : 0))
+  const [isIosPlatform, setIsIosPlatform] = useState(false)
+  const [reactionTray, setReactionTray] = useState(null)
+  const [messageReactions, setMessageReactions] = useState({})
+  const [videoThumbMap, setVideoThumbMap] = useState({})
   const [notificationPermission, setNotificationPermission] = useState(
     getNotificationPermissionState()
   )
@@ -118,6 +124,7 @@ function ChatPageNew() {
   const wsLastHiddenAtRef = useRef(typeof Date !== 'undefined' ? Date.now() : 0)
   const wsErrorTimerRef = useRef(null)
   const offlineSinceRef = useRef({})
+  const maxViewportHeightRef = useRef(0)
   const CLEAR_CUTOFFS_KEY = 'chat_clear_cutoffs_v1'
 
   const formatUsername = (name) => {
@@ -139,6 +146,17 @@ function ChatPageNew() {
   const getTimeLabel = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   const getConversationKey = (peerUsername) => `${(flow.username || '').toLowerCase()}::${(peerUsername || '').toLowerCase()}`
   const getConversationClearCutoff = (peerUsername) => conversationClears[getConversationKey(peerUsername)] || 0
+  const getCapacitorKeyboard = async () => {
+    const runtimeKeyboard = window?.Capacitor?.Plugins?.Keyboard
+    if (runtimeKeyboard) return runtimeKeyboard
+    try {
+      const moduleName = '@capacitor/keyboard'
+      const mod = await import(/* @vite-ignore */ moduleName)
+      return mod?.Keyboard || null
+    } catch {
+      return null
+    }
+  }
   const readConversationClears = () => {
     try {
       const raw = window.localStorage.getItem(CLEAR_CUTOFFS_KEY)
@@ -232,6 +250,7 @@ function ChatPageNew() {
     return `local:${message.sender || 'x'}:${created}:${message.senderName || ''}`
   }
   const isSameMessage = (message, key) => getMessageEditKey(message) === key
+  const getMessageUiKey = (message, index) => getMessageEditKey(message) || `${index}-${message?.createdAt || message?.timestamp || 'x'}-${message?.sender || 'u'}`
   const canEditMessage = (message) => {
     if (!message || message.sender !== 'user') return false
     if (isMessageFailed(message)) return false
@@ -251,6 +270,24 @@ function ChatPageNew() {
   const MAX_IMAGE_BYTES = 15 * 1024 * 1024
   const MAX_VIDEO_BYTES = 150 * 1024 * 1024
   const MAX_OTHER_BYTES = 40 * 1024 * 1024
+  const AUTO_COMPRESS_FILE_BYTES = 149 * 1024 * 1024
+  const gzipFile = async (inputFile) => {
+    if (typeof window === 'undefined' || typeof window.CompressionStream === 'undefined') return null
+    try {
+      const gzip = new window.CompressionStream('gzip')
+      const compressedStream = inputFile.stream().pipeThrough(gzip)
+      const compressedBlob = await new Response(compressedStream).blob()
+      const compressedName = inputFile.name?.toLowerCase?.().endsWith('.gz')
+        ? inputFile.name
+        : `${inputFile.name || 'attachment'}.gz`
+      return new File([compressedBlob], compressedName, {
+        type: 'application/gzip',
+        lastModified: Date.now(),
+      })
+    } catch {
+      return null
+    }
+  }
   const toShortLastSeen = (lastSeenAt) => {
     if (!lastSeenAt) return '-'
     const diffSeconds = Math.max(0, Math.floor((Date.now() - lastSeenAt) / 1000))
@@ -405,13 +442,19 @@ function ChatPageNew() {
   }, [isMobileView, selectedUser, location.state, location.search])
 
   useEffect(() => {
+    if (typeof window === 'undefined') return
+    const platform = window.Capacitor?.getPlatform?.()
+    const ua = window.navigator?.userAgent || ''
+    const isiOS = platform === 'ios' || /iPad|iPhone|iPod/.test(ua)
+    setIsIosPlatform(isiOS)
+  }, [])
+
+  useEffect(() => {
     if (typeof window === 'undefined' || !window.Capacitor) return
     if (window.Capacitor.getPlatform?.() !== 'ios') return
     const hideAccessoryBar = async () => {
       try {
-        const moduleName = '@capacitor/keyboard'
-        const mod = await import(/* @vite-ignore */ moduleName)
-        const keyboard = mod?.Keyboard
+        const keyboard = await getCapacitorKeyboard()
         if (!keyboard?.setAccessoryBarVisible) return
         await keyboard.setAccessoryBarVisible({ isVisible: false })
       } catch {
@@ -436,12 +479,27 @@ function ChatPageNew() {
 
     const getKeyboardOffset = () => {
       const viewport = window.visualViewport
-      if (!viewport) return 0
-      const offset = Math.round(window.innerHeight - (viewport.height + viewport.offsetTop))
-      return offset > 80 ? offset : 0
+      const viewportHeight = Math.round(viewport?.height || window.innerHeight || 0)
+      const viewportTop = Math.round(viewport?.offsetTop || 0)
+      const effectiveHeight = viewportHeight + viewportTop
+
+      if (effectiveHeight > maxViewportHeightRef.current) {
+        maxViewportHeightRef.current = effectiveHeight
+      }
+      const baseline = maxViewportHeightRef.current || effectiveHeight
+      const offset = Math.max(0, baseline - effectiveHeight)
+      return offset > 40 ? offset : 0
     }
 
     const syncKeyboardFromViewport = () => {
+      const viewport = window.visualViewport
+      const viewportHeightNow = Math.round((viewport?.height || window.innerHeight || 0) + (viewport?.offsetTop || 0))
+      setViewportHeight(viewportHeightNow || window.innerHeight)
+      if (!isIosPlatform) {
+        setKeyboardOffset(0)
+        setIsKeyboardOpen(false)
+        return
+      }
       const offset = getKeyboardOffset()
       setKeyboardOffset(offset)
       setIsKeyboardOpen(offset > 0)
@@ -480,9 +538,7 @@ function ChatPageNew() {
     const setupKeyboardListeners = async () => {
       if (!window.Capacitor) return
       try {
-        const moduleName = '@capacitor/keyboard'
-        const mod = await import(/* @vite-ignore */ moduleName)
-        const keyboard = mod?.Keyboard
+        const keyboard = await getCapacitorKeyboard()
         if (!keyboard?.addListener) return
         const onShow = (info) => {
           const nativeHeight = Number(info?.keyboardHeight || 0)
@@ -527,7 +583,91 @@ function ChatPageNew() {
       window.removeEventListener('orientationchange', syncKeyboardFromViewport)
       handles.forEach((handle) => handle?.remove?.())
     }
-  }, [])
+  }, [isIosPlatform])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined
+    const videoUrls = [...new Set(
+      messages
+        .filter((msg) => msg?.type === 'video' && msg?.mediaUrl)
+        .map((msg) => String(msg.mediaUrl))
+    )]
+    if (videoUrls.length === 0) return undefined
+
+    let cancelled = false
+    const generateThumb = (url) => new Promise((resolve) => {
+      const video = document.createElement('video')
+      video.muted = true
+      video.playsInline = true
+      video.preload = 'metadata'
+      video.crossOrigin = 'anonymous'
+      video.src = url
+
+      const cleanup = () => {
+        video.pause()
+        video.removeAttribute('src')
+        video.load()
+      }
+
+      const fail = () => {
+        cleanup()
+        resolve(null)
+      }
+
+      const capture = () => {
+        try {
+          const width = video.videoWidth || 0
+          const height = video.videoHeight || 0
+          if (!width || !height) return fail()
+          const canvas = document.createElement('canvas')
+          canvas.width = width
+          canvas.height = height
+          const ctx = canvas.getContext('2d')
+          if (!ctx) return fail()
+          ctx.drawImage(video, 0, 0, width, height)
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.72)
+          cleanup()
+          resolve(dataUrl || null)
+        } catch {
+          fail()
+        }
+      }
+
+      video.addEventListener('loadedmetadata', () => {
+        try {
+          const targetTime = Math.min(0.4, Math.max((video.duration || 0) * 0.1, 0.05))
+          if (Number.isFinite(targetTime) && targetTime > 0) {
+            video.currentTime = targetTime
+          } else {
+            capture()
+          }
+        } catch {
+          capture()
+        }
+      }, { once: true })
+      video.addEventListener('seeked', capture, { once: true })
+      video.addEventListener('error', fail, { once: true })
+      setTimeout(fail, 8000)
+    })
+
+    const loadThumbs = async () => {
+      for (const url of videoUrls) {
+        if (cancelled) return
+        if (videoThumbMap[url] !== undefined) continue
+        const thumb = await generateThumb(url)
+        if (cancelled || !thumb) continue
+        setVideoThumbMap((prev) => {
+          if (prev[url]) return prev
+          return { ...prev, [url]: thumb }
+        })
+      }
+    }
+
+    loadThumbs()
+    return () => {
+      cancelled = true
+    }
+  }, [messages, videoThumbMap])
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -1480,16 +1620,34 @@ function ChatPageNew() {
       resolvedType = file.type?.startsWith('video') ? 'video' : 'image'
     }
 
+    let uploadFile = file
+    if (resolvedType === 'file' && file.size > AUTO_COMPRESS_FILE_BYTES) {
+      toast.info('Large file detected. Compressing before upload...')
+      const compressed = await gzipFile(file)
+      if (!compressed) {
+        toast.error('Could not compress this large file on this device.')
+        return
+      }
+      if (compressed.size >= file.size) {
+        toast.error('Compression did not reduce file size. Please use a smaller file.')
+        return
+      }
+      uploadFile = compressed
+      const beforeMb = Math.round(file.size / (1024 * 1024))
+      const afterMb = Math.round(compressed.size / (1024 * 1024))
+      toast.info(`Compressed file from ${beforeMb}MB to ${afterMb}MB`)
+    }
+
     const maxBytes = resolvedType === 'video'
       ? MAX_VIDEO_BYTES
       : (resolvedType === 'image' ? MAX_IMAGE_BYTES : MAX_OTHER_BYTES)
-    if (file.size > maxBytes) {
+    if (uploadFile.size > maxBytes) {
       const sizeMb = Math.round(maxBytes / (1024 * 1024))
       toast.error(`File too large. Maximum ${sizeMb}MB allowed.`)
       return
     }
 
-    const localPreviewUrl = URL.createObjectURL(file)
+    const localPreviewUrl = URL.createObjectURL(uploadFile)
     const currentReply = replyingTo
     const targetUser = selectedUser
     const tempId = createTempId()
@@ -1500,9 +1658,9 @@ function ChatPageNew() {
       sender: 'user',
       type: resolvedType,
       text: `Sent ${article} ${label}`,
-      fileName: file.name,
+      fileName: uploadFile.name,
       mediaUrl: localPreviewUrl,
-      mimeType: file.type,
+      mimeType: uploadFile.type,
       timestamp: getTimeLabel(),
       senderName: formatUsername(flow.username || 'You'),
       replyingTo: currentReply,
@@ -1515,9 +1673,9 @@ function ChatPageNew() {
       ? 'Sent an image'
       : resolvedType === 'video'
         ? 'Sent a video'
-        : resolvedType === 'voice'
+      : resolvedType === 'voice'
           ? 'Sent a voice message'
-          : `Sent a file (${file.name})`
+          : `Sent a file (${uploadFile.name})`
 
     setUsers((prev) =>
       prev.map((user) =>
@@ -1534,13 +1692,13 @@ function ChatPageNew() {
     }
 
     try {
-      const uploaded = await uploadMedia(flow.token, file)
+      const uploaded = await uploadMedia(flow.token, uploadFile)
       const uploadedUrl = normalizeMediaUrl(uploaded?.mediaUrl || localPreviewUrl)
-      const uploadedMime = uploaded?.mimeType || file.type || null
+      const uploadedMime = uploaded?.mimeType || uploadFile.type || null
 
       setMessages((prev) => prev.map((msg) => (
         msg.tempId === tempId
-          ? { ...msg, mediaUrl: uploadedUrl, mimeType: uploadedMime, fileName: uploaded?.fileName || file.name }
+          ? { ...msg, mediaUrl: uploadedUrl, mimeType: uploadedMime, fileName: uploaded?.fileName || uploadFile.name }
           : msg
       )))
 
@@ -1552,7 +1710,7 @@ function ChatPageNew() {
           message: previewLabel,
           tempId,
           type: resolvedType,
-          fileName: uploaded?.fileName || file.name,
+          fileName: uploaded?.fileName || uploadFile.name,
           mediaUrl: uploadedUrl,
           mimeType: uploadedMime,
           replyingTo: currentReply ? { text: currentReply.text, senderName: currentReply.senderName } : null,
@@ -1806,6 +1964,7 @@ function ChatPageNew() {
     messageLongPressRef.current = {
       timerId: setTimeout(() => {
         setActiveMessageActionsKey(messageKey)
+        setReactionTray({ messageKey, x, y })
         messageLongPressRef.current.triggered = true
       }, MESSAGE_ACTION_LONG_PRESS_MS),
       key: messageKey,
@@ -1890,7 +2049,34 @@ function ChatPageNew() {
     const target = event.target
     if (!(target instanceof HTMLElement)) return
     if (target.closest('button, a, audio, video, input, textarea')) return
+    setReactionTray(null)
     setActiveMessageActionsKey((prev) => (prev === messageKey ? null : messageKey))
+  }
+
+  const getReactionTrayStyle = () => {
+    if (!reactionTray || typeof window === 'undefined') return {}
+    const trayWidth = 292
+    const trayHeight = 54
+    const pad = 8
+    const left = Math.max(pad, Math.min(window.innerWidth - trayWidth - pad, reactionTray.x - (trayWidth / 2)))
+    const prefersAbove = reactionTray.y > 86
+    const top = prefersAbove
+      ? Math.max(pad, reactionTray.y - trayHeight - 12)
+      : Math.min(window.innerHeight - trayHeight - pad, reactionTray.y + 16)
+    return { left: `${left}px`, top: `${top}px` }
+  }
+
+  const applyMessageReaction = (messageKey, emoji) => {
+    setMessageReactions((prev) => {
+      if (prev[messageKey] === emoji) {
+        const next = { ...prev }
+        delete next[messageKey]
+        return next
+      }
+      return { ...prev, [messageKey]: emoji }
+    })
+    setReactionTray(null)
+    setActiveMessageActionsKey(messageKey)
   }
 
   const renderMessageMedia = (message) => {
@@ -1909,6 +2095,7 @@ function ChatPageNew() {
       )
     }
     if (message.type === 'video') {
+      const thumb = videoThumbMap[message.mediaUrl] || null
       return (
         <button
           type="button"
@@ -1916,7 +2103,14 @@ function ChatPageNew() {
           onClick={() => setActiveMediaPreview({ type: 'video', url: message.mediaUrl, name: message.fileName || 'video' })}
           aria-label="Open video preview"
         >
-          <video className="message-video-preview" src={message.mediaUrl} preload="metadata" />
+          <div className="message-video-thumb-shell">
+            {thumb ? (
+              <img className="message-video-thumb-image" src={thumb} alt={message.fileName || 'video thumbnail'} />
+            ) : (
+              <video className="message-video-preview" src={message.mediaUrl} preload="metadata" muted playsInline />
+            )}
+            <span className="message-video-play-icon">{icons.video}</span>
+          </div>
         </button>
       )
     }
@@ -1939,12 +2133,19 @@ function ChatPageNew() {
     if (isMobileView) {
       setShowMobileUsers(false)
     }
+    setReactionTray(null)
   }
+
+  const fallbackViewportHeight = typeof window !== 'undefined' ? window.innerHeight : 0
 
   return (
     <div
       className={`chat-container ${selectedUser ? 'user-selected' : ''} ${showMobileUsers ? 'mobile-users-open' : ''} ${isKeyboardOpen ? 'keyboard-open' : ''}`}
-      style={{ '--chat-keyboard-offset': `${Math.max(0, keyboardOffset)}px` }}
+      data-ios={isIosPlatform ? 'true' : 'false'}
+      style={{
+        '--chat-keyboard-offset': `${Math.max(0, keyboardOffset)}px`,
+        '--chat-viewport-height': `${Math.max(0, viewportHeight || fallbackViewportHeight)}px`,
+      }}
     >
       <ChatUsersPanel
         filteredUsers={filteredUsers}
@@ -2034,12 +2235,16 @@ function ChatPageNew() {
           className="messages-area"
           onDragOver={handleDragOver}
           onDrop={handleDrop}
-          onScroll={() => setActiveMessageActionsKey(null)}
+          onScroll={() => {
+            setActiveMessageActionsKey(null)
+            setReactionTray(null)
+          }}
           onClick={(event) => {
             const target = event.target
             if (!(target instanceof HTMLElement)) return
             if (!target.closest('.message')) {
               setActiveMessageActionsKey(null)
+              setReactionTray(null)
             }
           }}
           initial={{ opacity: 0 }}
@@ -2048,7 +2253,7 @@ function ChatPageNew() {
         >
           <AnimatePresence>
             {messages.map((message, index) => {
-              const messageKey = `${index}-${message.createdAt || message.timestamp}-${message.text}`
+              const messageKey = getMessageUiKey(message, index)
               const messageFailed = isMessageFailed(message)
               return (
               <motion.div
@@ -2096,6 +2301,11 @@ function ChatPageNew() {
                   {shouldShowSeenInline && index === lastOutgoingIndex && activeMessageActionsKey !== messageKey && (
                     <span className="message-seen-inline">Seen</span>
                   )}
+                  {messageReactions[messageKey] && (
+                    <span className="message-reaction-badge" aria-label={`Reaction ${messageReactions[messageKey]}`}>
+                      {messageReactions[messageKey]}
+                    </span>
+                  )}
                 </div>
                 <div className={`message-actions ${activeMessageActionsKey === messageKey ? 'active' : ''}`}>
                   <button
@@ -2135,6 +2345,22 @@ function ChatPageNew() {
           </AnimatePresence>
           <div ref={messagesEndRef} />
         </motion.div>
+        {reactionTray && (
+          <div className="reaction-tray" style={getReactionTrayStyle()}>
+            {QUICK_REACTIONS.map((emoji) => (
+              <button
+                key={`${reactionTray.messageKey}-${emoji}`}
+                type="button"
+                className="reaction-tray-btn"
+                onClick={() => applyMessageReaction(reactionTray.messageKey, emoji)}
+                aria-label={`React ${emoji}`}
+                title={`React ${emoji}`}
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+        )}
 
         <AnimatePresence>
           {editingMessage && (

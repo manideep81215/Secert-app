@@ -71,11 +71,16 @@ public class ChatMessageController {
     }
     String mimeType = file.getContentType() != null ? file.getContentType() : MediaType.APPLICATION_OCTET_STREAM_VALUE;
     boolean isVideo = mimeType.startsWith("video/");
-    long maxBytes = isVideo ? 20L * 1024L * 1024L : 8L * 1024L * 1024L;
+    boolean isImage = mimeType.startsWith("image/");
+    long maxBytes = isVideo
+        ? 150L * 1024L * 1024L
+        : (isImage ? 15L * 1024L * 1024L : 40L * 1024L * 1024L);
     if (file.getSize() > maxBytes) {
       throw new ResponseStatusException(
           HttpStatus.PAYLOAD_TOO_LARGE,
-          isVideo ? "Video exceeds 20MB limit" : "Photo/file exceeds 8MB limit");
+          isVideo
+              ? "Video exceeds 150MB limit"
+              : (isImage ? "Photo exceeds 15MB limit" : "File exceeds 40MB limit"));
     }
 
     try {
