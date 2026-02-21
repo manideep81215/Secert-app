@@ -239,10 +239,28 @@ function SnakeLadderGamePage() {
               {preset.ladders.map(([from, to]) => {
                 const a = toCellPoint(from)
                 const b = toCellPoint(to)
+                const rungCount = 5
+                const rungPoints = Array.from({ length: rungCount }, (_, idx) => {
+                  const t = (idx + 1) / (rungCount + 1)
+                  return {
+                    x: a.x + (b.x - a.x) * t,
+                    y: a.y + (b.y - a.y) * t,
+                  }
+                })
                 return (
                   <g key={`ladder-${from}-${to}`} className="ladder-line">
-                    <line x1={a.x - 0.7} y1={a.y} x2={b.x - 0.7} y2={b.y} />
-                    <line x1={a.x + 0.7} y1={a.y} x2={b.x + 0.7} y2={b.y} />
+                    <line className="ladder-rail" x1={a.x - 1.1} y1={a.y} x2={b.x - 1.1} y2={b.y} />
+                    <line className="ladder-rail" x1={a.x + 1.1} y1={a.y} x2={b.x + 1.1} y2={b.y} />
+                    {rungPoints.map((point, idx) => (
+                      <line
+                        key={`rung-${from}-${to}-${idx}`}
+                        className="ladder-rung"
+                        x1={point.x - 1.05}
+                        y1={point.y}
+                        x2={point.x + 1.05}
+                        y2={point.y}
+                      />
+                    ))}
                   </g>
                 )
               })}
