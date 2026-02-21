@@ -151,9 +151,7 @@ export async function pushNotify(title, body) {
         notifications: [
           {
             ...baseNotification,
-            // Android status-bar small icon should be monochrome/simple.
-            smallIcon: 'ic_launcher_foreground',
-            largeIcon: 'simp_games_quest_logo',
+            smallIcon: 'ic_stat_simp_games',
           },
         ],
       })
@@ -165,7 +163,7 @@ export async function pushNotify(title, body) {
           notifications: [
             {
               ...baseNotification,
-              smallIcon: 'ic_launcher',
+              smallIcon: 'ic_stat_simp_games',
             },
           ],
         })
