@@ -15,8 +15,10 @@
   },
   "dependencies": {
     "@capacitor/android": "^7.4.3",
+    "@capacitor/app": "^7.0.2",
     "@capacitor/core": "^7.4.3",
     "@capacitor/local-notifications": "^7.0.2",
+    "@capacitor/push-notifications": "^7.0.2",
     "@stomp/stompjs": "^7.2.1",
     "@tailwindcss/vite": "^4.1.18",
     "axios": "^1.13.5",

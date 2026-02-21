@@ -1,6 +1,9 @@
 package com.game.app.service;
 
 import java.math.BigInteger;
+import java.io.ByteArrayInputStream;
+import java.io.FileInputStream;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
@@ -17,8 +20,18 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import com.game.app.model.MobilePushTokenEntity;
 import com.game.app.model.PushSubscriptionEntity;
+import com.game.app.repository.MobilePushTokenRepository;
 import com.game.app.repository.PushSubscriptionRepository;
+import com.google.auth.oauth2.GoogleCredentials;
+import com.google.firebase.FirebaseApp;
+import com.google.firebase.FirebaseOptions;
+import com.google.firebase.messaging.AndroidConfig;
+import com.google.firebase.messaging.FirebaseMessaging;
+import com.google.firebase.messaging.FirebaseMessagingException;
+import com.google.firebase.messaging.Message;
+import com.google.firebase.messaging.MessagingErrorCode;
 
 import nl.martijndwars.webpush.Notification;
 import nl.martijndwars.webpush.PushService;
@@ -30,18 +43,32 @@ public class PushNotificationService {
   private static final Logger log = LoggerFactory.getLogger(PushNotificationService.class);
   private static final int PUSH_TTL_SECONDS = 24 * 60 * 60;
   private static final Urgency PUSH_URGENCY = Urgency.HIGH;
+  private static final long FCM_TTL_MILLIS = 24L * 60L * 60L * 1000L;
+  private static final String FCM_APP_NAME = "simp-games-quest-fcm";
 
   private final PushSubscriptionRepository pushSubscriptionRepository;
+  private final MobilePushTokenRepository mobilePushTokenRepository;
   private final String vapidPublicKey;
   private final String vapidPrivateKey;
   private final String vapidSubject;
+  private final boolean fcmEnabled;
+  private final String fcmCredentialsFile;
+  private final String fcmCredentialsJson;
+  private final String fcmCredentialsBase64;
+  private volatile FirebaseMessaging firebaseMessaging;
 
   public PushNotificationService(
       PushSubscriptionRepository pushSubscriptionRepository,
+      MobilePushTokenRepository mobilePushTokenRepository,
       @Value("${app.push.vapid.public-key:}") String vapidPublicKey,
       @Value("${app.push.vapid.private-key:}") String vapidPrivateKey,
-      @Value("${app.push.vapid.subject:mailto:admin@example.com}") String vapidSubject) {
+      @Value("${app.push.vapid.subject:mailto:admin@example.com}") String vapidSubject,
+      @Value("${app.push.fcm.enabled:true}") boolean fcmEnabled,
+      @Value("${app.push.fcm.credentials-file:}") String fcmCredentialsFile,
+      @Value("${app.push.fcm.credentials-json:}") String fcmCredentialsJson,
+      @Value("${app.push.fcm.credentials-base64:}") String fcmCredentialsBase64) {
     this.pushSubscriptionRepository = pushSubscriptionRepository;
+    this.mobilePushTokenRepository = mobilePushTokenRepository;
     String configuredPublic = vapidPublicKey != null ? vapidPublicKey.trim() : "";
     String configuredPrivate = vapidPrivateKey != null ? vapidPrivateKey.trim() : "";
     if (configuredPublic.isBlank() || configuredPrivate.isBlank()) {
@@ -54,6 +81,10 @@ public class PushNotificationService {
     this.vapidPublicKey = configuredPublic;
     this.vapidPrivateKey = configuredPrivate;
     this.vapidSubject = vapidSubject != null ? vapidSubject.trim() : "mailto:admin@example.com";
+    this.fcmEnabled = fcmEnabled;
+    this.fcmCredentialsFile = fcmCredentialsFile != null ? fcmCredentialsFile.trim() : "";
+    this.fcmCredentialsJson = fcmCredentialsJson != null ? fcmCredentialsJson.trim() : "";
+    this.fcmCredentialsBase64 = fcmCredentialsBase64 != null ? fcmCredentialsBase64.trim() : "";
   }
 
   public boolean isPushEnabled() {
@@ -62,6 +93,10 @@ public class PushNotificationService {
 
   public String getVapidPublicKey() {
     return vapidPublicKey;
+  }
+
+  public boolean isFcmEnabled() {
+    return getFirebaseMessaging() != null;
   }
 
   public void saveSubscription(String username, String endpoint, String p256dh, String auth) {
@@ -80,22 +115,49 @@ public class PushNotificationService {
     pushSubscriptionRepository.deleteByUsernameAndEndpoint(normalizeUsername(username), endpoint.trim());
   }
 
+  public void saveMobileToken(String username, String token, String platform) {
+    if (token == null || token.isBlank()) return;
+    String normalizedUser = normalizeUsername(username);
+    Optional<MobilePushTokenEntity> existing = mobilePushTokenRepository.findByToken(token.trim());
+    MobilePushTokenEntity entity = existing.orElseGet(MobilePushTokenEntity::new);
+    entity.setUsername(normalizedUser);
+    entity.setToken(token.trim());
+    entity.setPlatform(normalizePlatform(platform));
+    mobilePushTokenRepository.save(entity);
+  }
+
+  public void removeMobileToken(String username, String token) {
+    if (token == null || token.isBlank()) return;
+    mobilePushTokenRepository.deleteByUsernameAndToken(normalizeUsername(username), token.trim());
+  }
+
   public void notifyUser(String username, String title, String body, String url) {
     if (!isPushEnabled()) return;
     String normalizedUser = normalizeUsername(username);
     List<PushSubscriptionEntity> subscriptions = pushSubscriptionRepository.findByUsername(normalizedUser);
-    if (subscriptions.isEmpty()) return;
+    List<MobilePushTokenEntity> mobileTokens = mobilePushTokenRepository.findByUsername(normalizedUser);
+    if (subscriptions.isEmpty() && mobileTokens.isEmpty()) return;
 
     String payload = buildPayload(title, body, url);
 
     CompletableFuture.runAsync(() -> {
-      try {
-        PushService service = new PushService(vapidPublicKey, vapidPrivateKey, vapidSubject);
-        for (PushSubscriptionEntity subscription : subscriptions) {
-          sendToSubscription(service, subscription, payload);
+      if (!subscriptions.isEmpty()) {
+        try {
+          PushService service = new PushService(vapidPublicKey, vapidPrivateKey, vapidSubject);
+          for (PushSubscriptionEntity subscription : subscriptions) {
+            sendToSubscription(service, subscription, payload);
+          }
+        } catch (Exception ignored) {
+          // Ignore web-push broadcast failures.
         }
-      } catch (Exception ignored) {
-        // Ignore push broadcast failures.
+      }
+
+      if (!mobileTokens.isEmpty()) {
+        FirebaseMessaging messaging = getFirebaseMessaging();
+        if (messaging == null) return;
+        for (MobilePushTokenEntity mobileToken : mobileTokens) {
+          sendToMobileToken(messaging, mobileToken, title, body, url);
+        }
       }
     });
   }
@@ -168,6 +230,11 @@ public class PushNotificationService {
     return username == null ? "" : username.trim().toLowerCase();
   }
 
+  private String normalizePlatform(String platform) {
+    if (platform == null || platform.isBlank()) return "android";
+    return platform.trim().toLowerCase();
+  }
+
   private String escapeJson(String value) {
     if (value == null) return "";
     return value
@@ -175,6 +242,84 @@ public class PushNotificationService {
         .replace("\"", "\\\"")
         .replace("\n", "\\n")
         .replace("\r", "\\r");
+  }
+
+  private FirebaseMessaging getFirebaseMessaging() {
+    if (!fcmEnabled) return null;
+    FirebaseMessaging current = firebaseMessaging;
+    if (current != null) return current;
+    synchronized (this) {
+      if (firebaseMessaging != null) return firebaseMessaging;
+      try (InputStream credentialsStream = openFcmCredentialsStream()) {
+        if (credentialsStream == null) {
+          log.warn("FCM credentials are not configured. Closed-app push notifications are disabled.");
+          return null;
+        }
+        GoogleCredentials credentials = GoogleCredentials.fromStream(credentialsStream);
+        FirebaseOptions options = FirebaseOptions.builder().setCredentials(credentials).build();
+        FirebaseApp app;
+        try {
+          app = FirebaseApp.getInstance(FCM_APP_NAME);
+        } catch (IllegalStateException missing) {
+          app = FirebaseApp.initializeApp(options, FCM_APP_NAME);
+        }
+        firebaseMessaging = FirebaseMessaging.getInstance(app);
+        log.info("FCM initialized for mobile push notifications.");
+        return firebaseMessaging;
+      } catch (Exception error) {
+        log.error("Failed to initialize FCM mobile push", error);
+        return null;
+      }
+    }
+  }
+
+  private InputStream openFcmCredentialsStream() {
+    try {
+      if (!fcmCredentialsBase64.isBlank()) {
+        byte[] decoded = Base64.getDecoder().decode(fcmCredentialsBase64);
+        return new ByteArrayInputStream(decoded);
+      }
+      if (!fcmCredentialsJson.isBlank()) {
+        return new ByteArrayInputStream(fcmCredentialsJson.getBytes(StandardCharsets.UTF_8));
+      }
+      if (!fcmCredentialsFile.isBlank()) {
+        return new FileInputStream(fcmCredentialsFile);
+      }
+    } catch (Exception error) {
+      log.error("Unable to read FCM credentials", error);
+    }
+    return null;
+  }
+
+  private void sendToMobileToken(FirebaseMessaging messaging, MobilePushTokenEntity token, String title, String body, String url) {
+    try {
+      Message message = Message.builder()
+          .setToken(token.getToken())
+          .setNotification(com.google.firebase.messaging.Notification.builder().setTitle(title).setBody(body).build())
+          .putData("title", title != null ? title : "")
+          .putData("body", body != null ? body : "")
+          .putData("url", url != null ? url : "/#/chat")
+          .setAndroidConfig(AndroidConfig.builder()
+              .setPriority(AndroidConfig.Priority.HIGH)
+              .setTtl(FCM_TTL_MILLIS)
+              .build())
+          .build();
+      messaging.send(message);
+    } catch (FirebaseMessagingException error) {
+      if (isInvalidTokenError(error)) {
+        mobilePushTokenRepository.deleteById(token.getId());
+      }
+      log.warn("FCM send failed for user {}: {}", token.getUsername(), error.getMessage());
+    } catch (Exception error) {
+      log.warn("Unexpected FCM send error for user {}: {}", token.getUsername(), error.getMessage());
+    }
+  }
+
+  private boolean isInvalidTokenError(FirebaseMessagingException error) {
+    if (error == null) return false;
+    MessagingErrorCode code = error.getMessagingErrorCode();
+    return code == MessagingErrorCode.UNREGISTERED
+        || code == MessagingErrorCode.INVALID_ARGUMENT;
   }
 
   private VapidKeyPair generateVapidKeyPair() {

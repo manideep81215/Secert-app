@@ -1,21 +1,46 @@
+import { Capacitor } from '@capacitor/core'
+import { LocalNotifications } from '@capacitor/local-notifications'
+
 const CHAT_NOTIFY_CUTOFFS_KEY = 'chat_notify_cutoffs_v1'
+const NATIVE_CHAT_CHANNEL_ID = 'chat_messages'
+let nativeNotificationSetupDone = false
 
 function isCapacitorNative() {
-  if (typeof window === 'undefined') return false
-  const cap = window.Capacitor
-  if (!cap) return false
-  if (typeof cap.isNativePlatform === 'function') return cap.isNativePlatform()
-  return cap.getPlatform?.() === 'android' || cap.getPlatform?.() === 'ios'
+  try {
+    return Capacitor?.isNativePlatform?.() === true
+  } catch {
+    return false
+  }
 }
 
-async function getCapacitorLocalNotifications() {
+async function ensureNativeNotificationSetup(localNotifications) {
+  if (nativeNotificationSetupDone || !localNotifications) return
   try {
-    const moduleName = '@capacitor/local-notifications'
-    const mod = await import(/* @vite-ignore */ moduleName)
-    return mod.LocalNotifications || null
+    await localNotifications.createChannel({
+      id: NATIVE_CHAT_CHANNEL_ID,
+      name: 'Chat messages',
+      description: 'Incoming chat message alerts',
+      importance: 5,
+      visibility: 1,
+    })
   } catch {
-    return null
+    // Ignore channel creation failures on unsupported/older devices.
   }
+
+  try {
+    await localNotifications.registerActionTypes({
+      types: [
+        {
+          id: 'chat',
+          actions: [{ id: 'open-chat', title: 'Open chat' }],
+        },
+      ],
+    })
+  } catch {
+    // Ignore action registration failures.
+  }
+
+  nativeNotificationSetupDone = true
 }
 
 function readNotifyCutoffs() {
@@ -59,13 +84,11 @@ export function setNotifyCutoff(meUsername, peerUsername, cutoffMs) {
 
 export async function ensureNotificationPermission(interactive = false) {
   if (isCapacitorNative()) {
-    const localNotifications = await getCapacitorLocalNotifications()
-    if (!localNotifications) return false
     try {
-      const status = await localNotifications.checkPermissions()
+      const status = await LocalNotifications.checkPermissions()
       if (status?.display === 'granted') return true
       if (!interactive) return false
-      const requested = await localNotifications.requestPermissions()
+      const requested = await LocalNotifications.requestPermissions()
       return requested?.display === 'granted'
     } catch {
       return false
@@ -108,31 +131,66 @@ export function getNotificationBlockedHelp() {
 }
 
 export async function pushNotify(title, body) {
-  const hasPermission = await ensureNotificationPermission(false)
-  if (!hasPermission) return false
-
   if (isCapacitorNative()) {
-    const localNotifications = await getCapacitorLocalNotifications()
-    if (!localNotifications) return false
+    await ensureNativeNotificationSetup(LocalNotifications)
+    const hasPermission = await ensureNotificationPermission(false)
+    if (!hasPermission) return false
+
+    const notificationId = Math.floor(Date.now() % 2147483000)
+    const baseNotification = {
+      id: notificationId,
+      title: title || 'New message',
+      body: body || '',
+      schedule: { at: new Date(Date.now() + 50), allowWhileIdle: true },
+      channelId: NATIVE_CHAT_CHANNEL_ID,
+      actionTypeId: 'chat',
+      extra: { url: '/#/chat' },
+    }
+
     try {
-      await localNotifications.schedule({
+      await LocalNotifications.schedule({
         notifications: [
           {
-            id: Math.floor(Date.now() % 2147483000),
-            title: title || 'New message',
-            body: body || '',
-            schedule: { at: new Date(Date.now() + 100) },
-            smallIcon: 'ic_launcher',
-            actionTypeId: 'chat',
-            extra: { url: '/#/chat' },
+            ...baseNotification,
+            // Android status-bar small icon should be monochrome/simple.
+            smallIcon: 'ic_launcher_foreground',
+            largeIcon: 'simp_games_quest_logo',
           },
         ],
       })
       return true
-    } catch {
-      return false
+    } catch (errorPrimary) {
+      // Fallback for devices/ROMs that reject custom icon resources.
+      try {
+        await LocalNotifications.schedule({
+          notifications: [
+            {
+              ...baseNotification,
+              smallIcon: 'ic_launcher',
+            },
+          ],
+        })
+        return true
+      } catch (errorSecondary) {
+        try {
+          await LocalNotifications.schedule({
+            notifications: [baseNotification],
+          })
+          return true
+        } catch (errorFinal) {
+          console.warn('[notify] Native notification failed', {
+            errorPrimary,
+            errorSecondary,
+            errorFinal,
+          })
+          return false
+        }
+      }
     }
   }
+
+  const hasPermission = await ensureNotificationPermission(false)
+  if (!hasPermission) return false
 
   const chatUrl = `${window.location.origin}/#/chat`
 

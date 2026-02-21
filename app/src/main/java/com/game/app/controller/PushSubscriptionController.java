@@ -35,7 +35,10 @@ public class PushSubscriptionController {
 
   @GetMapping("/public-key")
   public PushPublicKeyResponse publicKey() {
-    return new PushPublicKeyResponse(pushNotificationService.isPushEnabled(), pushNotificationService.getVapidPublicKey());
+    return new PushPublicKeyResponse(
+        pushNotificationService.isPushEnabled(),
+        pushNotificationService.getVapidPublicKey(),
+        pushNotificationService.isFcmEnabled());
   }
 
   @PostMapping("/subscribe")
@@ -67,6 +70,34 @@ public class PushSubscriptionController {
     String endpoint = payload != null ? payload.endpoint() : null;
     if (endpoint != null && !endpoint.isBlank()) {
       pushNotificationService.removeSubscription(me.getUsername(), endpoint.trim());
+    }
+    return new PushSubscribeResponse(true);
+  }
+
+  @PostMapping("/mobile-token")
+  public PushSubscribeResponse subscribeMobileToken(
+      @RequestHeader(value = "Authorization", required = false) String authHeader,
+      @RequestBody MobilePushTokenRequest payload) {
+    UserEntity me = requireAuthUser(authHeader);
+    if (payload == null || payload.token() == null || payload.token().isBlank()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mobile push token is required");
+    }
+
+    pushNotificationService.saveMobileToken(
+        me.getUsername(),
+        payload.token().trim(),
+        payload.platform());
+    return new PushSubscribeResponse(true);
+  }
+
+  @DeleteMapping("/mobile-token")
+  public PushSubscribeResponse unsubscribeMobileToken(
+      @RequestHeader(value = "Authorization", required = false) String authHeader,
+      @RequestBody(required = false) MobilePushTokenRequest payload) {
+    UserEntity me = requireAuthUser(authHeader);
+    String token = payload != null ? payload.token() : null;
+    if (token != null && !token.isBlank()) {
+      pushNotificationService.removeMobileToken(me.getUsername(), token.trim());
     }
     return new PushSubscribeResponse(true);
   }
@@ -115,11 +146,13 @@ public class PushSubscriptionController {
 
   public record PushKeys(String p256dh, String auth) {}
 
-  public record PushPublicKeyResponse(boolean enabled, String publicKey) {}
+  public record PushPublicKeyResponse(boolean enabled, String publicKey, boolean nativeEnabled) {}
 
   public record PushSubscribeResponse(boolean success) {}
 
   public record PushUnsubscribeRequest(String endpoint) {}
+
+  public record MobilePushTokenRequest(String token, String platform) {}
 
   public record PushTestRequest(String title, String body, String url) {}
 

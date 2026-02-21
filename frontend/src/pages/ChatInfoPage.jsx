@@ -8,7 +8,6 @@ import {
   ensureNotificationPermission,
   getNotificationBlockedHelp,
   getNotificationPermissionState,
-  pushNotify,
   setNotifyCutoff,
 } from '../lib/notifications'
 import { ensurePushSubscription } from '../lib/pushSubscription'
@@ -50,20 +49,6 @@ function ChatInfoPage() {
   })
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [activeMediaPreview, setActiveMediaPreview] = useState(null)
-  const toUserKey = (username) => (username || '').trim().toLowerCase()
-  const activeChatKey = () => `active_chat_peer_v1:${toUserKey(flow.username)}`
-
-  const shouldSuppressNotification = (fromUsername) => {
-    if (typeof window === 'undefined') return false
-    if (window.location?.pathname !== '/chat') return false
-    try {
-      const activePeer = window.localStorage.getItem(activeChatKey()) || ''
-      return activePeer && activePeer === toUserKey(fromUsername)
-    } catch {
-      return false
-    }
-  }
-
   useEffect(() => {
     if (selectedUser?.username) return
     navigate('/chat', { replace: true })
@@ -114,7 +99,7 @@ function ChatInfoPage() {
 
   const requestNotificationAccess = async () => {
     const granted = await ensureNotificationPermission(true)
-    const current = granted ? 'granted' : (typeof Notification !== 'undefined' ? Notification.permission : 'unsupported')
+    const current = granted ? 'granted' : getNotificationPermissionState()
     setNotificationPermission(current)
     if (granted) {
       toast.success('Notifications enabled.')
@@ -305,15 +290,6 @@ function ChatInfoPage() {
     const authUsername = (flow.username || '').trim()
     if (!authUsername || !authToken) return
 
-    const previewFromPayload = (payload) => {
-      const type = payload?.type || 'text'
-      if (type === 'image') return 'Sent an image'
-      if (type === 'video') return 'Sent a video'
-      if (type === 'voice') return 'Sent a voice message'
-      if (type === 'file') return payload?.fileName ? `Sent file: ${payload.fileName}` : 'Sent a file'
-      return payload?.message || 'New message'
-    }
-
     const client = new Client({
       webSocketFactory: () => new SockJS(WS_CHAT_URL, null, {
         transports: ['websocket', 'xhr-streaming', 'xhr-polling'],
@@ -332,10 +308,6 @@ function ChatInfoPage() {
             const fromUsername = (payload?.fromUsername || '').trim()
             if (!fromUsername) return
 
-            const preview = previewFromPayload(payload)
-            if (!shouldSuppressNotification(fromUsername)) {
-              pushNotify(`@${fromUsername}`, preview || 'New message')
-            }
             setNotifyCutoff(authUsername, fromUsername, Number(payload?.createdAt || Date.now()))
           } catch {
             // Ignore malformed realtime payload.

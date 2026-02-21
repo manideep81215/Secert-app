@@ -32,3 +32,18 @@ export async function sendTestPush(token, payload = {}) {
   })
   return data
 }
+
+export async function subscribeMobilePush(token, payload) {
+  const { data } = await pushClient.post('/mobile-token', payload, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  })
+  return data
+}
+
+export async function unsubscribeMobilePush(token, mobileToken) {
+  const { data } = await pushClient.delete('/mobile-token', {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    data: mobileToken ? { token: mobileToken } : {},
+  })
+  return data
+}

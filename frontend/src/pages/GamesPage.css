@@ -33,7 +33,10 @@
   background: linear-gradient(180deg, rgba(255, 248, 226, 0.96), rgba(246, 233, 200, 0.95));
   color: #4b2813;
   font-weight: 900;
-  padding: 0.6rem 0.95rem;
+  min-height: 56px;
+  padding: 0.9rem 1.1rem;
+  font-size: 1rem;
+  line-height: 1.1;
   cursor: pointer;
   width: 100%;
   white-space: nowrap;
@@ -157,8 +160,9 @@
   }
 
   .dash-ctrl-btn {
-    font-size: 0.82rem;
-    padding: 0.5rem 0.45rem;
+    min-height: 52px;
+    font-size: 0.94rem;
+    padding: 0.75rem 0.7rem;
   }
 
   .games-icon-grid {
@@ -177,8 +181,9 @@
   }
 
   .dash-ctrl-btn {
-    font-size: 0.74rem;
-    padding: 0.45rem 0.35rem;
+    min-height: 48px;
+    font-size: 0.88rem;
+    padding: 0.65rem 0.55rem;
     border-width: 2px;
   }
 

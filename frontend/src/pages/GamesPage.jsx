@@ -6,7 +6,7 @@ import { toast } from 'react-toastify'
 import { useFlowState, resetFlowState } from '../hooks/useFlowState'
 import { getConversation } from '../services/messagesApi'
 import { getAllUsers } from '../services/usersApi'
-import { getNotifyCutoff, pushNotify, setNotifyCutoff } from '../lib/notifications'
+import { getNotifyCutoff, setNotifyCutoff } from '../lib/notifications'
 import { WS_CHAT_URL } from '../config/apiConfig'
 import './GamesPage.css'
 
@@ -99,20 +99,6 @@ function GamesPage() {
           try {
             const payload = JSON.parse(frame.body)
             const fromUsername = payload?.fromUsername || 'Unknown'
-            const type = payload?.type || 'text'
-            const text = payload?.message || ''
-
-            const preview = type === 'image'
-              ? 'Sent an image'
-              : type === 'video'
-                ? 'Sent a video'
-                : type === 'voice'
-                  ? 'Sent a voice message'
-                  : type === 'file'
-                    ? `Sent file: ${payload?.fileName || 'attachment'}`
-                    : text
-
-            await pushNotify(`@${fromUsername}`, preview || 'New message')
             setNotifyCutoff(authUsername, fromUsername, Number(payload?.createdAt || Date.now()))
           } catch {
             // Ignore invalid realtime payloads.
