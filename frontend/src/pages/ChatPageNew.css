@@ -2058,7 +2058,14 @@
     width: 100vw !important;
     height: 100dvh !important;
     min-height: 100dvh !important;
+    padding-top: max(12px, env(safe-area-inset-top));
     padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .chat-container.mobile-users-open .users-header {
+    position: sticky;
+    top: 0;
+    z-index: 145;
   }
 
   .chat-container.mobile-users-open .users-list {

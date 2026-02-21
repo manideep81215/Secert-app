@@ -3,6 +3,7 @@ import { PushNotifications } from '@capacitor/push-notifications'
 import { subscribeMobilePush, unsubscribeMobilePush } from '../services/pushApi'
 
 const MOBILE_PUSH_TOKEN_KEY = 'mobile_push_token_v1'
+const NATIVE_PUSH_CHANNEL_ID = 'chat_messages'
 
 let listenersAttached = false
 let authTokenRef = ''
@@ -101,6 +102,23 @@ function attachListeners() {
   })
 }
 
+async function ensureNativePushChannel() {
+  if (!isNativeMobile()) return
+  if (typeof PushNotifications.createChannel !== 'function') return
+  try {
+    await PushNotifications.createChannel({
+      id: NATIVE_PUSH_CHANNEL_ID,
+      name: 'Chat messages',
+      description: 'Incoming chat message alerts',
+      importance: 5,
+      visibility: 1,
+      sound: 'default',
+    })
+  } catch {
+    // Ignore channel creation failures on unsupported devices.
+  }
+}
+
 async function clearDeliveredNativePushNotifications() {
   if (!isNativeMobile()) return
   if (typeof PushNotifications.removeAllDeliveredNotifications !== 'function') return
@@ -122,6 +140,8 @@ export async function syncNativePushRegistration(authToken) {
       permission = await PushNotifications.requestPermissions()
     }
     if (permission?.receive !== 'granted') return false
+
+    await ensureNativePushChannel()
 
     const storedToken = readStoredMobileToken()
     if (storedToken) {

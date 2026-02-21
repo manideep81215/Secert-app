@@ -68,7 +68,7 @@ function VerifyPage() {
 
       setFlow((prev) => ({ ...prev, verified: true }))
       pushNotify('Checkpoint cleared', 'Bonus room is now available.')
-      navigate('/users')
+      navigate('/chat')
     } catch {
       toast.error('Unable to reach server.')
     } finally {

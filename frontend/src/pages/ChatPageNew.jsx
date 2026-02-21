@@ -1006,7 +1006,7 @@ function ChatPageNew() {
 
       if (isTypingTarget || event.ctrlKey || event.metaKey || event.altKey) return
       if (event.key?.toLowerCase() === 'v') {
-        navigate('/users')
+        navigate('/chat')
       }
     }
 

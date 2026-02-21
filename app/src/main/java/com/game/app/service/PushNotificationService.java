@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -134,11 +135,15 @@ public class PushNotificationService {
     entity.setToken(token.trim());
     entity.setPlatform(normalizedPlatform);
     mobilePushTokenRepository.save(entity);
-    // Keep one active token per user/platform to prevent duplicate mobile pushes.
-    mobilePushTokenRepository.deleteByUsernameAndPlatformAndTokenNot(
-        normalizedUser,
-        normalizedPlatform,
-        token.trim());
+    // Keep exactly one active token row per user/platform (latest saved row).
+    List<MobilePushTokenEntity> stale = mobilePushTokenRepository.findByUsername(normalizedUser).stream()
+        .filter(row -> row != null && row.getId() != null)
+        .filter(row -> normalizePlatform(row.getPlatform()).equals(normalizedPlatform))
+        .filter(row -> !row.getId().equals(entity.getId()))
+        .collect(Collectors.toList());
+    if (!stale.isEmpty()) {
+      mobilePushTokenRepository.deleteAllInBatch(stale);
+    }
   }
 
   public void removeMobileToken(String username, String token) {
