@@ -99,11 +99,13 @@ function SnakeLadderGamePage() {
   const [status, setStatus] = useState('Pick difficulty and roll the dice.')
   const [winner, setWinner] = useState('')
   const [isRolling, setIsRolling] = useState(false)
+  const [isDifficultyMenuOpen, setIsDifficultyMenuOpen] = useState(false)
   const cpuTimerRef = useRef(null)
   const rollTimerRef = useRef(null)
   const positionsRef = useRef({ you: 1, cpu: 1 })
   const waitTimersRef = useRef(new Set())
   const animationVersionRef = useRef(0)
+  const difficultyMenuRef = useRef(null)
 
   useEffect(() => {
     if (!flow.username || !flow.token) navigate('/auth')
@@ -126,6 +128,25 @@ function SnakeLadderGamePage() {
   useEffect(() => {
     positionsRef.current = positions
   }, [positions])
+
+  useEffect(() => {
+    const handleOutsidePress = (event) => {
+      if (!difficultyMenuRef.current?.contains(event.target)) {
+        setIsDifficultyMenuOpen(false)
+      }
+    }
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') setIsDifficultyMenuOpen(false)
+    }
+    document.addEventListener('mousedown', handleOutsidePress)
+    document.addEventListener('touchstart', handleOutsidePress, { passive: true })
+    document.addEventListener('keydown', handleEscape)
+    return () => {
+      document.removeEventListener('mousedown', handleOutsidePress)
+      document.removeEventListener('touchstart', handleOutsidePress)
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }, [])
 
   const preset = DIFFICULTY_PRESETS[difficulty]
   const jumpMap = useMemo(() => {
@@ -263,22 +284,40 @@ function SnakeLadderGamePage() {
 
       <div className="snake-card">
         <div className="snake-toolbar">
-          <div className="snake-difficulty-bar">
-            <label className="snake-difficulty-select-wrap" htmlFor="snake-difficulty-select">
-              Difficulty:
-              <select
-                id="snake-difficulty-select"
-                className="snake-difficulty-select"
-                value={difficulty}
-                onChange={(event) => resetGame(event.target.value)}
-              >
+          <div className="snake-difficulty-bar" ref={difficultyMenuRef}>
+            <button
+              type="button"
+              className={`snake-difficulty-trigger ${isDifficultyMenuOpen ? 'open' : ''}`}
+              onClick={() => setIsDifficultyMenuOpen((prev) => !prev)}
+              aria-haspopup="menu"
+              aria-expanded={isDifficultyMenuOpen}
+              aria-label="Open difficulty menu"
+            >
+              Difficulty: {DIFFICULTY_PRESETS[difficulty].label}
+              <span className="snake-difficulty-caret">▼</span>
+            </button>
+            <button type="button" className="snake-difficulty-chip" onClick={() => resetGame(difficulty)}>
+              {DIFFICULTY_PRESETS[difficulty].label}
+            </button>
+            {isDifficultyMenuOpen && (
+              <div className="snake-difficulty-popover" role="menu" aria-label="Difficulty">
                 {DIFFICULTY_KEYS.map((key) => (
-                  <option key={key} value={key}>
+                  <button
+                    key={key}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={difficulty === key}
+                    className={`snake-difficulty-option ${difficulty === key ? 'active' : ''}`}
+                    onClick={() => {
+                      resetGame(key)
+                      setIsDifficultyMenuOpen(false)
+                    }}
+                  >
                     {DIFFICULTY_PRESETS[key].label}
-                  </option>
+                  </button>
                 ))}
-              </select>
-            </label>
+              </div>
+            )}
           </div>
 
           <button type="button" className="snake-reset-btn" onClick={() => resetGame()}>

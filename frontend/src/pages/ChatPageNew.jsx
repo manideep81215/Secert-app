@@ -82,6 +82,7 @@ function ChatPageNew() {
   const [socket, setSocket] = useState(null)
   const [isRecordingVoice, setIsRecordingVoice] = useState(false)
   const [recordingSeconds, setRecordingSeconds] = useState(0)
+  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false)
   const [notificationPermission, setNotificationPermission] = useState(
     getNotificationPermissionState()
   )
@@ -106,6 +107,7 @@ function ChatPageNew() {
     triggered: false,
     swiped: false,
   })
+  const swipeTapSuppressUntilRef = useRef(0)
   const mediaRecorderRef = useRef(null)
   const recordingStreamRef = useRef(null)
   const recordingChunksRef = useRef([])
@@ -416,6 +418,71 @@ function ChatPageNew() {
       }
     }
     hideAccessoryBar()
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined
+
+    const resetViewportScroll = () => {
+      try {
+        window.scrollTo(0, 0)
+        document.documentElement.scrollTop = 0
+        document.body.scrollTop = 0
+      } catch {
+        // Ignore viewport scroll failures.
+      }
+    }
+
+    const onFocusIn = (event) => {
+      const target = event.target
+      if (!(target instanceof HTMLElement)) return
+      if (!target.closest('.message-input')) return
+      setTimeout(resetViewportScroll, 0)
+      setTimeout(resetViewportScroll, 120)
+    }
+
+    window.addEventListener('focusin', onFocusIn)
+
+    let isCancelled = false
+    const handles = []
+    const setupKeyboardListeners = async () => {
+      if (!window.Capacitor) return
+      try {
+        const moduleName = '@capacitor/keyboard'
+        const mod = await import(/* @vite-ignore */ moduleName)
+        const keyboard = mod?.Keyboard
+        if (!keyboard?.addListener) return
+        const onShow = () => {
+          setIsKeyboardOpen(true)
+          resetViewportScroll()
+        }
+        const onHide = () => {
+          setIsKeyboardOpen(false)
+          resetViewportScroll()
+        }
+        const showHandle = await keyboard.addListener('keyboardWillShow', onShow)
+        const didShowHandle = await keyboard.addListener('keyboardDidShow', onShow)
+        const hideHandle = await keyboard.addListener('keyboardWillHide', onHide)
+        const didHideHandle = await keyboard.addListener('keyboardDidHide', onHide)
+        if (isCancelled) {
+          showHandle?.remove?.()
+          didShowHandle?.remove?.()
+          hideHandle?.remove?.()
+          didHideHandle?.remove?.()
+          return
+        }
+        handles.push(showHandle, didShowHandle, hideHandle, didHideHandle)
+      } catch {
+        // Keyboard plugin may be unavailable on web.
+      }
+    }
+
+    setupKeyboardListeners()
+    return () => {
+      isCancelled = true
+      window.removeEventListener('focusin', onFocusIn)
+      handles.forEach((handle) => handle?.remove?.())
+    }
   }, [])
 
   useEffect(() => {
@@ -1721,19 +1788,27 @@ function ChatPageNew() {
 
   const handleMessageGestureMove = (x, y) => {
     const state = messageLongPressRef.current
-    if (!state?.timerId) return
+    if (!state?.message) return
     const dx = x - state.startX
     const dy = y - state.startY
-    if (!state.swiped && dx > 56 && Math.abs(dy) < 26 && state.message) {
+
+    if (state.timerId && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
       clearTimeout(state.timerId)
-      setReplyingTo(state.message)
-      setActiveMessageActionsKey(null)
-      messageLongPressRef.current = { timerId: null, key: null, message: null, startX: 0, startY: 0, moved: true, triggered: false, swiped: true }
+      messageLongPressRef.current.timerId = null
+    }
+
+    if (Math.abs(dy) > 44 && Math.abs(dy) > Math.abs(dx) + 8) {
+      messageLongPressRef.current = { timerId: null, key: null, message: null, startX: 0, startY: 0, moved: true, triggered: false, swiped: false }
       return
     }
-    if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
-      clearTimeout(state.timerId)
-      messageLongPressRef.current = { timerId: null, key: null, message: null, startX: 0, startY: 0, moved: true, triggered: false, swiped: false }
+
+    const isOutgoing = state.message?.sender === 'user'
+    const reachedReplySwipe = isOutgoing ? (dx < -56 && Math.abs(dy) < 34) : (dx > 56 && Math.abs(dy) < 34)
+    if (!state.swiped && reachedReplySwipe) {
+      setReplyingTo(state.message)
+      setActiveMessageActionsKey(null)
+      swipeTapSuppressUntilRef.current = Date.now() + 420
+      messageLongPressRef.current = { timerId: null, key: null, message: null, startX: 0, startY: 0, moved: true, triggered: false, swiped: true }
     }
   }
 
@@ -1767,6 +1842,7 @@ function ChatPageNew() {
 
   const handleMessageTap = (event, messageKey) => {
     if (!isTouchDevice) return
+    if (Date.now() < swipeTapSuppressUntilRef.current) return
     const target = event.target
     if (!(target instanceof HTMLElement)) return
     if (target.closest('button, a, audio, video, input, textarea')) return
@@ -1822,7 +1898,7 @@ function ChatPageNew() {
   }
 
   return (
-    <div className={`chat-container ${selectedUser ? 'user-selected' : ''} ${showMobileUsers ? 'mobile-users-open' : ''}`}>
+    <div className={`chat-container ${selectedUser ? 'user-selected' : ''} ${showMobileUsers ? 'mobile-users-open' : ''} ${isKeyboardOpen ? 'keyboard-open' : ''}`}>
       <ChatUsersPanel
         filteredUsers={filteredUsers}
         selectedUserId={selectedUser?.id || null}
@@ -1962,7 +2038,7 @@ function ChatPageNew() {
                     </div>
                   )}
                   {renderMessageMedia(message)}
-                  {message.fileName && <div className="message-file-name">{message.fileName}</div>}
+                  {message.fileName && message.type !== 'file' && <div className="message-file-name">{message.fileName}</div>}
                   {(message.type === 'text' || !message.type) && (
                     <div className="message-text">{renderTextWithLinks(message.text)}</div>
                   )}

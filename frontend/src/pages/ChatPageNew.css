@@ -460,6 +460,7 @@
   animation: slideIn 0.3s ease;
   cursor: grab;
   width: 100%;
+  touch-action: pan-y;
 }
 
 .message:active {
@@ -478,6 +479,7 @@
   position: relative;
   transform-origin: bottom;
   animation: bubblePop 0.28s ease;
+  touch-action: pan-y;
 }
 
 .message-content.has-media {
@@ -2216,5 +2218,21 @@
   .chat-container:not(.mobile-users-open) .messages-area {
     top: calc(env(safe-area-inset-top) + 60px) !important;
     bottom: calc(68px + env(safe-area-inset-bottom)) !important;
+  }
+}
+
+@media (max-width: 920px) {
+  .chat-container.keyboard-open:not(.mobile-users-open) .chat-header {
+    position: fixed !important;
+    top: max(env(safe-area-inset-top), 0px) !important;
+    left: 0 !important;
+    right: 0 !important;
+    z-index: 300 !important;
+    transform: none !important;
+  }
+
+  .chat-container.keyboard-open:not(.mobile-users-open) .messages-area {
+    top: calc(max(env(safe-area-inset-top), 0px) + 64px) !important;
+    z-index: 120 !important;
   }
 }
