@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Pattern;
 
 import org.springframework.context.event.EventListener;
 import org.springframework.beans.factory.annotation.Value;
@@ -24,6 +25,7 @@ import com.game.app.service.PushNotificationService;
 @Controller
 public class ChatWebSocketController {
   private static final long EDIT_WINDOW_MILLIS = 15 * 60 * 1000L;
+  private static final Pattern REACTION_PATTERN = Pattern.compile("^[\\p{So}\\p{Sk}\\uFE0F\\u200D]{1,16}$");
 
   private final SimpMessagingTemplate messagingTemplate;
   private final SimpUserRegistry simpUserRegistry;
@@ -87,6 +89,7 @@ public class ChatWebSocketController {
             payload.fileName(),
             payload.mediaUrl(),
             payload.mimeType(),
+            entity.getReaction(),
             payload.replyingTo() != null
                 ? payload.replyingTo()
                 : buildReplyPreview(payload.replyText(), payload.replySenderName()),
@@ -207,6 +210,43 @@ public class ChatWebSocketController {
 
     ReadReceiptPayload event = new ReadReceiptPayload(normalizedReader, normalizedPeer, readAt);
     messagingTemplate.convertAndSendToUser(normalizedPeer, "/queue/read-receipts", event);
+  }
+
+  @MessageMapping("/chat.react")
+  public void reactToMessage(ReactionMessage payload, Principal principal) {
+    if (payload == null || payload.messageId() == null) {
+      return;
+    }
+
+    String reactor = principal != null ? principal.getName() : payload.fromUsername();
+    if (reactor == null || reactor.isBlank()) {
+      return;
+    }
+
+    String normalizedReactor = normalizeUsername(reactor);
+    ChatMessageEntity entity = chatMessageRepository.findById(payload.messageId()).orElse(null);
+    if (entity == null) {
+      return;
+    }
+
+    String normalizedFrom = normalizeUsername(entity.getFromUsername());
+    String normalizedTo = normalizeUsername(entity.getToUsername());
+    if (!normalizedReactor.equals(normalizedFrom) && !normalizedReactor.equals(normalizedTo)) {
+      return;
+    }
+
+    String normalizedReaction = normalizeReaction(payload.reaction());
+    entity.setReaction(normalizedReaction);
+    chatMessageRepository.save(entity);
+
+    MessageReactionPayload event = new MessageReactionPayload(
+        entity.getId(),
+        normalizedReaction,
+        normalizedReactor,
+        Instant.now().toEpochMilli());
+
+    messagingTemplate.convertAndSendToUser(normalizedFrom, "/queue/message-reactions", event);
+    messagingTemplate.convertAndSendToUser(normalizedTo, "/queue/message-reactions", event);
   }
 
   @MessageMapping("/user.online")
@@ -333,6 +373,15 @@ public class ChatWebSocketController {
     return text != null ? text : "New message";
   }
 
+  private String normalizeReaction(String reaction) {
+    if (reaction == null) return null;
+    String trimmed = reaction.trim();
+    if (trimmed.isBlank()) return null;
+    if (trimmed.length() > 16) return null;
+    if (!REACTION_PATTERN.matcher(trimmed).matches()) return null;
+    return trimmed;
+  }
+
   public record ChatMessage(
       String toUsername,
       String message,
@@ -354,6 +403,7 @@ public class ChatWebSocketController {
       String fileName,
       String mediaUrl,
       String mimeType,
+      String reaction,
       ReplyPreview replyingTo,
       String replyText,
       String replySenderName,
@@ -383,4 +433,8 @@ public class ChatWebSocketController {
   public record ReadReceiptMessage(String peerUsername, String readerUsername, Long readAt) {}
 
   public record ReadReceiptPayload(String readerUsername, String peerUsername, Long readAt) {}
+
+  public record ReactionMessage(Long messageId, String reaction, String fromUsername) {}
+
+  public record MessageReactionPayload(Long messageId, String reaction, String reactedBy, Long reactedAt) {}
 }

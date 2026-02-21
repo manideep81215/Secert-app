@@ -42,6 +42,9 @@ public class ChatMessageEntity {
   @Column(length = 120)
   private String mimeType;
 
+  @Column(length = 16)
+  private String reaction;
+
   @Lob
   @Column(columnDefinition = "LONGTEXT")
   private String replyText;
@@ -123,6 +126,14 @@ public class ChatMessageEntity {
 
   public void setMimeType(String mimeType) {
     this.mimeType = mimeType;
+  }
+
+  public String getReaction() {
+    return reaction;
+  }
+
+  public void setReaction(String reaction) {
+    this.reaction = reaction;
   }
 
   public String getReplyText() {

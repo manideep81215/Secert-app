@@ -88,7 +88,6 @@ function ChatPageNew() {
   const [viewportHeight, setViewportHeight] = useState(() => (typeof window !== 'undefined' ? window.innerHeight : 0))
   const [isIosPlatform, setIsIosPlatform] = useState(false)
   const [reactionTray, setReactionTray] = useState(null)
-  const [messageReactions, setMessageReactions] = useState({})
   const [videoThumbMap, setVideoThumbMap] = useState({})
   const [notificationPermission, setNotificationPermission] = useState(
     getNotificationPermissionState()
@@ -863,6 +862,7 @@ function ChatPageNew() {
           fileName: row.fileName || null,
           mediaUrl: normalizeMediaUrl(row.mediaUrl),
           mimeType: row.mimeType || null,
+          reaction: row.reaction || null,
           replyingTo: row.replyText ? { text: row.replyText, senderName: row.replySenderName || row.senderName } : null,
           senderName: formatUsername(row.senderName),
           messageId: row.id || null,
@@ -1008,6 +1008,7 @@ function ChatPageNew() {
               fileName: data?.fileName || null,
               mediaUrl: normalizeMediaUrl(data?.mediaUrl || null),
               mimeType: data?.mimeType || null,
+              reaction: data?.reaction || null,
               replyingTo: data?.replyingTo || (data?.replyText ? { text: data.replyText, senderName: data?.replySenderName || fromUsername } : null),
               createdAt: incomingCreatedAt || null,
               clientCreatedAt: incomingCreatedAt || Date.now(),
@@ -1164,6 +1165,22 @@ function ChatPageNew() {
             }))
           } catch (error) {
             console.error('Failed parsing read receipt payload', error)
+          }
+        })
+
+        client.subscribe('/user/queue/message-reactions', (frame) => {
+          try {
+            const event = JSON.parse(frame.body)
+            const messageId = Number(event?.messageId || 0)
+            if (!messageId) return
+            const nextReaction = event?.reaction || null
+            setMessages((prev) => prev.map((msg) => (
+              Number(msg?.messageId || 0) === messageId
+                ? { ...msg, reaction: nextReaction }
+                : msg
+            )))
+          } catch (error) {
+            console.error('Failed parsing message reaction payload', error)
           }
         })
       },
@@ -2169,14 +2186,40 @@ function ChatPageNew() {
   }
 
   const applyMessageReaction = (messageKey, emoji) => {
-    setMessageReactions((prev) => {
-      if (prev[messageKey] === emoji) {
-        const next = { ...prev }
-        delete next[messageKey]
-        return next
+    const targetMessage = messages.find((msg, index) => getMessageUiKey(msg, index) === messageKey)
+    if (!targetMessage) return
+    const currentReaction = targetMessage.reaction || null
+    const nextReaction = currentReaction === emoji ? null : emoji
+
+    if (!targetMessage.messageId || !socket?.connected) {
+      setMessages((prev) => prev.map((msg, index) => (
+        getMessageUiKey(msg, index) === messageKey
+          ? { ...msg, reaction: nextReaction }
+          : msg
+      )))
+      if (!targetMessage.messageId) {
+        toast.error('Reaction will sync after the message is sent.')
       }
-      return { ...prev, [messageKey]: emoji }
+      setReactionTray(null)
+      setActiveMessageActionsKey(messageKey)
+      return
+    }
+
+    setMessages((prev) => prev.map((msg) => (
+      Number(msg?.messageId || 0) === Number(targetMessage.messageId || 0)
+        ? { ...msg, reaction: nextReaction }
+        : msg
+    )))
+
+    socket.publish({
+      destination: '/app/chat.react',
+      body: JSON.stringify({
+        messageId: targetMessage.messageId,
+        reaction: nextReaction,
+        fromUsername: flow.username,
+      }),
     })
+
     setReactionTray(null)
     setActiveMessageActionsKey(messageKey)
   }
@@ -2403,9 +2446,9 @@ function ChatPageNew() {
                   {shouldShowSeenInline && index === lastOutgoingIndex && activeMessageActionsKey !== messageKey && (
                     <span className="message-seen-inline">Seen</span>
                   )}
-                  {messageReactions[messageKey] && (
-                    <span className="message-reaction-badge" aria-label={`Reaction ${messageReactions[messageKey]}`}>
-                      {messageReactions[messageKey]}
+                  {message.reaction && (
+                    <span className="message-reaction-badge" aria-label={`Reaction ${message.reaction}`}>
+                      {message.reaction}
                     </span>
                   )}
                 </div>
