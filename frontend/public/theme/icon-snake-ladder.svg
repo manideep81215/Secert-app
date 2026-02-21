@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Snake and ladders icon">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fef2cc" />
+      <stop offset="100%" stop-color="#e4bf7d" />
+    </linearGradient>
+  </defs>
+  <rect x="7" y="7" width="114" height="114" rx="18" fill="url(#bg)" stroke="#6d3f20" stroke-width="8" />
+  <g stroke="#7a4a2a" stroke-width="3">
+    <line x1="31" y1="23" x2="31" y2="105" />
+    <line x1="55" y1="23" x2="55" y2="105" />
+    <line x1="79" y1="23" x2="79" y2="105" />
+    <line x1="103" y1="23" x2="103" y2="105" />
+    <line x1="19" y1="37" x2="109" y2="37" />
+    <line x1="19" y1="59" x2="109" y2="59" />
+    <line x1="19" y1="81" x2="109" y2="81" />
+    <line x1="19" y1="103" x2="109" y2="103" />
+  </g>
+  <g stroke-linecap="round" fill="none">
+    <path d="M28 96 C 44 78, 40 63, 56 47 C 70 34, 64 26, 78 20" stroke="#5f8f48" stroke-width="7" />
+    <path d="M99 34 C 87 45, 90 58, 76 70 C 61 82, 68 96, 50 108" stroke="#a15e36" stroke-width="7" />
+    <line x1="34" y1="91" x2="52" y2="64" stroke="#6d4b2c" stroke-width="4" />
+    <line x1="42" y1="95" x2="60" y2="68" stroke="#6d4b2c" stroke-width="4" />
+  </g>
+</svg>

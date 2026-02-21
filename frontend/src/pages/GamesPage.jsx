@@ -16,6 +16,7 @@ const GAME_ITEMS = [
   { id: 'rps', title: 'Rock / Paper / Scissors', icon: '/theme/icon-rock-paper-scissors.png', path: '/games/rps' },
   { id: 'coin', title: 'Heads / Tails', icon: '/theme/icon-coin.png', path: '/games/coin' },
   { id: 'ttt', title: 'Tic-Tac-Toe', icon: '/theme/icon-tic-tac-toe.png', path: '/games/ttt' },
+  { id: 'snake-ladder', title: 'Snake & Ladders', icon: '/theme/icon-snake-ladder.svg', path: '/games/snake-ladder' },
 ]
 
 function GamesPage() {

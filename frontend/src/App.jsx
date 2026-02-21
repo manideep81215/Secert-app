@@ -8,6 +8,7 @@ import GamesPage from './pages/GamesPage'
 import RpsGamePage from './pages/RpsGamePage'
 import CoinGamePage from './pages/CoinGamePage'
 import TttGamePage from './pages/TttGamePage'
+import SnakeLadderGamePage from './pages/SnakeLadderGamePage'
 import VerifyPage from './pages/VerifyPage'
 import UsersListPage from './pages/UsersListPage'
 import ChatPageNew from './pages/ChatPageNew'
@@ -297,6 +298,7 @@ function App() {
           <Route path="/games/rps" element={isAuthenticated ? <RpsGamePage /> : <Navigate to="/auth" replace />} />
           <Route path="/games/coin" element={isAuthenticated ? <CoinGamePage /> : <Navigate to="/auth" replace />} />
           <Route path="/games/ttt" element={isAuthenticated ? <TttGamePage /> : <Navigate to="/auth" replace />} />
+          <Route path="/games/snake-ladder" element={isAuthenticated ? <SnakeLadderGamePage /> : <Navigate to="/auth" replace />} />
           <Route path="/verify" element={isAuthenticated ? <VerifyPage /> : <Navigate to="/auth" replace />} />
           <Route path="/users" element={isAuthenticated ? <UsersListPage /> : <Navigate to="/auth" replace />} />
           <Route path="/chat" element={isAuthenticated ? <ChatPageNew /> : <Navigate to="/auth" replace />} />
