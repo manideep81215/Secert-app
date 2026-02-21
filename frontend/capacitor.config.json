@@ -1,6 +1,6 @@
 {
-  "appId": "com.yourdomain.app",
-  "appName": "YourApp",
+  "appId": "com.simpgames.quest",
+  "appName": "Simp Games Quest",
   "webDir": "dist",
   "server": {
     "androidScheme": "https",

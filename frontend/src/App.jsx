@@ -13,6 +13,7 @@ import ChatPageNew from './pages/ChatPageNew'
 import ChatInfoPage from './pages/ChatInfoPage'
 import ProfilePage from './pages/ProfilePage'
 import { useFlowState } from './hooks/useFlowState'
+import { ensureNotificationPermission as ensureLocalNotificationPermission } from './lib/notifications'
 import { ensurePushSubscription } from './lib/pushSubscription'
 import './App.css'
 
@@ -26,6 +27,7 @@ const pageMotion = {
 function App() {
   const location = useLocation()
   const [flow] = useFlowState()
+  const isAuthenticated = Boolean((flow?.username || '').trim() && (flow?.token || '').trim())
   const [installPromptEvent, setInstallPromptEvent] = useState(null)
   const [isAppInstalled, setIsAppInstalled] = useState(false)
   const [showIosInstallHelp, setShowIosInstallHelp] = useState(false)
@@ -136,23 +138,36 @@ function App() {
     }
   }, [flow?.token])
 
+  useEffect(() => {
+    if (!flow?.token) return
+    const cap = typeof window !== 'undefined' ? window.Capacitor : null
+    const isNative = typeof cap?.isNativePlatform === 'function'
+      ? cap.isNativePlatform()
+      : cap?.getPlatform?.() === 'android' || cap?.getPlatform?.() === 'ios'
+    if (!isNative) return
+
+    ensureLocalNotificationPermission(true).catch(() => {
+      // Ignore runtime permission request failures.
+    })
+  }, [flow?.token])
+
   return (
     <div className={`app-wrap container-fluid ${isFullBleedRoute ? 'app-auth-route p-0' : 'py-4 px-3 px-md-4'}`}>
       <div className={isFullBleedRoute ? 'app-auth-max' : 'mx-auto app-max'}>
         <AnimatePresence mode="wait">
           <motion.div key={location.pathname} {...pageMotion}>
             <Routes>
-              <Route path="/" element={<Navigate to="/games" replace />} />
+              <Route path="/" element={<Navigate to="/auth" replace />} />
               <Route path="/auth" element={<AuthPage />} />
-              <Route path="/games" element={<GamesPage />} />
-              <Route path="/games/rps" element={<RpsGamePage />} />
-              <Route path="/games/coin" element={<CoinGamePage />} />
-              <Route path="/games/ttt" element={<TttGamePage />} />
-              <Route path="/verify" element={<VerifyPage />} />
-              <Route path="/users" element={<UsersListPage />} />
-              <Route path="/chat" element={<ChatPageNew />} />
-              <Route path="/chat/info" element={<ChatInfoPage />} />
-              <Route path="/profile" element={<ProfilePage />} />
+              <Route path="/games" element={isAuthenticated ? <GamesPage /> : <Navigate to="/auth" replace />} />
+              <Route path="/games/rps" element={isAuthenticated ? <RpsGamePage /> : <Navigate to="/auth" replace />} />
+              <Route path="/games/coin" element={isAuthenticated ? <CoinGamePage /> : <Navigate to="/auth" replace />} />
+              <Route path="/games/ttt" element={isAuthenticated ? <TttGamePage /> : <Navigate to="/auth" replace />} />
+              <Route path="/verify" element={isAuthenticated ? <VerifyPage /> : <Navigate to="/auth" replace />} />
+              <Route path="/users" element={isAuthenticated ? <UsersListPage /> : <Navigate to="/auth" replace />} />
+              <Route path="/chat" element={isAuthenticated ? <ChatPageNew /> : <Navigate to="/auth" replace />} />
+              <Route path="/chat/info" element={isAuthenticated ? <ChatInfoPage /> : <Navigate to="/auth" replace />} />
+              <Route path="/profile" element={isAuthenticated ? <ProfilePage /> : <Navigate to="/auth" replace />} />
               <Route path="*" element={<Navigate to="/auth" replace />} />
             </Routes>
           </motion.div>

@@ -1,4 +1,4 @@
-import { useEffect, useState, useTransition } from 'react'
+import { useState, useTransition } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
@@ -29,12 +29,6 @@ function AuthPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [, startTransition] = useTransition()
-
-  useEffect(() => {
-    if (flow.username && flow.token) {
-      navigate('/games', { replace: true })
-    }
-  }, [flow.username, flow.token, navigate])
 
   const submit = async (event) => {
     event.preventDefault()
