@@ -1,0 +1,24 @@
+# VCS / IDE
+.git
+.github
+.idea
+.vscode
+
+# Build outputs
+target
+build
+out
+
+# Local data/runtime files
+data
+*.mv.db
+*.trace.db
+*.log
+
+# Frontend and unrelated workspace folders (defensive)
+../frontend
+
+# Misc
+Dockerfile*
+*.iml
+node_modules
