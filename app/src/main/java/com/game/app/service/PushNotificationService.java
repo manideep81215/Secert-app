@@ -28,6 +28,7 @@ import com.google.auth.oauth2.GoogleCredentials;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
 import com.google.firebase.messaging.AndroidConfig;
+import com.google.firebase.messaging.AndroidNotification;
 import com.google.firebase.messaging.FirebaseMessaging;
 import com.google.firebase.messaging.FirebaseMessagingException;
 import com.google.firebase.messaging.Message;
@@ -45,6 +46,8 @@ public class PushNotificationService {
   private static final Urgency PUSH_URGENCY = Urgency.HIGH;
   private static final long FCM_TTL_MILLIS = 24L * 60L * 60L * 1000L;
   private static final String FCM_APP_NAME = "simp-games-quest-fcm";
+  private static final String FCM_ANDROID_CHANNEL_ID = "chat_messages";
+  private static final String FCM_ANDROID_SMALL_ICON = "ic_stat_simp_games";
 
   private final PushSubscriptionRepository pushSubscriptionRepository;
   private final MobilePushTokenRepository mobilePushTokenRepository;
@@ -140,24 +143,25 @@ public class PushNotificationService {
 
     String payload = buildPayload(title, body, url);
 
-    CompletableFuture.runAsync(() -> {
-      if (!subscriptions.isEmpty()) {
-        try {
-          PushService service = new PushService(vapidPublicKey, vapidPrivateKey, vapidSubject);
-          for (PushSubscriptionEntity subscription : subscriptions) {
-            sendToSubscription(service, subscription, payload);
-          }
-        } catch (Exception ignored) {
-          // Ignore web-push broadcast failures.
-        }
-      }
-
-      if (!mobileTokens.isEmpty()) {
-        FirebaseMessaging messaging = getFirebaseMessaging();
-        if (messaging == null) return;
+    // Send native mobile push immediately for lowest delivery latency.
+    if (!mobileTokens.isEmpty()) {
+      FirebaseMessaging messaging = getFirebaseMessaging();
+      if (messaging != null) {
         for (MobilePushTokenEntity mobileToken : mobileTokens) {
           sendToMobileToken(messaging, mobileToken, title, body, url);
         }
+      }
+    }
+
+    CompletableFuture.runAsync(() -> {
+      if (subscriptions.isEmpty()) return;
+      try {
+        PushService service = new PushService(vapidPublicKey, vapidPrivateKey, vapidSubject);
+        for (PushSubscriptionEntity subscription : subscriptions) {
+          sendToSubscription(service, subscription, payload);
+        }
+      } catch (Exception ignored) {
+        // Ignore web-push broadcast failures.
       }
     });
   }
@@ -302,6 +306,11 @@ public class PushNotificationService {
           .setAndroidConfig(AndroidConfig.builder()
               .setPriority(AndroidConfig.Priority.HIGH)
               .setTtl(FCM_TTL_MILLIS)
+              .setNotification(AndroidNotification.builder()
+                  .setChannelId(FCM_ANDROID_CHANNEL_ID)
+                  .setIcon(FCM_ANDROID_SMALL_ICON)
+                  .setSound("default")
+                  .build())
               .build())
           .build();
       messaging.send(message);

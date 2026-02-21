@@ -141,7 +141,6 @@ export async function pushNotify(title, body) {
       id: notificationId,
       title: title || 'New message',
       body: body || '',
-      schedule: { at: new Date(Date.now() + 50), allowWhileIdle: true },
       channelId: NATIVE_CHAT_CHANNEL_ID,
       actionTypeId: 'chat',
       extra: { url: '/#/chat' },
