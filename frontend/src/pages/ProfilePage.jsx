@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import { resetFlowScores, resetFlowState, useFlowState } from '../hooks/useFlowState'
@@ -16,7 +16,8 @@ function ProfilePage() {
   const [secretKey, setSecretKey] = useState('')
   const [isFirstTime, setIsFirstTime] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const timerRef = useRef(null)
+  const longPressTimerRef = useRef(null)
+  const longPressTriggeredRef = useRef(false)
   const wins = flow.wins || { rps: 0, coin: 0, ttt: 0 }
   const totalWins = useMemo(() => wins.rps + wins.coin + wins.ttt, [wins])
   const previousPage = location.state?.from || '/games'
@@ -65,54 +66,68 @@ function ProfilePage() {
     navigate('/auth', { replace: true })
   }
 
-  const handleResetScoreMouseDown = () => {
-    timerRef.current = setTimeout(async () => {
-      setIsLoading(true)
-      try {
-        // Check if user has a secret key in the database
-        const response = await fetch(
-          `${API_BASE}/users/${flow.userId}/secret-key-exists`,
-          {
-            method: 'GET',
-            headers: {
-              Authorization: `Bearer ${flow.token}`,
-            }
+  const openSecretKeyModal = async () => {
+    setIsLoading(true)
+    try {
+      // Check if user has a secret key in the database
+      const response = await fetch(
+        `${API_BASE}/users/${flow.userId}/secret-key-exists`,
+        {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${flow.token}`,
           }
-        )
-        
-        if (response.status === 401) {
-          handleUnauthorized()
-          return
         }
+      )
 
-        if (response.ok) {
-          const data = await response.json()
-          setIsFirstTime(!data.exists)
-          setShowSecretKeyModal(true)
-          setSecretKey('')
-        } else {
-          toast.error('Unable to check secret key status.')
-        }
-      } catch (error) {
-        console.error('Error checking secret key:', error)
-        toast.error('Unable to reach server.')
-      } finally {
-        setIsLoading(false)
+      if (response.status === 401) {
+        handleUnauthorized()
+        return
       }
-    }, 2000)
-  }
 
-  const handleResetScoreMouseUp = () => {
-    if (timerRef.current) {
-      clearTimeout(timerRef.current)
-      timerRef.current = null
+      if (response.ok) {
+        const data = await response.json()
+        setIsFirstTime(!data.exists)
+        setShowSecretKeyModal(true)
+        setSecretKey('')
+      } else {
+        toast.error('Unable to check secret key status.')
+      }
+    } catch (error) {
+      console.error('Error checking secret key:', error)
+      toast.error('Unable to reach server.')
+    } finally {
+      setIsLoading(false)
     }
   }
 
-  const handleResetScoreMouseLeave = () => {
-    if (timerRef.current) {
-      clearTimeout(timerRef.current)
-      timerRef.current = null
+  const handleResetScoreClick = () => {
+    if (longPressTriggeredRef.current) {
+      longPressTriggeredRef.current = false
+      return
+    }
+    resetFlowScores(setFlow)
+    toast.success('Score reset successfully!')
+  }
+
+  const handleResetScoreLongPressStart = () => {
+    if (isLoading) return
+    longPressTriggeredRef.current = false
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current)
+      longPressTimerRef.current = null
+    }
+    longPressTimerRef.current = setTimeout(() => {
+      longPressTriggeredRef.current = true
+      openSecretKeyModal()
+      longPressTimerRef.current = null
+    }, 1200)
+  }
+
+  const handleResetScoreLongPressEnd = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current)
+      longPressTimerRef.current = null
     }
   }
 
@@ -145,10 +160,9 @@ function ProfilePage() {
 
         if (response.ok) {
           setFlow((prev) => ({ ...prev, verified: true }))
-          toast.success('Confirmation key created successfully!')
+          toast.success('Confirmation key created successfully! Redirecting to chat...')
           setShowSecretKeyModal(false)
           setSecretKey('')
-          // Redirect to chat after a short delay
           setTimeout(() => {
             navigate('/chat')
           }, 500)
@@ -182,7 +196,6 @@ function ProfilePage() {
             toast.success('Confirmation key verified! Redirecting to chat...')
             setShowSecretKeyModal(false)
             setSecretKey('')
-            // Redirect to chat after a short delay
             setTimeout(() => {
               navigate('/chat')
             }, 500)
@@ -253,11 +266,13 @@ function ProfilePage() {
 
         <button 
           className="profile-reset-secret-btn" 
-          onMouseDown={handleResetScoreMouseDown}
-          onMouseUp={handleResetScoreMouseUp}
-          onMouseLeave={handleResetScoreMouseLeave}
-          onTouchStart={handleResetScoreMouseDown}
-          onTouchEnd={handleResetScoreMouseUp}
+          onClick={handleResetScoreClick}
+          onMouseDown={handleResetScoreLongPressStart}
+          onMouseUp={handleResetScoreLongPressEnd}
+          onMouseLeave={handleResetScoreLongPressEnd}
+          onTouchStart={handleResetScoreLongPressStart}
+          onTouchEnd={handleResetScoreLongPressEnd}
+          onTouchCancel={handleResetScoreLongPressEnd}
           disabled={isLoading}
         >
           Reset Score
@@ -273,8 +288,8 @@ function ProfilePage() {
             </h3>
             <p className="modal-description">
               {isFirstTime 
-                ? 'Enter a key to reset score - this cannot be undone'
-                : 'Enter key to reset score - this cannot be undone'}
+                ? 'Create a confirmation key for secure access to chat'
+                : 'Enter your confirmation key to continue to chat'}
             </p>
             <input
               type="password"

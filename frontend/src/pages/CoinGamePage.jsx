@@ -62,6 +62,7 @@ function CoinGamePage() {
       <header className="coin-header">
         <button className="coin-back-btn" onClick={() => navigate('/games')}>Back</button>
         <h1>Heads / Tails</h1>
+        <span className="coin-header-spacer" aria-hidden="true" />
       </header>
 
       <div className="coin-board-wrap">

@@ -1,7 +1,7 @@
 .single-game-page {
   min-height: 100vh;
   min-height: 100dvh;
-  padding: 1rem;
+  padding: calc(0.8rem + env(safe-area-inset-top)) 1rem 1rem;
   display: grid;
   align-content: start;
   gap: 1rem;
@@ -16,6 +16,10 @@
   grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 0.6rem;
+}
+
+.single-game-top-spacer {
+  min-width: 3.2rem;
 }
 
 .single-game-top h2 {
@@ -54,6 +58,42 @@
   height: 120px;
   border-radius: 999px;
   object-fit: contain;
+}
+
+.ttt-difficulty-bar {
+  width: min(320px, 100%);
+  display: grid;
+  gap: 0.35rem;
+}
+
+.ttt-difficulty-label {
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #6a3a1f;
+}
+
+.ttt-difficulty-menu {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.ttt-difficulty-btn {
+  border: 2px solid #6a391b;
+  border-radius: 0.6rem;
+  background: #fff2cf;
+  color: #4f2d17;
+  font-weight: 800;
+  padding: 0.28rem 0.6rem;
+  transition: transform 0.25s ease, box-shadow 0.25s ease, background 0.25s ease, color 0.25s ease;
+}
+
+.ttt-difficulty-btn.active {
+  background: linear-gradient(180deg, #8bc34a, #4f8f41);
+  color: #fff7df;
+  border-color: #3d6b33;
 }
 
 .ttt-board-grid {

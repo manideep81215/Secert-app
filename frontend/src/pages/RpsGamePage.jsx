@@ -75,6 +75,7 @@ function RpsGamePage() {
       <header className="rps-header">
         <button className="rps-back-btn" onClick={() => navigate('/games')}>Back</button>
         <h1>Rock / Paper / Scissors</h1>
+        <span className="rps-header-spacer" aria-hidden="true" />
       </header>
 
       <div className="rps-board-wrap">

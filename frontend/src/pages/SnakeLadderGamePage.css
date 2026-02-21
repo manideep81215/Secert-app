@@ -2,7 +2,7 @@
   min-height: 100vh;
   min-height: 100svh;
   min-height: 100dvh;
-  padding: 1rem;
+  padding: calc(0.8rem + env(safe-area-inset-top)) 1rem 1rem;
   background:
     radial-gradient(circle at 10% 18%, rgba(248, 234, 174, 0.4), rgba(248, 234, 174, 0) 32%),
     radial-gradient(circle at 88% 20%, rgba(179, 230, 199, 0.45), rgba(179, 230, 199, 0) 34%),
@@ -13,7 +13,8 @@
 .snake-header {
   width: min(980px, 100%);
   margin: 0 auto 0.75rem;
-  display: flex;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
   gap: 0.8rem;
   align-items: center;
 }
@@ -22,6 +23,11 @@
   margin: 0;
   color: #4f2a16;
   font-weight: 900;
+  text-align: center;
+}
+
+.snake-header-spacer {
+  min-width: 3.7rem;
 }
 
 .snake-back-btn {
@@ -50,6 +56,19 @@
   align-items: center;
   gap: 0.6rem;
   flex-wrap: wrap;
+}
+
+.snake-difficulty-bar {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.snake-difficulty-label {
+  font-size: 0.76rem;
+  font-weight: 900;
+  color: #6a3a1b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .snake-difficulty-menu {
@@ -118,19 +137,21 @@
   left: 3px;
   font-size: 0.66rem;
   font-weight: 800;
-  color: #6a3f20;
+  color: #4a2b14;
+  text-shadow: 0 1px 0 rgba(255, 246, 214, 0.65);
 }
 
 .snake-token {
   z-index: 5;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border-radius: 999px;
   display: grid;
   place-items: center;
   font-size: 0.72rem;
   font-weight: 900;
-  border: 2px solid #5e3418;
+  border: 2px solid #4b2912;
+  box-shadow: 0 0 0 2px rgba(255, 243, 214, 0.8);
 }
 
 .snake-token-you {
@@ -156,21 +177,21 @@
   stroke: #8b5a2b;
   stroke-width: 1.2;
   stroke-linecap: round;
-  opacity: 1;
+  opacity: 0.48;
 }
 
 .ladder-shadow {
   stroke: rgba(45, 27, 12, 0.38);
   stroke-width: 1.03;
   stroke-linecap: round;
-  opacity: 1;
+  opacity: 0.34;
 }
 
 .ladder-rung {
   stroke: #f5b14b;
   stroke-width: 1.08;
   stroke-linecap: round;
-  opacity: 1;
+  opacity: 0.45;
 }
 
 .ladder-line .ladder-rung:nth-child(odd) {

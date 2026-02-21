@@ -204,7 +204,7 @@ function SnakeLadderGamePage() {
       setStatus(`${playerKey === 'you' ? 'You' : 'Computer'} rolled ${roll}. Need exact number for 100.`)
     } else {
       setStatus(`${playerKey === 'you' ? 'You' : 'Computer'} rolled ${roll}. Moving...`)
-      await animateMoveTo(playerKey, landing, 170)
+      await animateMoveTo(playerKey, landing, 260)
       if (animationVersion !== animationVersionRef.current) return
     }
 
@@ -215,7 +215,7 @@ function SnakeLadderGamePage() {
       setStatus(`${isLadder ? 'Ladder up!' : 'Snake bite!'} ${landing} to ${target}.`)
       await waitFor(250)
       if (animationVersion !== animationVersionRef.current) return
-      await animateMoveTo(playerKey, target, 150)
+      await animateMoveTo(playerKey, target, 230)
       if (animationVersion !== animationVersionRef.current) return
       finalCell = target
     } else if (moved <= 100) {
@@ -257,21 +257,25 @@ function SnakeLadderGamePage() {
       <header className="snake-header">
         <button className="snake-back-btn" onClick={() => navigate('/games')}>Back</button>
         <h1>Snake & Ladders</h1>
+        <span className="snake-header-spacer" aria-hidden="true" />
       </header>
 
       <div className="snake-card">
         <div className="snake-toolbar">
-          <div className="snake-difficulty-menu" role="group" aria-label="Difficulty options">
-            {DIFFICULTY_KEYS.map((key) => (
-              <button
-                key={key}
-                type="button"
-                className={`snake-difficulty-btn ${difficulty === key ? 'active' : ''}`}
-                onClick={() => resetGame(key)}
-              >
-                {DIFFICULTY_PRESETS[key].label}
-              </button>
-            ))}
+          <div className="snake-difficulty-bar">
+            <span className="snake-difficulty-label">Difficulty</span>
+            <div className="snake-difficulty-menu" role="group" aria-label="Difficulty options">
+              {DIFFICULTY_KEYS.map((key) => (
+                <button
+                  key={key}
+                  type="button"
+                  className={`snake-difficulty-btn ${difficulty === key ? 'active' : ''}`}
+                  onClick={() => resetGame(key)}
+                >
+                  {DIFFICULTY_PRESETS[key].label}
+                </button>
+              ))}
+            </div>
           </div>
 
           <button type="button" className="snake-reset-btn" onClick={() => resetGame()}>

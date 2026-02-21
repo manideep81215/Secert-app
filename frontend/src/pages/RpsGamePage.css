@@ -1,7 +1,7 @@
 .rps-page {
   min-height: 100vh;
   min-height: 100dvh;
-  padding: 1rem;
+  padding: calc(0.8rem + env(safe-area-inset-top)) 1rem 1rem;
   background:
     radial-gradient(circle at 15% 12%, rgba(255, 228, 150, 0.4) 0%, rgba(255, 228, 150, 0) 34%),
     radial-gradient(circle at 82% 22%, rgba(255, 191, 80, 0.28) 0%, rgba(255, 191, 80, 0) 36%),
@@ -17,6 +17,10 @@
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
+}
+
+.rps-header-spacer {
+  min-width: 3.7rem;
 }
 
 .rps-back-btn {

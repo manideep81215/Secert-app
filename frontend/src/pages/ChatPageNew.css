@@ -757,6 +757,7 @@
   justify-content: space-between;
   align-items: center;
   margin: 0 1.5rem;
+  z-index: 180;
 }
 
 .edit-preview {
@@ -2175,6 +2176,16 @@
     z-index: 230 !important;
     margin: 0 !important;
     padding-bottom: calc(0.45rem + env(safe-area-inset-bottom)) !important;
+  }
+
+  .chat-container:not(.mobile-users-open) .reply-preview {
+    position: fixed !important;
+    left: max(0.65rem, env(safe-area-inset-left)) !important;
+    right: max(0.65rem, env(safe-area-inset-right)) !important;
+    bottom: calc(68px + env(safe-area-inset-bottom)) !important;
+    margin: 0 !important;
+    z-index: 240 !important;
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.2);
   }
 }
 

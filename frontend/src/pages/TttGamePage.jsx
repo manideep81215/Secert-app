@@ -6,6 +6,7 @@ import './TttGamePage.css'
 
 const PLAYER = 'X'
 const CPU = 'O'
+const TTT_DIFFICULTIES = ['easy', 'medium', 'hard']
 
 function getFreeCells(board) {
   return board.map((cell, idx) => (cell ? null : idx)).filter((idx) => idx !== null)
@@ -46,12 +47,45 @@ function getMediumCpuMove(board) {
   return pickRandom(free)
 }
 
+function minimax(board, isCpuTurn) {
+  const winner = getTttWinner(board)
+  if (winner === CPU) return { score: 10 }
+  if (winner === PLAYER) return { score: -10 }
+  if (winner === 'draw') return { score: 0 }
+
+  const free = getFreeCells(board)
+  if (!free.length) return { score: 0 }
+
+  let bestMove = { score: isCpuTurn ? -Infinity : Infinity, index: free[0] }
+  for (const idx of free) {
+    const next = [...board]
+    next[idx] = isCpuTurn ? CPU : PLAYER
+    const result = minimax(next, !isCpuTurn)
+    if (isCpuTurn) {
+      if (result.score > bestMove.score) bestMove = { score: result.score, index: idx }
+    } else if (result.score < bestMove.score) {
+      bestMove = { score: result.score, index: idx }
+    }
+  }
+  return bestMove
+}
+
+function getHardCpuMove(board) {
+  const best = minimax(board, true)
+  return Number.isInteger(best?.index) ? best.index : -1
+}
+
+function getEasyCpuMove(board) {
+  return pickRandom(getFreeCells(board))
+}
+
 function TttGamePage() {
   const navigate = useNavigate()
   const [flow, setFlow] = useFlowState()
   const [board, setBoard] = useState(Array(9).fill(''))
   const [text, setText] = useState('Play as X')
   const [lastMoveIndex, setLastMoveIndex] = useState(null)
+  const [difficulty, setDifficulty] = useState('medium')
 
   useEffect(() => {
     if (!flow.username || !flow.token) navigate('/auth')
@@ -71,7 +105,12 @@ function TttGamePage() {
     let result = getTttWinner(next)
 
     if (!result) {
-      const cpuMove = getMediumCpuMove(next)
+      const cpuMove =
+        difficulty === 'easy'
+          ? getEasyCpuMove(next)
+          : difficulty === 'hard'
+            ? getHardCpuMove(next)
+            : getMediumCpuMove(next)
       if (cpuMove >= 0) {
         next[cpuMove] = CPU
         latestMove = cpuMove
@@ -101,7 +140,10 @@ function TttGamePage() {
     }
     if (result === 'draw') {
       setText('Draw, reset and retry')
+      return
     }
+
+    setText(`Mode: ${difficulty[0].toUpperCase()}${difficulty.slice(1)}`)
   }
 
   return (
@@ -109,10 +151,31 @@ function TttGamePage() {
       <header className="single-game-top">
         <button onClick={() => navigate('/games')}>Back</button>
         <h2>Tic-Tac-Toe</h2>
+        <span className="single-game-top-spacer" aria-hidden="true" />
       </header>
 
       <div className="ttt-stage">
         <img src="/theme/icon-tic-tac-toe.png" alt="Tic Tac Toe" className="single-game-icon" />
+        <div className="ttt-difficulty-bar">
+          <span className="ttt-difficulty-label">Difficulty</span>
+          <div className="ttt-difficulty-menu" role="group" aria-label="Tic Tac Toe difficulty">
+            {TTT_DIFFICULTIES.map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                className={`ttt-difficulty-btn ${difficulty === mode ? 'active' : ''}`}
+                onClick={() => {
+                  setDifficulty(mode)
+                  setBoard(Array(9).fill(''))
+                  setLastMoveIndex(null)
+                  setText(`Mode: ${mode[0].toUpperCase()}${mode.slice(1)}`)
+                }}
+              >
+                {mode[0].toUpperCase() + mode.slice(1)}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="ttt-board-grid">
           {board.map((cell, index) => (
             <button
@@ -126,7 +189,7 @@ function TttGamePage() {
         </div>
         <div className="ttt-bottom">
           <p>{text}</p>
-          <button onClick={() => { setBoard(Array(9).fill('')); setText('Play as X'); setLastMoveIndex(null) }}>Reset</button>
+          <button onClick={() => { setBoard(Array(9).fill('')); setText(`Mode: ${difficulty[0].toUpperCase()}${difficulty.slice(1)}`); setLastMoveIndex(null) }}>Reset</button>
         </div>
       </div>
     </section>
