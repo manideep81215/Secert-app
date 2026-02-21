@@ -8,6 +8,7 @@ function CoinGamePage() {
   const navigate = useNavigate()
   const [flow, setFlow] = useFlowState()
   const [round, setRound] = useState(null)
+  const [isResolving, setIsResolving] = useState(false)
 
   useEffect(() => {
     if (!flow.username || !flow.token) navigate('/auth')
@@ -18,10 +19,18 @@ function CoinGamePage() {
     setFlow((prev) => ({ ...prev, unlocked: true }))
   }
 
-  const play = (guess) => {
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+  const play = async (guess) => {
+    if (isResolving) return
+    setIsResolving(true)
+    setRound({ guess, flip: null, win: false })
+    await sleep(850)
+
     const flip = randomPick(['heads', 'tails'])
     const win = flip === guess
     setRound({ guess, flip, win })
+    setIsResolving(false)
     if (flip === guess) {
       setFlow((prev) => ({
         ...prev,
@@ -37,15 +46,16 @@ function CoinGamePage() {
   }
 
   const resultText = (() => {
+    if (isResolving) return 'Flipping coin...'
     if (!round) return 'Call the toss to start the match.'
     if (round.win) return `Hit! The coin landed on ${round.flip === 'heads' ? 'Heads' : 'Tails'}.`
     return `Miss! The coin landed on ${round.flip === 'heads' ? 'Heads' : 'Tails'}.`
   })()
 
   const yourPickText = round ? (round.guess === 'heads' ? 'Picked: Heads' : 'Picked: Tails') : 'Picked: -'
-  const cpuPickText = round ? (round.flip === 'heads' ? 'Result: Heads' : 'Result: Tails') : 'Result: -'
+  const cpuPickText = round ? (round.flip ? (round.flip === 'heads' ? 'Result: Heads' : 'Result: Tails') : 'Result: ...') : 'Result: -'
   const yourCoin = round?.guess === 'tails' ? 'T' : 'H'
-  const cpuCoin = round?.flip === 'tails' ? 'T' : 'H'
+  const cpuCoin = round?.flip ? (round.flip === 'tails' ? 'T' : 'H') : '?'
 
   return (
     <section className="coin-page">
@@ -76,9 +86,10 @@ function CoinGamePage() {
         </div>
 
         <div className="coin-actions">
-          <button onClick={() => play('heads')}>Heads</button>
-          <button onClick={() => play('tails')}>Tails</button>
+          <button onClick={() => play('heads')} disabled={isResolving}>{isResolving ? '...' : 'Heads'}</button>
+          <button onClick={() => play('tails')} disabled={isResolving}>{isResolving ? '...' : 'Tails'}</button>
         </div>
+        {isResolving && <div className="game-loading-inline" aria-live="polite"><span className="game-spinner" />Processing...</div>}
       </div>
     </section>
   )

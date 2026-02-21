@@ -70,9 +70,9 @@ function App() {
     const authUsername = (flow?.username || '').trim()
     if (!authToken || !authUsername) return undefined
 
-    const routeHandlesOwnChatNotifications = (pathname) => {
+    const shouldSuppressGlobalMessageNotification = (pathname) => {
       if (!pathname) return false
-      return pathname.startsWith('/chat')
+      return pathname === '/chat'
     }
 
     const previewFromPayload = (payload) => {
@@ -102,7 +102,7 @@ function App() {
             const fromUsername = (payload?.fromUsername || '').trim()
             if (!fromUsername) return
             const currentPath = currentPathRef.current || ''
-            if (routeHandlesOwnChatNotifications(currentPath)) return
+            if (shouldSuppressGlobalMessageNotification(currentPath)) return
 
             const preview = previewFromPayload(payload)
             await pushNotify(`@${fromUsername}`, preview)

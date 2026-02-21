@@ -8,6 +8,7 @@ function RpsGamePage() {
   const navigate = useNavigate()
   const [flow, setFlow] = useFlowState()
   const [round, setRound] = useState(null)
+  const [isResolving, setIsResolving] = useState(false)
 
   useEffect(() => {
     if (!flow.username || !flow.token) navigate('/auth')
@@ -18,11 +19,19 @@ function RpsGamePage() {
     setFlow((prev) => ({ ...prev, unlocked: true }))
   }
 
-  const play = (pick) => {
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+  const play = async (pick) => {
+    if (isResolving) return
+    setIsResolving(true)
+    setRound({ pick, cpu: null, draw: false, win: false })
+    await sleep(850)
+
     const cpu = randomPick(['rock', 'paper', 'scissors'])
     const draw = pick === cpu
     const win = !draw && winsAgainst[pick] === cpu
     setRound({ pick, cpu, draw, win })
+    setIsResolving(false)
 
     if (pick === cpu) {
       return
@@ -54,6 +63,7 @@ function RpsGamePage() {
   }
 
   const resultText = (() => {
+    if (isResolving) return 'Thinking...'
     if (!round) return 'Choose Rock, Paper, or Scissors to start.'
     if (round.draw) return `Draw! Both picked ${displayMove(round.pick)}.`
     if (round.win) return `You Win! ${displayMove(round.pick)} beats ${displayMove(round.cpu)}.`
@@ -89,10 +99,11 @@ function RpsGamePage() {
         </div>
 
         <div className="rps-actions">
-          <button onClick={() => play('rock')}>Rock</button>
-          <button onClick={() => play('paper')}>Paper</button>
-          <button onClick={() => play('scissors')}>Scissors</button>
+          <button onClick={() => play('rock')} disabled={isResolving}>{isResolving ? '...' : 'Rock'}</button>
+          <button onClick={() => play('paper')} disabled={isResolving}>{isResolving ? '...' : 'Paper'}</button>
+          <button onClick={() => play('scissors')} disabled={isResolving}>{isResolving ? '...' : 'Scissors'}</button>
         </div>
+        {isResolving && <div className="game-loading-inline" aria-live="polite"><span className="game-spinner" />Waiting for result...</div>}
       </div>
     </section>
   )

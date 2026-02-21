@@ -34,6 +34,7 @@
   color: #4f2d17;
   font-weight: 700;
   padding: 0.35rem 0.7rem;
+  transition: transform 0.45s ease, box-shadow 0.45s ease, background 0.45s ease, color 0.45s ease;
 }
 
 .ttt-stage {
@@ -65,6 +66,13 @@
 .ttt-board-cell {
   min-height: 3rem;
   font-size: 1.15rem;
+}
+
+.ttt-board-cell-last {
+  background: linear-gradient(180deg, #9be79d, #62cb69);
+  color: #133a17;
+  border-color: #2f8a3f;
+  box-shadow: 0 0 0 2px rgba(60, 153, 76, 0.25);
 }
 
 .ttt-bottom {

@@ -3,7 +3,19 @@ import { LocalNotifications } from '@capacitor/local-notifications'
 
 const CHAT_NOTIFY_CUTOFFS_KEY = 'chat_notify_cutoffs_v1'
 const NATIVE_CHAT_CHANNEL_ID = 'chat_messages'
+const NOTIFY_DEDUP_WINDOW_MS = 1800
 let nativeNotificationSetupDone = false
+let lastNotifyMeta = { key: '', at: 0 }
+
+function shouldSkipDuplicateNotification(title, body) {
+  const key = `${String(title || '').trim()}::${String(body || '').trim()}`
+  const now = Date.now()
+  if (key && lastNotifyMeta.key === key && (now - Number(lastNotifyMeta.at || 0)) < NOTIFY_DEDUP_WINDOW_MS) {
+    return true
+  }
+  lastNotifyMeta = { key, at: now }
+  return false
+}
 
 function isCapacitorNative() {
   try {
@@ -22,6 +34,7 @@ async function ensureNativeNotificationSetup(localNotifications) {
       description: 'Incoming chat message alerts',
       importance: 5,
       visibility: 1,
+      sound: 'default',
     })
   } catch {
     // Ignore channel creation failures on unsupported/older devices.
@@ -131,6 +144,8 @@ export function getNotificationBlockedHelp() {
 }
 
 export async function pushNotify(title, body) {
+  if (shouldSkipDuplicateNotification(title, body)) return false
+
   if (isCapacitorNative()) {
     await ensureNativeNotificationSetup(LocalNotifications)
     const hasPermission = await ensureNotificationPermission(false)
@@ -143,6 +158,7 @@ export async function pushNotify(title, body) {
       body: body || '',
       channelId: NATIVE_CHAT_CHANNEL_ID,
       actionTypeId: 'chat',
+      sound: 'default',
       extra: { url: '/#/chat' },
     }
 
@@ -163,7 +179,7 @@ export async function pushNotify(title, body) {
           notifications: [
             {
               ...baseNotification,
-              smallIcon: 'ic_stat_simp_games',
+              smallIcon: 'ic_launcher_foreground',
             },
           ],
         })
@@ -199,6 +215,8 @@ export async function pushNotify(title, body) {
           body,
           tag: `chat-${Date.now()}`,
           renotify: false,
+          silent: false,
+          vibrate: [150, 90, 150],
           data: { url: chatUrl },
         })
         return true

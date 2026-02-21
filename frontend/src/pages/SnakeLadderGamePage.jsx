@@ -100,12 +100,16 @@ function SnakeLadderGamePage() {
   const [isRolling, setIsRolling] = useState(false)
   const cpuTimerRef = useRef(null)
   const rollTimerRef = useRef(null)
+  const positionsRef = useRef({ you: 1, cpu: 1 })
+  const waitTimersRef = useRef(new Set())
+  const animationVersionRef = useRef(0)
 
   useEffect(() => {
     if (!flow.username || !flow.token) navigate('/auth')
   }, [flow.username, flow.token, navigate])
 
   useEffect(() => () => {
+    animationVersionRef.current += 1
     if (cpuTimerRef.current) {
       clearTimeout(cpuTimerRef.current)
       cpuTimerRef.current = null
@@ -114,7 +118,13 @@ function SnakeLadderGamePage() {
       clearTimeout(rollTimerRef.current)
       rollTimerRef.current = null
     }
+    waitTimersRef.current.forEach((timerId) => clearTimeout(timerId))
+    waitTimersRef.current.clear()
   }, [])
+
+  useEffect(() => {
+    positionsRef.current = positions
+  }, [positions])
 
   const preset = DIFFICULTY_PRESETS[difficulty]
   const jumpMap = useMemo(() => {
@@ -125,6 +135,7 @@ function SnakeLadderGamePage() {
   }, [preset])
 
   const resetGame = (nextDifficulty = difficulty) => {
+    animationVersionRef.current += 1
     if (cpuTimerRef.current) {
       clearTimeout(cpuTimerRef.current)
       cpuTimerRef.current = null
@@ -133,8 +144,11 @@ function SnakeLadderGamePage() {
       clearTimeout(rollTimerRef.current)
       rollTimerRef.current = null
     }
+    waitTimersRef.current.forEach((timerId) => clearTimeout(timerId))
+    waitTimersRef.current.clear()
     setDifficulty(nextDifficulty)
     setPositions({ you: 1, cpu: 1 })
+    positionsRef.current = { you: 1, cpu: 1 }
     setTurn('you')
     setDiceValue(null)
     setWinner('')
@@ -147,44 +161,76 @@ function SnakeLadderGamePage() {
     setFlow((prev) => ({ ...prev, unlocked: true }))
   }
 
-  const applyMove = (playerKey, roll) => {
-    const current = positions[playerKey]
-    const moved = current + roll
-    let landing = moved > 100 ? current : moved
+  const waitFor = (ms) => new Promise((resolve) => {
+    const timerId = setTimeout(() => {
+      waitTimersRef.current.delete(timerId)
+      resolve()
+    }, ms)
+    waitTimersRef.current.add(timerId)
+  })
 
-    if (jumpMap[landing]) {
-      const target = jumpMap[landing]
-      const isLadder = target > landing
-      setStatus(`${playerKey === 'you' ? 'You' : 'Computer'} rolled ${roll}. ${isLadder ? 'Ladder up!' : 'Snake bite!'} ${landing} to ${target}.`)
-      landing = target
-    } else {
-      setStatus(`${playerKey === 'you' ? 'You' : 'Computer'} rolled ${roll}. Moved to ${landing}.`)
+  const animateMoveTo = async (playerKey, targetCell, stepDelay = 170) => {
+    let current = Number(positionsRef.current[playerKey] || 1)
+    if (targetCell === current) return current
+    const direction = targetCell > current ? 1 : -1
+
+    while (current !== targetCell) {
+      current += direction
+      setPositions((prev) => {
+        const next = { ...prev, [playerKey]: current }
+        positionsRef.current = next
+        return next
+      })
+      await waitFor(stepDelay)
     }
 
-    const nextPositions = { ...positions, [playerKey]: landing }
-    setPositions(nextPositions)
-    return landing
+    return current
   }
 
-  const runTurn = (playerKey) => {
+  const runTurn = async (playerKey) => {
     if (winner) return
+    const animationVersion = animationVersionRef.current
     setIsRolling(true)
     const roll = randomDice()
     setDiceValue(roll)
+    await waitFor(420)
+    if (animationVersion !== animationVersionRef.current) return
 
-    rollTimerRef.current = setTimeout(() => {
-      const finalCell = applyMove(playerKey, roll)
-      setIsRolling(false)
-      if (finalCell === 100) {
-        const who = playerKey === 'you' ? 'You' : 'Computer'
-        setWinner(playerKey)
-        setStatus(`${who} won the game.`)
-        if (playerKey === 'you') unlock()
-        return
-      }
-      setTurn(playerKey === 'you' ? 'cpu' : 'you')
-      rollTimerRef.current = null
-    }, 300)
+    const current = Number(positionsRef.current[playerKey] || 1)
+    const moved = current + roll
+    const landing = moved > 100 ? current : moved
+
+    if (moved > 100) {
+      setStatus(`${playerKey === 'you' ? 'You' : 'Computer'} rolled ${roll}. Need exact number for 100.`)
+    } else {
+      setStatus(`${playerKey === 'you' ? 'You' : 'Computer'} rolled ${roll}. Moving...`)
+      await animateMoveTo(playerKey, landing, 170)
+      if (animationVersion !== animationVersionRef.current) return
+    }
+
+    let finalCell = landing
+    if (jumpMap[landing]) {
+      const target = jumpMap[landing]
+      const isLadder = target > landing
+      setStatus(`${isLadder ? 'Ladder up!' : 'Snake bite!'} ${landing} to ${target}.`)
+      await waitFor(250)
+      if (animationVersion !== animationVersionRef.current) return
+      await animateMoveTo(playerKey, target, 150)
+      if (animationVersion !== animationVersionRef.current) return
+      finalCell = target
+    } else if (moved <= 100) {
+      setStatus(`${playerKey === 'you' ? 'You' : 'Computer'} moved to ${landing}.`)
+    }
+
+    setIsRolling(false)
+    if (finalCell === 100) {
+      const who = playerKey === 'you' ? 'You' : 'Computer'
+      setWinner(playerKey)
+      setStatus(`${who} won the game.`)
+      if (playerKey === 'you') unlock()
+      return
+    }
+    setTurn(playerKey === 'you' ? 'cpu' : 'you')
   }
 
   useEffect(() => {

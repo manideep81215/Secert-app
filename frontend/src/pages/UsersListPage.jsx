@@ -23,6 +23,7 @@ function UsersListPage() {
   const usersRef = useRef([])
   const tokenRef = useRef(flow.token || '')
   const usernameRef = useRef(flow.username || '')
+  const toUserKey = (username) => (username || '').trim().toLowerCase()
 
   useEffect(() => {
     if (!flow.token || !flow.username) {

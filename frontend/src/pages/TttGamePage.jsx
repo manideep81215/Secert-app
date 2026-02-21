@@ -51,6 +51,7 @@ function TttGamePage() {
   const [flow, setFlow] = useFlowState()
   const [board, setBoard] = useState(Array(9).fill(''))
   const [text, setText] = useState('Play as X')
+  const [lastMoveIndex, setLastMoveIndex] = useState(null)
 
   useEffect(() => {
     if (!flow.username || !flow.token) navigate('/auth')
@@ -66,17 +67,20 @@ function TttGamePage() {
 
     const next = [...board]
     next[index] = PLAYER
+    let latestMove = index
     let result = getTttWinner(next)
 
     if (!result) {
       const cpuMove = getMediumCpuMove(next)
       if (cpuMove >= 0) {
         next[cpuMove] = CPU
+        latestMove = cpuMove
       }
       result = getTttWinner(next)
     }
 
     setBoard(next)
+    setLastMoveIndex(latestMove)
 
     if (result === 'X') {
       setText('You won this round')
@@ -111,12 +115,18 @@ function TttGamePage() {
         <img src="/theme/icon-tic-tac-toe.png" alt="Tic Tac Toe" className="single-game-icon" />
         <div className="ttt-board-grid">
           {board.map((cell, index) => (
-            <button key={index} onClick={() => play(index)} className="ttt-board-cell">{cell || '-'}</button>
+            <button
+              key={index}
+              onClick={() => play(index)}
+              className={`ttt-board-cell ${lastMoveIndex === index && cell ? 'ttt-board-cell-last' : ''}`}
+            >
+              {cell || '-'}
+            </button>
           ))}
         </div>
         <div className="ttt-bottom">
           <p>{text}</p>
-          <button onClick={() => { setBoard(Array(9).fill('')); setText('Play as X') }}>Reset</button>
+          <button onClick={() => { setBoard(Array(9).fill('')); setText('Play as X'); setLastMoveIndex(null) }}>Reset</button>
         </div>
       </div>
     </section>

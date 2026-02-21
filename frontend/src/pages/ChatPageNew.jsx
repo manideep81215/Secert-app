@@ -941,9 +941,7 @@ function ChatPageNew() {
   }
 
   const shouldSuppressChatNotification = (fromUsername) => {
-    if (typeof document === 'undefined') return false
-    if (document.visibilityState !== 'visible') return false
-    if (!location.pathname.startsWith('/chat')) return false
+    if (location.pathname !== '/chat') return false
     if (!fromUsername) return true
     return true
   }
@@ -1744,7 +1742,12 @@ function ChatPageNew() {
       >
         <div className="users-header">
           <h2>Messages</h2>
-          <button className="btn-new-chat" onClick={() => setSelectedUser(filteredUsers[0] || null)}>+</button>
+          <div className="users-header-actions">
+            <button className="btn-users-games" onClick={() => navigate('/games')} title="Go to dashboard" aria-label="Go to dashboard">
+              {icons.game}
+            </button>
+            <button className="btn-new-chat" onClick={() => setSelectedUser(filteredUsers[0] || null)}>+</button>
+          </div>
         </div>
         <div className="users-search">
           <input
