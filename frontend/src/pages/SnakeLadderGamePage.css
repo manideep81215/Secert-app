@@ -153,8 +153,8 @@
 }
 
 .ladder-rail {
-  stroke: url(#ladderWood);
-  stroke-width: 1.12;
+  stroke: #8b5a2b;
+  stroke-width: 1.2;
   stroke-linecap: round;
   opacity: 1;
 }
@@ -167,10 +167,18 @@
 }
 
 .ladder-rung {
-  stroke: #84582d;
-  stroke-width: 0.95;
+  stroke: #f5b14b;
+  stroke-width: 1.08;
   stroke-linecap: round;
   opacity: 1;
+}
+
+.ladder-line .ladder-rung:nth-child(odd) {
+  stroke: #ffd36a;
+}
+
+.ladder-line .ladder-rung:nth-child(even) {
+  stroke: #e89a3a;
 }
 
 .snake-group {

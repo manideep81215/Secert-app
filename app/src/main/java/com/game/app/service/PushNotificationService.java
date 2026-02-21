@@ -4,6 +4,9 @@ import java.math.BigInteger;
 import java.io.ByteArrayInputStream;
 import java.io.FileInputStream;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
@@ -294,10 +297,41 @@ public class PushNotificationService {
       if (!fcmCredentialsFile.isBlank()) {
         return new FileInputStream(fcmCredentialsFile);
       }
+      String fallback = readFallbackCredentials();
+      if (!fallback.isBlank()) {
+        String trimmed = fallback.trim();
+        if (trimmed.startsWith("{")) {
+          return new ByteArrayInputStream(trimmed.getBytes(StandardCharsets.UTF_8));
+        }
+        byte[] decoded = Base64.getDecoder().decode(trimmed);
+        return new ByteArrayInputStream(decoded);
+      }
     } catch (Exception error) {
       log.error("Unable to read FCM credentials", error);
     }
     return null;
+  }
+
+  private String readFallbackCredentials() {
+    String[] candidates = new String[] {
+        "firebase-service-account.base64.txt",
+        "frontend/firebase-service-account.base64.txt",
+        "../frontend/firebase-service-account.base64.txt"
+    };
+    for (String candidate : candidates) {
+      try {
+        Path path = Paths.get(candidate).toAbsolutePath().normalize();
+        if (!Files.exists(path)) continue;
+        String raw = Files.readString(path, StandardCharsets.UTF_8);
+        if (raw != null && !raw.trim().isBlank()) {
+          log.info("Loaded fallback FCM credentials from {}", path);
+          return raw;
+        }
+      } catch (Exception ignored) {
+        // Try next fallback candidate.
+      }
+    }
+    return "";
   }
 
   private void sendToMobileToken(FirebaseMessaging messaging, MobilePushTokenEntity token, String title, String body, String url) {
