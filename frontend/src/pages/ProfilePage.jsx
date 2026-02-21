@@ -4,6 +4,7 @@ import { toast } from 'react-toastify'
 import { resetFlowScores, resetFlowState, useFlowState } from '../hooks/useFlowState'
 import { getUserById } from '../services/usersApi'
 import { API_APP_BASE_URL } from '../config/apiConfig'
+import BackIcon from '../components/BackIcon'
 import './ProfilePage.css'
 
 const API_BASE = API_APP_BASE_URL
@@ -220,7 +221,7 @@ function ProfilePage() {
   return (
     <section className="profile-page">
       <header className="profile-topbar">
-        <button className="profile-nav-btn" onClick={() => navigate(previousPage)}>Back</button>
+        <button className="profile-nav-btn" onClick={() => navigate(previousPage)} aria-label="Back"><BackIcon /></button>
         <h2>Profile</h2>
         <button className="profile-nav-btn" onClick={() => navigate(previousPage)}>Home</button>
       </header>

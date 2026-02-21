@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useFlowState } from '../hooks/useFlowState'
+import BackIcon from '../components/BackIcon'
 import './SnakeLadderGamePage.css'
 
 const DIFFICULTY_PRESETS = {
@@ -255,7 +256,7 @@ function SnakeLadderGamePage() {
   return (
     <section className="snake-page">
       <header className="snake-header">
-        <button className="snake-back-btn" onClick={() => navigate('/games')}>Back</button>
+        <button className="snake-back-btn" onClick={() => navigate('/games')} aria-label="Back"><BackIcon /></button>
         <h1>Snake & Ladders</h1>
         <span className="snake-header-spacer" aria-hidden="true" />
       </header>
@@ -263,19 +264,21 @@ function SnakeLadderGamePage() {
       <div className="snake-card">
         <div className="snake-toolbar">
           <div className="snake-difficulty-bar">
-            <span className="snake-difficulty-label">Difficulty</span>
-            <div className="snake-difficulty-menu" role="group" aria-label="Difficulty options">
-              {DIFFICULTY_KEYS.map((key) => (
-                <button
-                  key={key}
-                  type="button"
-                  className={`snake-difficulty-btn ${difficulty === key ? 'active' : ''}`}
-                  onClick={() => resetGame(key)}
-                >
-                  {DIFFICULTY_PRESETS[key].label}
-                </button>
-              ))}
-            </div>
+            <label className="snake-difficulty-select-wrap" htmlFor="snake-difficulty-select">
+              Difficulty:
+              <select
+                id="snake-difficulty-select"
+                className="snake-difficulty-select"
+                value={difficulty}
+                onChange={(event) => resetGame(event.target.value)}
+              >
+                {DIFFICULTY_KEYS.map((key) => (
+                  <option key={key} value={key}>
+                    {DIFFICULTY_PRESETS[key].label}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
 
           <button type="button" className="snake-reset-btn" onClick={() => resetGame()}>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useFlowState } from '../hooks/useFlowState'
 import { randomPick, winsAgainst } from '../lib/gameUtils'
+import BackIcon from '../components/BackIcon'
 import './RpsGamePage.css'
 
 function RpsGamePage() {
@@ -73,7 +74,7 @@ function RpsGamePage() {
   return (
     <section className="rps-page">
       <header className="rps-header">
-        <button className="rps-back-btn" onClick={() => navigate('/games')}>Back</button>
+        <button className="rps-back-btn" onClick={() => navigate('/games')} aria-label="Back"><BackIcon /></button>
         <h1>Rock / Paper / Scissors</h1>
         <span className="rps-header-spacer" aria-hidden="true" />
       </header>

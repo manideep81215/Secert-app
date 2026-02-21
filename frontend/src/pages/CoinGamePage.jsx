@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useFlowState } from '../hooks/useFlowState'
 import { randomPick } from '../lib/gameUtils'
+import BackIcon from '../components/BackIcon'
 import './CoinGamePage.css'
 
 function CoinGamePage() {
@@ -60,7 +61,7 @@ function CoinGamePage() {
   return (
     <section className="coin-page">
       <header className="coin-header">
-        <button className="coin-back-btn" onClick={() => navigate('/games')}>Back</button>
+        <button className="coin-back-btn" onClick={() => navigate('/games')} aria-label="Back"><BackIcon /></button>
         <h1>Heads / Tails</h1>
         <span className="coin-header-spacer" aria-hidden="true" />
       </header>

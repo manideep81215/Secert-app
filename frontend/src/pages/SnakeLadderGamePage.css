@@ -63,18 +63,40 @@
   gap: 0.25rem;
 }
 
-.snake-difficulty-label {
-  font-size: 0.76rem;
+.snake-difficulty-select-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 2px solid #6a3a1b;
+  border-radius: 0.65rem;
+  background: #8f5f34;
+  color: #fff7df;
   font-weight: 900;
-  color: #6a3a1b;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  padding: 0.4rem 0.62rem;
 }
 
-.snake-difficulty-menu {
-  display: flex;
-  gap: 0.45rem;
-  flex-wrap: wrap;
+.snake-difficulty-select {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 0;
+  background: transparent;
+  color: #fff7df;
+  font-weight: 900;
+  padding-right: 1.2rem;
+  outline: none;
+  cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, #fff7df 50%), linear-gradient(135deg, #fff7df 50%, transparent 50%);
+  background-position: calc(100% - 0.55rem) calc(50% - 2px), calc(100% - 0.35rem) calc(50% - 2px);
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+}
+
+.snake-difficulty-select option {
+  color: #3f2514;
+}
+
+.snake-difficulty-select-wrap:focus-within {
+  box-shadow: 0 0 0 2px rgba(121, 72, 38, 0.22);
 }
 
 .snake-difficulty-btn,
@@ -85,11 +107,6 @@
   color: #52301a;
   font-weight: 800;
   padding: 0.42rem 0.7rem;
-}
-
-.snake-difficulty-btn.active {
-  background: #8f5f34;
-  color: #fff7df;
 }
 
 .snake-board-wrap {

@@ -4,6 +4,7 @@ import { toast } from 'react-toastify'
 import { resetFlowState, useFlowState } from '../hooks/useFlowState'
 import { pushNotify } from '../lib/notifications'
 import { API_APP_BASE_URL } from '../config/apiConfig'
+import BackIcon from '../components/BackIcon'
 import './VerifyPage.css'
 
 const API_BASE = API_APP_BASE_URL
@@ -79,7 +80,7 @@ function VerifyPage() {
   return (
     <section className="verify-page">
       <header className="verify-topbar">
-        <button className="verify-nav-btn" onClick={() => navigate('/profile')}>Back</button>
+        <button className="verify-nav-btn" onClick={() => navigate('/profile')} aria-label="Back"><BackIcon /></button>
         <h2>Verify</h2>
         <button className="verify-nav-btn" onClick={() => navigate('/games')}>Home</button>
       </header>

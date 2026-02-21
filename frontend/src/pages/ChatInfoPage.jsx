@@ -4,6 +4,7 @@ import { Client } from '@stomp/stompjs'
 import SockJS from 'sockjs-client'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
+import BackIcon from '../components/BackIcon'
 import {
   ensureNotificationPermission,
   getNotificationBlockedHelp,
@@ -233,7 +234,14 @@ function ChatInfoPage() {
   }
 
   const handleDeleteChatForMe = () => {
-    if (!selectedUser?.username || !flow?.username) return
+    if (!selectedUser?.username) {
+      toast.error('No chat selected to delete.')
+      return
+    }
+    if (!flow?.username) {
+      toast.error('Login required. Please re-open chat and try again.')
+      return
+    }
     const key = `${(flow.username || '').toLowerCase()}::${(selectedUser.username || '').toLowerCase()}`
     let current = {}
     try {
@@ -243,7 +251,8 @@ function ChatInfoPage() {
     } catch {
       current = {}
     }
-    const next = { ...current, [key]: Date.now() }
+    const cutoffAt = Date.now()
+    const next = { ...current, [key]: cutoffAt }
     try {
       window.localStorage.setItem(CLEAR_CUTOFFS_KEY, JSON.stringify(next))
     } catch {
@@ -256,6 +265,8 @@ function ChatInfoPage() {
       state: {
         selectedUsername: selectedUser.username,
         refreshConversation: true,
+        clearForUsername: selectedUser.username,
+        clearCutoffAt: cutoffAt,
       },
     })
   }
@@ -330,7 +341,7 @@ function ChatInfoPage() {
   return (
     <div className="chat-info-page">
       <div className="chat-info-header">
-        <button type="button" className="chat-info-back" onClick={goBackToChat} aria-label="Back to chat">←</button>
+        <button type="button" className="chat-info-back" onClick={goBackToChat} aria-label="Back to chat"><BackIcon /></button>
         <h2>User Details</h2>
       </div>
 
@@ -341,11 +352,11 @@ function ChatInfoPage() {
 
         <div className="chat-info-actions">
           <button type="button" className="chat-info-action" onClick={() => setShowDeleteConfirm(true)} aria-label="Delete chat">
-            <span className="chat-info-action-icon">Del</span>
+            <span className="chat-info-action-icon">🗑</span>
             <span className="chat-info-action-label">Delete</span>
           </button>
           <button type="button" className={`chat-info-action ${notificationPermission === 'granted' ? 'active' : ''}`} onClick={requestNotificationAccess} aria-label="Enable notifications">
-            <span className="chat-info-action-icon">N</span>
+            <span className="chat-info-action-icon">🔔</span>
             <span className="chat-info-action-label">Notify</span>
           </button>
           <button type="button" className={`chat-info-action ${showPushDebug ? 'active' : ''}`} onClick={() => setShowPushDebug((prev) => !prev)} aria-label="Toggle debug panel">
@@ -353,7 +364,7 @@ function ChatInfoPage() {
             <span className="chat-info-action-label">Debug</span>
           </button>
           <button type="button" className="chat-info-action" onClick={goBackToChat} aria-label="Back to chat">
-            <span className="chat-info-action-icon">←</span>
+            <span className="chat-info-action-icon"><BackIcon size={15} /></span>
             <span className="chat-info-action-label">Back</span>
           </button>
         </div>

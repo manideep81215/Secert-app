@@ -72,8 +72,11 @@ function App() {
     const shouldSuppressGlobalMessageNotification = (pathname) => {
       if (!pathname) return false
       if (pathname !== '/chat') return false
-      if (typeof document === 'undefined') return false
-      return document.visibilityState === 'visible'
+      if (typeof document === 'undefined' || document.visibilityState !== 'visible') return false
+      if (typeof window === 'undefined') return false
+      const activeChatPeerKey = `active_chat_peer_v1:${authUsername.toLowerCase()}`
+      const activeChatPeer = (window.localStorage.getItem(activeChatPeerKey) || '').trim()
+      return Boolean(activeChatPeer)
     }
 
     const previewFromPayload = (payload) => {

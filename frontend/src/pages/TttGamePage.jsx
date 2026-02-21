@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useFlowState } from '../hooks/useFlowState'
 import { getTttWinner } from '../lib/gameUtils'
+import BackIcon from '../components/BackIcon'
 import './TttGamePage.css'
 
 const PLAYER = 'X'
@@ -149,7 +150,7 @@ function TttGamePage() {
   return (
     <section className="single-game-page ttt-theme">
       <header className="single-game-top">
-        <button onClick={() => navigate('/games')}>Back</button>
+        <button onClick={() => navigate('/games')} aria-label="Back"><BackIcon /></button>
         <h2>Tic-Tac-Toe</h2>
         <span className="single-game-top-spacer" aria-hidden="true" />
       </header>
@@ -157,24 +158,27 @@ function TttGamePage() {
       <div className="ttt-stage">
         <img src="/theme/icon-tic-tac-toe.png" alt="Tic Tac Toe" className="single-game-icon" />
         <div className="ttt-difficulty-bar">
-          <span className="ttt-difficulty-label">Difficulty</span>
-          <div className="ttt-difficulty-menu" role="group" aria-label="Tic Tac Toe difficulty">
-            {TTT_DIFFICULTIES.map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                className={`ttt-difficulty-btn ${difficulty === mode ? 'active' : ''}`}
-                onClick={() => {
-                  setDifficulty(mode)
-                  setBoard(Array(9).fill(''))
-                  setLastMoveIndex(null)
-                  setText(`Mode: ${mode[0].toUpperCase()}${mode.slice(1)}`)
-                }}
-              >
-                {mode[0].toUpperCase() + mode.slice(1)}
-              </button>
-            ))}
-          </div>
+          <label className="ttt-difficulty-select-wrap" htmlFor="ttt-difficulty-select">
+            Difficulty:
+            <select
+              id="ttt-difficulty-select"
+              className="ttt-difficulty-select"
+              value={difficulty}
+              onChange={(event) => {
+                const mode = event.target.value
+                setDifficulty(mode)
+                setBoard(Array(9).fill(''))
+                setLastMoveIndex(null)
+                setText(`Mode: ${mode[0].toUpperCase()}${mode.slice(1)}`)
+              }}
+            >
+              {TTT_DIFFICULTIES.map((mode) => (
+                <option key={mode} value={mode}>
+                  {mode[0].toUpperCase() + mode.slice(1)}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
         <div className="ttt-board-grid">
           {board.map((cell, index) => (

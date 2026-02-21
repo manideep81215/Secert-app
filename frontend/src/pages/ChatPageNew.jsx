@@ -7,6 +7,8 @@ import { toast } from 'react-toastify'
 import { getMe } from '../services/authApi'
 import { getConversation, uploadMedia } from '../services/messagesApi'
 import { getAllUsers } from '../services/usersApi'
+import BackIcon from '../components/BackIcon'
+import { FileAttachIcon, PhotoAttachIcon } from '../components/AttachmentIcons'
 import ChatUsersPanel from './ChatUsersPanel'
 import {
   getNotificationPermissionState,
@@ -151,9 +153,9 @@ function ChatPageNew() {
     }
   }
   const icons = {
-    image: '\u25A7',
+    image: '\uD83D\uDDBC',
     video: '\u25B6',
-    file: '\u2398',
+    file: '\uD83D\uDCC4',
     voice: '\uD83C\uDFA4',
     reply: '\u21A9',
     delete: '\uD83D\uDDD1',
@@ -244,8 +246,8 @@ function ChatPageNew() {
   }
   const createTempId = () => (window.crypto?.randomUUID?.() || `${Date.now()}_${Math.random().toString(16).slice(2)}`)
   const MAX_IMAGE_BYTES = 8 * 1024 * 1024
-  const MAX_VIDEO_BYTES = 20 * 1024 * 1024
-  const MAX_OTHER_BYTES = 8 * 1024 * 1024
+  const MAX_VIDEO_BYTES = 30 * 1024 * 1024
+  const MAX_OTHER_BYTES = 20 * 1024 * 1024
   const toShortLastSeen = (lastSeenAt) => {
     if (!lastSeenAt) return '-'
     const diffSeconds = Math.max(0, Math.floor((Date.now() - lastSeenAt) / 1000))
@@ -964,8 +966,7 @@ function ChatPageNew() {
 
   const shouldSuppressChatNotification = (fromUsername) => {
     if (location.pathname !== '/chat') return false
-    if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return false
-    if (!fromUsername) return true
+    // App-level notifications handle chat-route delivery.
     return true
   }
 
@@ -1190,8 +1191,17 @@ function ChatPageNew() {
     const requestedUserId = location.state?.selectedUserId
     const requestedUsername = location.state?.selectedUsername
     const shouldRefreshConversation = Boolean(location.state?.refreshConversation)
+    const clearForUsername = (location.state?.clearForUsername || '').trim()
+    const clearCutoffAt = Number(location.state?.clearCutoffAt || 0)
     const requestedFromQuery = new URLSearchParams(location.search).get('with')
     const normalizedFromQuery = requestedFromQuery ? formatUsername(requestedFromQuery).toLowerCase() : ''
+    if (clearForUsername && clearCutoffAt > 0 && flow.username) {
+      const convoKey = `${(flow.username || '').toLowerCase()}::${clearForUsername.toLowerCase()}`
+      setConversationClears((prev) => ({ ...prev, [convoKey]: clearCutoffAt }))
+      if (selectedUserRef.current?.username?.toLowerCase() === clearForUsername.toLowerCase()) {
+        setMessages([])
+      }
+    }
     if (shouldOpenUsersList) {
       setSelectedUser(null)
       setShowMobileUsers(true)
@@ -1219,7 +1229,7 @@ function ChatPageNew() {
       setSelectedUser(nextSelectedUser)
       navigate('/chat', { replace: true })
     }
-  }, [users, location.state, location.search, navigate])
+  }, [users, location.state, location.search, navigate, flow.username])
 
   const handleSendMessage = async () => {
     const text = inputValue.trim()
@@ -1452,7 +1462,7 @@ function ChatPageNew() {
         return
       }
       if (error?.response?.status === 413) {
-        toast.error('File exceeds upload limit (photo/file 8MB, video 20MB).')
+        toast.error('File exceeds upload limit (photo 8MB, file 20MB, video 30MB).')
         return
       }
       setMessages((prev) => prev.map((msg) => (msg.tempId === tempId ? { ...msg, deliveryStatus: 'failed' } : msg)))
@@ -1844,8 +1854,9 @@ function ChatPageNew() {
               setShowMobileUsers(true)
             }}
             title="Back to users"
+            aria-label="Back to users"
           >
-            ←
+            <BackIcon />
           </button>
           <div
             className="chat-header-left chat-header-left-btn"
@@ -2066,15 +2077,15 @@ function ChatPageNew() {
                 title="Photo or file"
                 aria-label="Open attachments menu"
               >
-                {icons.image}
+                <PhotoAttachIcon className="attach-icon attach-icon-photo" />
               </button>
               {showAttachMenu && (
                 <div className="attach-dropdown">
                   <button className="attach-item" onClick={() => { mediaInputRef.current?.click(); setShowAttachMenu(false) }} title="Send Photo" aria-label="Send photo">
-                    {icons.image} Photo
+                    <PhotoAttachIcon className="attach-icon attach-icon-photo" /> Photo
                   </button>
                   <button className="attach-item" onClick={() => { fileInputRef.current?.click(); setShowAttachMenu(false) }} title="Send File" aria-label="Send file">
-                    {icons.file} File
+                    <FileAttachIcon className="attach-icon attach-icon-file" /> File
                   </button>
                 </div>
               )}
@@ -2122,6 +2133,7 @@ function ChatPageNew() {
             ref={fileInputRef}
             style={{ display: 'none' }}
             onChange={(event) => handleFileUpload(event, 'file')}
+            accept="*/*"
           />
         </motion.div>
       </div>
@@ -2186,7 +2198,8 @@ function ChatPageNew() {
             </motion.div>
           </motion.div>
         )}
-      </AnimatePresence>
+      </AnimatePresence>
+
 </div>
   )
 }

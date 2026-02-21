@@ -66,18 +66,37 @@
   gap: 0.35rem;
 }
 
-.ttt-difficulty-label {
-  font-size: 0.75rem;
+.ttt-difficulty-select-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: fit-content;
+  border: 2px solid #6a391b;
+  border-radius: 0.65rem;
+  background: #fff2cf;
+  color: #4f2d17;
   font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: #6a3a1f;
+  padding: 0.28rem 0.56rem;
 }
 
-.ttt-difficulty-menu {
-  display: flex;
-  gap: 0.4rem;
-  flex-wrap: wrap;
+.ttt-difficulty-select {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 0;
+  background: transparent;
+  color: #4f2d17;
+  font-weight: 900;
+  padding-right: 1.1rem;
+  outline: none;
+  cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, #4f2d17 50%), linear-gradient(135deg, #4f2d17 50%, transparent 50%);
+  background-position: calc(100% - 0.55rem) calc(50% - 2px), calc(100% - 0.35rem) calc(50% - 2px);
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+}
+
+.ttt-difficulty-select-wrap:focus-within {
+  box-shadow: 0 0 0 2px rgba(121, 72, 38, 0.2);
 }
 
 .ttt-difficulty-btn {
