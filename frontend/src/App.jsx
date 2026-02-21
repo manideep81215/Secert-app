@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { ToastContainer } from 'react-toastify'
 import AuthPage from './pages/AuthPage'
@@ -16,13 +15,6 @@ import { useFlowState } from './hooks/useFlowState'
 import { ensureNotificationPermission as ensureLocalNotificationPermission } from './lib/notifications'
 import { ensurePushSubscription } from './lib/pushSubscription'
 import './App.css'
-
-const pageMotion = {
-  initial: { opacity: 0, y: 18 },
-  animate: { opacity: 1, y: 0 },
-  exit: { opacity: 0, y: -18 },
-  transition: { duration: 0.22 },
-}
 
 function App() {
   const location = useLocation()
@@ -154,24 +146,20 @@ function App() {
   return (
     <div className={`app-wrap container-fluid ${isFullBleedRoute ? 'app-auth-route p-0' : 'py-4 px-3 px-md-4'}`}>
       <div className={isFullBleedRoute ? 'app-auth-max' : 'mx-auto app-max'}>
-        <AnimatePresence mode="wait">
-          <motion.div key={location.pathname} {...pageMotion}>
-            <Routes>
-              <Route path="/" element={<Navigate to="/auth" replace />} />
-              <Route path="/auth" element={<AuthPage />} />
-              <Route path="/games" element={isAuthenticated ? <GamesPage /> : <Navigate to="/auth" replace />} />
-              <Route path="/games/rps" element={isAuthenticated ? <RpsGamePage /> : <Navigate to="/auth" replace />} />
-              <Route path="/games/coin" element={isAuthenticated ? <CoinGamePage /> : <Navigate to="/auth" replace />} />
-              <Route path="/games/ttt" element={isAuthenticated ? <TttGamePage /> : <Navigate to="/auth" replace />} />
-              <Route path="/verify" element={isAuthenticated ? <VerifyPage /> : <Navigate to="/auth" replace />} />
-              <Route path="/users" element={isAuthenticated ? <UsersListPage /> : <Navigate to="/auth" replace />} />
-              <Route path="/chat" element={isAuthenticated ? <ChatPageNew /> : <Navigate to="/auth" replace />} />
-              <Route path="/chat/info" element={isAuthenticated ? <ChatInfoPage /> : <Navigate to="/auth" replace />} />
-              <Route path="/profile" element={isAuthenticated ? <ProfilePage /> : <Navigate to="/auth" replace />} />
-              <Route path="*" element={<Navigate to="/auth" replace />} />
-            </Routes>
-          </motion.div>
-        </AnimatePresence>
+        <Routes>
+          <Route path="/" element={<Navigate to="/auth" replace />} />
+          <Route path="/auth" element={<AuthPage />} />
+          <Route path="/games" element={isAuthenticated ? <GamesPage /> : <Navigate to="/auth" replace />} />
+          <Route path="/games/rps" element={isAuthenticated ? <RpsGamePage /> : <Navigate to="/auth" replace />} />
+          <Route path="/games/coin" element={isAuthenticated ? <CoinGamePage /> : <Navigate to="/auth" replace />} />
+          <Route path="/games/ttt" element={isAuthenticated ? <TttGamePage /> : <Navigate to="/auth" replace />} />
+          <Route path="/verify" element={isAuthenticated ? <VerifyPage /> : <Navigate to="/auth" replace />} />
+          <Route path="/users" element={isAuthenticated ? <UsersListPage /> : <Navigate to="/auth" replace />} />
+          <Route path="/chat" element={isAuthenticated ? <ChatPageNew /> : <Navigate to="/auth" replace />} />
+          <Route path="/chat/info" element={isAuthenticated ? <ChatInfoPage /> : <Navigate to="/auth" replace />} />
+          <Route path="/profile" element={isAuthenticated ? <ProfilePage /> : <Navigate to="/auth" replace />} />
+          <Route path="*" element={<Navigate to="/auth" replace />} />
+        </Routes>
       </div>
 
       {!isAppInstalled && installPromptEvent && (
