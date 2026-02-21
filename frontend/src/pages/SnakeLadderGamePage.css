@@ -103,8 +103,8 @@
 .snake-cell {
   position: relative;
   border-radius: 0.3rem;
-  border: 1px solid rgba(122, 76, 42, 0.68);
-  background: linear-gradient(180deg, rgba(249, 239, 207, 0.56), rgba(239, 220, 168, 0.52));
+  border: 1px solid rgba(122, 76, 42, 0.75);
+  background: linear-gradient(180deg, rgba(255, 244, 208, 0.42), rgba(245, 226, 176, 0.38));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -154,7 +154,7 @@
 
 .ladder-rail {
   stroke: url(#ladderWood);
-  stroke-width: 0.95;
+  stroke-width: 1.12;
   stroke-linecap: round;
   opacity: 1;
 }
@@ -167,10 +167,10 @@
 }
 
 .ladder-rung {
-  stroke: #6d4b2c;
-  stroke-width: 0.8;
+  stroke: #84582d;
+  stroke-width: 0.95;
   stroke-linecap: round;
-  opacity: 0.98;
+  opacity: 1;
 }
 
 .snake-group {
@@ -179,8 +179,8 @@
 
 .snake-path-shadow {
   fill: none;
-  stroke: rgba(40, 79, 31, 0.42);
-  stroke-width: 1.7;
+  stroke: rgba(40, 79, 31, 0.6);
+  stroke-width: 1.95;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -188,7 +188,7 @@
 .snake-line {
   fill: none;
   stroke: url(#snakeBodyGreen);
-  stroke-width: 1.42;
+  stroke-width: 1.7;
   stroke-linecap: round;
   stroke-linejoin: round;
   opacity: 1;
@@ -196,22 +196,22 @@
 
 .snake-line-highlight {
   fill: none;
-  stroke: rgba(201, 237, 164, 0.58);
-  stroke-width: 0.46;
+  stroke: rgba(221, 248, 189, 0.82);
+  stroke-width: 0.62;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
 .snake-head {
-  fill: #4d8d36;
+  fill: #5ea944;
   stroke: #2f6523;
-  stroke-width: 0.18;
+  stroke-width: 0.22;
 }
 
 .snake-tail {
-  fill: #6bae46;
+  fill: #7ec454;
   stroke: #386e2a;
-  stroke-width: 0.14;
+  stroke-width: 0.2;
 }
 
 .snake-eye {
