@@ -13,6 +13,7 @@ import VerifyPage from './pages/VerifyPage'
 import ChatPageNew from './pages/ChatPageNew'
 import ChatInfoPage from './pages/ChatInfoPage'
 import ProfilePage from './pages/ProfilePage'
+import UsersListPage from './pages/UsersListPage'
 import { WS_CHAT_URL } from './config/apiConfig'
 import { useFlowState } from './hooks/useFlowState'
 import {
@@ -136,12 +137,23 @@ function App() {
         if (disposed) return
         listenerHandle = await mod.App.addListener('backButton', () => {
           const current = currentPathRef.current || ''
+          const activeChatPeerKey = `active_chat_peer_v1:${(flow?.username || '').trim().toLowerCase()}`
+          const activeChatPeer = typeof window !== 'undefined'
+            ? (window.localStorage.getItem(activeChatPeerKey) || '').trim()
+            : ''
           const orderedBackMap = {
-            '/chat/info': '/chat',
-            '/chat': '/profile',
+            '/chat': '/users',
             '/users': '/profile',
             '/verify': '/profile',
             '/profile': '/games',
+          }
+
+          if (current === '/chat/info') {
+            navigate('/chat', {
+              replace: true,
+              state: activeChatPeer ? { selectedUsername: activeChatPeer } : undefined,
+            })
+            return
           }
 
           const mappedTarget = orderedBackMap[current]
@@ -175,7 +187,7 @@ function App() {
       disposed = true
       listenerHandle?.remove?.()
     }
-  }, [navigate])
+  }, [flow?.username, navigate])
 
   useEffect(() => {
     const IOS_HELP_DISMISSED_KEY = 'ios_install_help_dismissed'
@@ -349,7 +361,7 @@ function App() {
           <Route path="/games/ttt" element={isAuthenticated ? <TttGamePage /> : <Navigate to="/auth" replace />} />
           <Route path="/games/snake-ladder" element={isAuthenticated ? <SnakeLadderGamePage /> : <Navigate to="/auth" replace />} />
           <Route path="/verify" element={isAuthenticated ? <VerifyPage /> : <Navigate to="/auth" replace />} />
-          <Route path="/users" element={isAuthenticated ? <Navigate to="/chat" replace /> : <Navigate to="/auth" replace />} />
+          <Route path="/users" element={isAuthenticated ? <UsersListPage /> : <Navigate to="/auth" replace />} />
           <Route path="/chat" element={isAuthenticated ? <ChatPageNew /> : <Navigate to="/auth" replace />} />
           <Route path="/chat/info" element={isAuthenticated ? <ChatInfoPage /> : <Navigate to="/auth" replace />} />
           <Route path="/profile" element={isAuthenticated ? <ProfilePage /> : <Navigate to="/auth" replace />} />

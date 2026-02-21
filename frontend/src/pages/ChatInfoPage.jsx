@@ -93,7 +93,10 @@ function ChatInfoPage() {
   const goBackToChat = () => {
     navigate('/chat', {
       replace: true,
-      state: { selectedUsername: selectedUser?.username },
+      state: {
+        selectedUserId: selectedUser?.id || null,
+        selectedUsername: selectedUser?.username,
+      },
     })
   }
 

@@ -66,7 +66,11 @@ function ChatPageNew() {
   const [isTouchDevice, setIsTouchDevice] = useState(
     () => (typeof window !== 'undefined') && (window.matchMedia?.('(pointer: coarse)').matches || 'ontouchstart' in window)
   )
-  const [showMobileUsers, setShowMobileUsers] = useState(() => window.innerWidth <= 920)
+  const [showMobileUsers, setShowMobileUsers] = useState(() => {
+    const requestedFromQuery = new URLSearchParams(location.search).get('with')
+    const hasRouteSelection = Boolean(location.state?.selectedUserId || location.state?.selectedUsername || requestedFromQuery)
+    return window.innerWidth <= 920 && !hasRouteSelection
+  })
   const [replyingTo, setReplyingTo] = useState(null)
   const [editingMessage, setEditingMessage] = useState(null)
   const [draggedMessage, setDraggedMessage] = useState(null)
@@ -376,8 +380,14 @@ function ChatPageNew() {
 
   useEffect(() => {
     if (!isMobileView) return
+    const requestedFromQuery = new URLSearchParams(location.search).get('with')
+    const hasRouteSelection = Boolean(location.state?.selectedUserId || location.state?.selectedUsername || requestedFromQuery)
+    if (hasRouteSelection && !selectedUser) {
+      setShowMobileUsers(false)
+      return
+    }
     setShowMobileUsers(!selectedUser)
-  }, [isMobileView, selectedUser])
+  }, [isMobileView, selectedUser, location.state, location.search])
 
   useEffect(() => {
     if (typeof window === 'undefined' || !window.Capacitor) return
@@ -1783,10 +1793,12 @@ function ChatPageNew() {
           <button
             className="btn-back-mobile"
             onClick={() => {
-              setSelectedUser(null)
               if (isMobileView) {
-                setShowMobileUsers(true)
+                navigate('/users')
+                return
               }
+              setSelectedUser(null)
+              setShowMobileUsers(true)
             }}
             title="Back to users"
           >
