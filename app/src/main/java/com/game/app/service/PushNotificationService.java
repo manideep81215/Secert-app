@@ -135,9 +135,14 @@ public class PushNotificationService {
   }
 
   public void notifyUser(String username, String title, String body, String url) {
-    if (!isPushEnabled()) return;
     String normalizedUser = normalizeUsername(username);
-    List<PushSubscriptionEntity> subscriptions = pushSubscriptionRepository.findByUsername(normalizedUser);
+    boolean webPushEnabled = isPushEnabled();
+    boolean nativePushEnabled = getFirebaseMessaging() != null;
+    if (!webPushEnabled && !nativePushEnabled) return;
+
+    List<PushSubscriptionEntity> subscriptions = webPushEnabled
+        ? pushSubscriptionRepository.findByUsername(normalizedUser)
+        : List.of();
     List<MobilePushTokenEntity> mobileTokens = mobilePushTokenRepository.findByUsername(normalizedUser);
     if (subscriptions.isEmpty() && mobileTokens.isEmpty()) return;
 

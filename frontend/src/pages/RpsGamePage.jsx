@@ -7,7 +7,7 @@ import './RpsGamePage.css'
 function RpsGamePage() {
   const navigate = useNavigate()
   const [flow, setFlow] = useFlowState()
-  const [text, setText] = useState('Pick one move to start.')
+  const [round, setRound] = useState(null)
 
   useEffect(() => {
     if (!flow.username || !flow.token) navigate('/auth')
@@ -20,12 +20,14 @@ function RpsGamePage() {
 
   const play = (pick) => {
     const cpu = randomPick(['rock', 'paper', 'scissors'])
+    const draw = pick === cpu
+    const win = !draw && winsAgainst[pick] === cpu
+    setRound({ pick, cpu, draw, win })
+
     if (pick === cpu) {
-      setText(`Draw: both picked ${pick}`)
       return
     }
     if (winsAgainst[pick] === cpu) {
-      setText(`Win: ${pick} beats ${cpu}`)
       setFlow((prev) => ({
         ...prev,
         wins: {
@@ -37,20 +39,56 @@ function RpsGamePage() {
       unlock()
       return
     }
-    setText(`Lose: ${cpu} beats ${pick}`)
   }
 
+  const displayMove = (move) => {
+    if (!move) return '-'
+    return move[0].toUpperCase() + move.slice(1)
+  }
+
+  const moveEmoji = (move) => {
+    if (move === 'rock') return '✊'
+    if (move === 'paper') return '✋'
+    if (move === 'scissors') return '✌️'
+    return '?'
+  }
+
+  const resultText = (() => {
+    if (!round) return 'Choose Rock, Paper, or Scissors to start.'
+    if (round.draw) return `Draw! Both picked ${displayMove(round.pick)}.`
+    if (round.win) return `You Win! ${displayMove(round.pick)} beats ${displayMove(round.cpu)}.`
+    return `You Lose! ${displayMove(round.cpu)} beats ${displayMove(round.pick)}.`
+  })()
+
   return (
-    <section className="single-game-page rps-theme">
-      <header className="single-game-top">
-        <button onClick={() => navigate('/games')}>Back</button>
-        <h2>Rock / Paper / Scissors</h2>
+    <section className="rps-page">
+      <header className="rps-header">
+        <button className="rps-back-btn" onClick={() => navigate('/games')}>Back</button>
+        <h1>Rock / Paper / Scissors</h1>
       </header>
 
-      <div className="rps-stage">
-        <img src="/theme/icon-rock-paper-scissors.png" alt="RPS" className="single-game-icon" />
-        <p>{text}</p>
-        <div className="single-game-actions">
+      <div className="rps-board-wrap">
+        <div className="rps-board">
+          <div className="rps-vs-grid">
+            <article className="rps-player-panel">
+              <h3>You</h3>
+              <div className="rps-token">{moveEmoji(round?.pick)}</div>
+              <p>{`Picked: ${displayMove(round?.pick)}`}</p>
+            </article>
+
+            <div className="rps-vs-mark">VS</div>
+
+            <article className="rps-player-panel">
+              <h3>Computer</h3>
+              <div className="rps-token">{moveEmoji(round?.cpu)}</div>
+              <p>{`Result: ${displayMove(round?.cpu)}`}</p>
+            </article>
+          </div>
+
+          <div className="rps-result-strip">{resultText}</div>
+        </div>
+
+        <div className="rps-actions">
           <button onClick={() => play('rock')}>Rock</button>
           <button onClick={() => play('paper')}>Paper</button>
           <button onClick={() => play('scissors')}>Scissors</button>

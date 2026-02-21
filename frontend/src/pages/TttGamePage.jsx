@@ -7,55 +7,43 @@ import './TttGamePage.css'
 const PLAYER = 'X'
 const CPU = 'O'
 
-function scoreBoard(board, depth) {
-  const winner = getTttWinner(board)
-  if (winner === CPU) return 10 - depth
-  if (winner === PLAYER) return depth - 10
-  if (winner === 'draw') return 0
-  return null
+function getFreeCells(board) {
+  return board.map((cell, idx) => (cell ? null : idx)).filter((idx) => idx !== null)
 }
 
-function minimax(board, depth, isCpuTurn) {
-  const score = scoreBoard(board, depth)
-  if (score !== null) return score
-
-  const free = board.map((cell, idx) => (cell ? null : idx)).filter((idx) => idx !== null)
-
-  if (isCpuTurn) {
-    let best = -Infinity
-    for (const idx of free) {
-      board[idx] = CPU
-      best = Math.max(best, minimax(board, depth + 1, false))
-      board[idx] = ''
-    }
-    return best
-  }
-
-  let best = Infinity
+function findWinningMove(board, mark) {
+  const free = getFreeCells(board)
   for (const idx of free) {
-    board[idx] = PLAYER
-    best = Math.min(best, minimax(board, depth + 1, true))
-    board[idx] = ''
+    const next = [...board]
+    next[idx] = mark
+    if (getTttWinner(next) === mark) return idx
   }
-  return best
+  return -1
 }
 
-function getBestCpuMove(board) {
-  const free = board.map((cell, idx) => (cell ? null : idx)).filter((idx) => idx !== null)
-  let bestScore = -Infinity
-  let bestMove = free[0] ?? -1
+function pickRandom(items) {
+  if (!items.length) return -1
+  return items[Math.floor(Math.random() * items.length)]
+}
 
-  for (const idx of free) {
-    board[idx] = CPU
-    const score = minimax(board, 0, false)
-    board[idx] = ''
-    if (score > bestScore) {
-      bestScore = score
-      bestMove = idx
-    }
+function getMediumCpuMove(board) {
+  const free = getFreeCells(board)
+  if (!free.length) return -1
+
+  const winning = findWinningMove(board, CPU)
+  if (winning >= 0) return winning
+
+  const block = findWinningMove(board, PLAYER)
+  if (block >= 0) return block
+
+  if (free.includes(4) && Math.random() < 0.65) return 4
+
+  const corners = [0, 2, 6, 8].filter((idx) => free.includes(idx))
+  if (corners.length && Math.random() < 0.55) {
+    return pickRandom(corners)
   }
 
-  return bestMove
+  return pickRandom(free)
 }
 
 function TttGamePage() {
@@ -81,7 +69,7 @@ function TttGamePage() {
     let result = getTttWinner(next)
 
     if (!result) {
-      const cpuMove = getBestCpuMove(next)
+      const cpuMove = getMediumCpuMove(next)
       if (cpuMove >= 0) {
         next[cpuMove] = CPU
       }

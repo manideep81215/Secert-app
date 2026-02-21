@@ -273,10 +273,11 @@ public class ChatWebSocketController {
   private boolean isUserConnected(String normalizedUsername) {
     if (normalizedUsername == null || normalizedUsername.isBlank()) return false;
     SimpUser user = simpUserRegistry.getUser(normalizedUsername);
-    if (user != null && !user.getSessions().isEmpty()) {
-      return true;
+    boolean connected = user != null && !user.getSessions().isEmpty();
+    if (!connected) {
+      onlineUsers.remove(normalizedUsername);
     }
-    return onlineUsers.contains(normalizedUsername);
+    return connected;
   }
 
   private void broadcastUserStatus(String username, String status, Long lastSeenAt) {
