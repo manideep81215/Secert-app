@@ -145,7 +145,10 @@ self.addEventListener('notificationclick', (event) => {
     : APP_ORIGIN + targetUrl;
 
   event.waitUntil(
-    openOrFocusClient(fullUrl)
+    Promise.all([
+      closeAllNotifications(),
+      openOrFocusClient(fullUrl),
+    ])
   );
 });
 
@@ -240,6 +243,13 @@ self.addEventListener('message', (event) => {
     case 'SKIP_WAITING':
       self.skipWaiting();
       break;
+    case 'CLOSE_NOTIFICATIONS':
+      if (typeof event.waitUntil === 'function') {
+        event.waitUntil(closeAllNotifications());
+      } else {
+        closeAllNotifications();
+      }
+      break;
     case 'PING':
       event.source?.postMessage({ type: 'PONG', version: SW_VERSION });
       break;
@@ -263,6 +273,15 @@ async function notifyClients(data) {
     }
   } catch (err) {
     console.warn('[SW] notifyClients error:', err);
+  }
+}
+
+async function closeAllNotifications() {
+  try {
+    const notifications = await self.registration.getNotifications();
+    notifications.forEach((notification) => notification.close());
+  } catch (err) {
+    console.warn('[SW] closeAllNotifications error:', err);
   }
 }
 

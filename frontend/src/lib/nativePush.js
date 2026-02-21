@@ -69,6 +69,9 @@ function attachListeners() {
   })
 
   PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
+    clearDeliveredNativePushNotifications().catch(() => {
+      // Ignore notification tray cleanup failures.
+    })
     const dataUrl = action?.notification?.data?.url
     const url = typeof dataUrl === 'string' && dataUrl.trim() ? dataUrl.trim() : '/#/chat'
     if (typeof window !== 'undefined') {
@@ -81,6 +84,16 @@ function attachListeners() {
       }
     }
   })
+}
+
+async function clearDeliveredNativePushNotifications() {
+  if (!isNativeMobile()) return
+  if (typeof PushNotifications.removeAllDeliveredNotifications !== 'function') return
+  try {
+    await PushNotifications.removeAllDeliveredNotifications()
+  } catch {
+    // Ignore unsupported API failures.
+  }
 }
 
 export async function syncNativePushRegistration(authToken) {
@@ -105,6 +118,10 @@ export async function syncNativePushRegistration(authToken) {
   } catch {
     return false
   }
+}
+
+export async function clearNativeDeliveredPushNotifications() {
+  await clearDeliveredNativePushNotifications()
 }
 
 export async function clearNativePushRegistration(authToken) {

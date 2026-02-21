@@ -103,8 +103,8 @@
 .snake-cell {
   position: relative;
   border-radius: 0.3rem;
-  border: 1px solid rgba(122, 76, 42, 0.82);
-  background: linear-gradient(180deg, rgba(249, 239, 207, 0.8), rgba(239, 220, 168, 0.8));
+  border: 1px solid rgba(122, 76, 42, 0.68);
+  background: linear-gradient(180deg, rgba(249, 239, 207, 0.56), rgba(239, 220, 168, 0.52));
   display: flex;
   align-items: center;
   justify-content: center;

@@ -17,11 +17,16 @@ import ProfilePage from './pages/ProfilePage'
 import { WS_CHAT_URL } from './config/apiConfig'
 import { useFlowState } from './hooks/useFlowState'
 import {
+  clearActiveNotifications,
   ensureNotificationPermission as ensureLocalNotificationPermission,
   pushNotify,
   setNotifyCutoff,
 } from './lib/notifications'
-import { clearNativePushRegistration, syncNativePushRegistration } from './lib/nativePush'
+import {
+  clearNativeDeliveredPushNotifications,
+  clearNativePushRegistration,
+  syncNativePushRegistration,
+} from './lib/nativePush'
 import { ensurePushSubscription } from './lib/pushSubscription'
 import './App.css'
 
@@ -254,6 +259,36 @@ function App() {
       window.removeEventListener('online', syncPushSubscription)
       navigator.serviceWorker?.removeEventListener?.('message', onSwMessage)
       document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [flow?.token])
+
+  useEffect(() => {
+    if (!flow?.token) return undefined
+
+    const clearNow = () => {
+      clearActiveNotifications().catch(() => {
+        // Ignore notification cleanup failures.
+      })
+      clearNativeDeliveredPushNotifications().catch(() => {
+        // Ignore native push tray cleanup failures.
+      })
+    }
+
+    clearNow()
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        clearNow()
+      }
+    }
+
+    window.addEventListener('focus', clearNow)
+    window.addEventListener('pageshow', clearNow)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      window.removeEventListener('focus', clearNow)
+      window.removeEventListener('pageshow', clearNow)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
     }
   }, [flow?.token])
 

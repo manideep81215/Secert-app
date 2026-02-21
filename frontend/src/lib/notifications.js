@@ -223,3 +223,31 @@ export async function pushNotify(title, body) {
     return false
   }
 }
+
+export async function clearActiveNotifications() {
+  if (isCapacitorNative()) {
+    try {
+      await LocalNotifications.removeAllDeliveredNotifications()
+    } catch {
+      // Ignore unsupported API failures on older devices.
+    }
+    try {
+      await LocalNotifications.cancel({ notifications: [] })
+    } catch {
+      // Ignore cancellation failures.
+    }
+    return
+  }
+
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return
+  try {
+    const registration = await navigator.serviceWorker.ready
+    const shown = await registration.getNotifications()
+    shown.forEach((notification) => notification.close())
+    if (registration.active) {
+      registration.active.postMessage({ type: 'CLOSE_NOTIFICATIONS' })
+    }
+  } catch {
+    // Ignore notification cleanup failures.
+  }
+}
