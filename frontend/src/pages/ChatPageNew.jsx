@@ -159,6 +159,35 @@ function ChatPageNew() {
     if (!value) return getTimeLabel()
     return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   }
+  const linkRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi
+  const splitUrlSuffix = (token) => {
+    const match = token.match(/[),.!?:;]+$/)
+    if (!match) return { urlPart: token, suffix: '' }
+    const suffix = match[0]
+    return { urlPart: token.slice(0, token.length - suffix.length), suffix }
+  }
+  const renderTextWithLinks = (value) => {
+    const text = String(value || '')
+    if (!text) return null
+    const parts = text.split(linkRegex)
+    return parts.map((part, index) => {
+      if (!part) return null
+      const isUrlPart = /^https?:\/\//i.test(part) || /^www\./i.test(part)
+      if (!isUrlPart) {
+        return <span key={`txt-${index}`}>{part}</span>
+      }
+      const { urlPart, suffix } = splitUrlSuffix(part)
+      const href = urlPart.startsWith('http') ? urlPart : `https://${urlPart}`
+      return (
+        <span key={`lnk-wrap-${index}`}>
+          <a className="message-link" href={href} target="_blank" rel="noreferrer">
+            {urlPart}
+          </a>
+          {suffix ? <span>{suffix}</span> : null}
+        </span>
+      )
+    })
+  }
   const normalizeMediaUrl = (url) => {
     if (!url) return null
     if (url.startsWith('/')) return `${API_BASE_URL}${url}`
@@ -897,7 +926,9 @@ function ChatPageNew() {
     if (location.pathname !== '/chat') return false
     if (!fromUsername) return false
     const activeUser = selectedUserRef.current?.username
-    return activeUser && toUserKey(activeUser) === toUserKey(fromUsername)
+    if (!activeUser) return false
+    if (isMobileView && showMobileUsers) return false
+    return toUserKey(activeUser) === toUserKey(fromUsername)
   }
 
   useEffect(() => {
@@ -1846,16 +1877,16 @@ function ChatPageNew() {
                   {message.replyingTo && (
                     <div className="message-reply-context">
                       <div className="reply-label">Replying to {message.replyingTo.senderName ? `@${formatUsername(message.replyingTo.senderName)}` : 'message'}:</div>
-                      <div className="reply-text">{message.replyingTo.text}</div>
+                      <div className="reply-text">{renderTextWithLinks(message.replyingTo.text)}</div>
                     </div>
                   )}
                   {renderMessageMedia(message)}
                   {message.fileName && <div className="message-file-name">{message.fileName}</div>}
                   {(message.type === 'text' || !message.type) && (
-                    <div className="message-text">{message.text}</div>
+                    <div className="message-text">{renderTextWithLinks(message.text)}</div>
                   )}
                   {(message.type && message.type !== 'text' && !message.mediaUrl) && (
-                    <div className="message-media-fallback">{`${getTypeIcon(message.type)} ${message.text}`.trim()}</div>
+                    <div className="message-media-fallback">{renderTextWithLinks(`${getTypeIcon(message.type)} ${message.text}`.trim())}</div>
                   )}
                   <span className="message-time">{getMessageFooterLabel(message)}</span>
                   {shouldShowSeenInline && index === lastOutgoingIndex && activeMessageActionsKey !== messageKey && (

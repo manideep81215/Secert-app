@@ -526,6 +526,16 @@
   line-height: 1.4;
 }
 
+.message-link {
+  color: inherit;
+  text-decoration: underline;
+  word-break: break-all;
+}
+
+.message-link:hover {
+  opacity: 0.88;
+}
+
 .message-media {
   font-size: 1.5rem;
   padding: 1rem 0;
