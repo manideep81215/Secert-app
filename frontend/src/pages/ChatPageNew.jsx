@@ -159,6 +159,16 @@ function ChatPageNew() {
   const getTimeLabel = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   const getConversationKey = (peerUsername) => `${(flow.username || '').toLowerCase()}::${(peerUsername || '').toLowerCase()}`
   const getConversationClearCutoff = (peerUsername) => conversationClears[getConversationKey(peerUsername)] || 0
+  const isNativeCapacitorRuntime = () => {
+    if (typeof window === 'undefined') return false
+    const cap = window.Capacitor
+    if (!cap) return false
+    if (typeof cap.isNativePlatform === 'function') {
+      return Boolean(cap.isNativePlatform())
+    }
+    const platform = cap.getPlatform?.()
+    return platform === 'ios' || platform === 'android'
+  }
   const getCapacitorKeyboard = async () => {
     const runtimeKeyboard = window?.Capacitor?.Plugins?.Keyboard
     if (runtimeKeyboard) return runtimeKeyboard
@@ -570,6 +580,7 @@ function ChatPageNew() {
   useEffect(() => {
     if (typeof document === 'undefined') return undefined
     if (!isMobileView) return undefined
+    if (!isNativeCapacitorRuntime()) return undefined
     const html = document.documentElement
     const body = document.body
     const root = document.getElementById('root')
@@ -1012,6 +1023,7 @@ function ChatPageNew() {
   useEffect(() => {
     if (typeof window === 'undefined') return undefined
     if (!isMobileView) return undefined
+    if (!isNativeCapacitorRuntime()) return undefined
     const viewport = window.visualViewport
     if (!viewport) return undefined
 
@@ -1029,9 +1041,11 @@ function ChatPageNew() {
     }
   }, [isMobileView])
 
+  
   useEffect(() => {
     if (!isKeyboardOpen) return
     if (!isMobileView) return
+    if (!isNativeCapacitorRuntime()) return
     const active = document.activeElement
     const isTypingTarget = active instanceof HTMLElement && Boolean(active.closest('.message-input'))
     if (!isTypingTarget) return
@@ -1531,6 +1545,7 @@ function ChatPageNew() {
 
   const startKeyboardBottomLock = (durationMs = 1400) => {
     if (typeof window === 'undefined') return
+    if (!isNativeCapacitorRuntime()) return
     const until = Date.now() + Math.max(0, durationMs)
     keyboardBottomLockRef.current.until = until
     if (keyboardBottomLockRef.current.rafId) return
