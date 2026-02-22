@@ -95,6 +95,8 @@ function ChatPageNew() {
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false)
   const [keyboardOffset, setKeyboardOffset] = useState(0)
   const [viewportHeight, setViewportHeight] = useState(() => (typeof window !== 'undefined' ? window.innerHeight : 0))
+  const [visualViewportTop, setVisualViewportTop] = useState(0)
+  const [visualViewportBottomGap, setVisualViewportBottomGap] = useState(0)
   const [isIosPlatform, setIsIosPlatform] = useState(false)
   const [isAndroidPlatform, setIsAndroidPlatform] = useState(false)
   const [reactionTray, setReactionTray] = useState(null)
@@ -655,16 +657,21 @@ function ChatPageNew() {
     const syncKeyboardFromViewport = () => {
       const viewport = window.visualViewport
       const viewportHeightNow = Math.round(viewport?.height || window.innerHeight || 0)
+      const viewportTopNow = Math.max(0, Math.round(viewport?.offsetTop || 0))
       if (viewportHeightNow > maxViewportHeightRef.current) {
         maxViewportHeightRef.current = viewportHeightNow
       }
       const baselineHeight = Math.max(maxViewportHeightRef.current || 0, viewportHeightNow)
+      const layoutHeight = Math.round(window.innerHeight || viewportHeightNow || 0)
+      const viewportBottomGap = Math.max(0, layoutHeight - (viewportTopNow + viewportHeightNow))
       const keyboardDelta = Math.max(0, baselineHeight - viewportHeightNow)
-      const keyboardLikelyOpen = keyboardDelta > 120 || isMessageInputFocused()
+      const keyboardLikelyOpen = keyboardDelta > 120 || viewportBottomGap > 80 || isMessageInputFocused()
       setViewportHeight((prev) => {
         const next = viewportHeightNow || window.innerHeight
         return Math.abs((prev || 0) - next) <= 2 ? prev : next
       })
+      setVisualViewportTop((prev) => (Math.abs((prev || 0) - viewportTopNow) <= 1 ? prev : viewportTopNow))
+      setVisualViewportBottomGap((prev) => (Math.abs((prev || 0) - viewportBottomGap) <= 1 ? prev : viewportBottomGap))
       if (isAndroidPlatform) {
         setKeyboardOffset(0)
         setIsKeyboardOpen(keyboardLikelyOpen)
@@ -2383,6 +2390,8 @@ function ChatPageNew() {
         '--chat-keyboard-offset': '0px',
         '--chat-viewport-height': `${Math.max(0, viewportHeight || fallbackViewportHeight)}px`,
         '--chat-safe-bottom': isIosPlatform ? 'env(safe-area-inset-bottom)' : '0px',
+        '--chat-vv-top': `${Math.max(0, visualViewportTop)}px`,
+        '--chat-vv-bottom': `${Math.max(0, visualViewportBottomGap)}px`,
       }}
     >
       <ChatUsersPanel
