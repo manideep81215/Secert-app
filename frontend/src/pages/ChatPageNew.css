@@ -49,6 +49,7 @@
   flex-direction: column;
   background: white;
   overflow: hidden;
+  min-height: 0;
   animation: panelReveal 0.45s ease;
 }
 
@@ -448,6 +449,7 @@
 /* Messages Area */
 .messages-area {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 1.5rem;
   display: flex;

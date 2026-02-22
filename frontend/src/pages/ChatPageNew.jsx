@@ -107,6 +107,7 @@ function ChatPageNew() {
   const lastPublishedReadAtRef = useRef({})
   const mediaInputRef = useRef(null)
   const fileInputRef = useRef(null)
+  const messagesAreaRef = useRef(null)
   const messagesEndRef = useRef(null)
   const selectedUserRef = useRef(null)
   const attachMenuRef = useRef(null)
@@ -1004,8 +1005,29 @@ function ChatPageNew() {
   }, [flow.token, flow.username])
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'auto' })
+    scrollMessagesToBottom('auto')
   }, [messages])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined
+    if (!isMobileView) return undefined
+    const viewport = window.visualViewport
+    if (!viewport) return undefined
+
+    const keepBottomVisible = () => {
+      const active = document.activeElement
+      const isTypingTarget = active instanceof HTMLElement && Boolean(active.closest('.message-input'))
+      if (!isTypingTarget) return
+      scrollMessagesToBottom('auto')
+      setTimeout(() => scrollMessagesToBottom('auto'), 120)
+      setTimeout(() => scrollMessagesToBottom('auto'), 320)
+    }
+
+    viewport.addEventListener('resize', keepBottomVisible)
+    return () => {
+      viewport.removeEventListener('resize', keepBottomVisible)
+    }
+  }, [isMobileView])
 
   useEffect(() => {
     if (!selectedUser?.username || !socket?.connected) return
@@ -1480,6 +1502,18 @@ function ChatPageNew() {
 
   const closeMediaPreview = () => {
     setActiveMediaPreview(null)
+  }
+
+  const scrollMessagesToBottom = (behavior = 'auto') => {
+    const listEl = messagesAreaRef.current
+    if (listEl) {
+      try {
+        listEl.scrollTo({ top: listEl.scrollHeight, behavior })
+      } catch {
+        listEl.scrollTop = listEl.scrollHeight
+      }
+    }
+    messagesEndRef.current?.scrollIntoView({ behavior, block: 'end' })
   }
 
   useEffect(() => {
@@ -2389,7 +2423,7 @@ function ChatPageNew() {
       style={{
         '--chat-keyboard-offset': '0px',
         '--chat-viewport-height': `${Math.max(0, viewportHeight || fallbackViewportHeight)}px`,
-        '--chat-safe-bottom': isIosPlatform ? 'env(safe-area-inset-bottom)' : '0px',
+        '--chat-safe-bottom': (isIosPlatform && !isKeyboardOpen) ? 'env(safe-area-inset-bottom)' : '0px',
         '--chat-vv-top': `${Math.max(0, visualViewportTop)}px`,
         '--chat-vv-bottom': `${isIosPlatform ? 0 : Math.max(0, visualViewportBottomGap)}px`,
       }}
@@ -2480,6 +2514,7 @@ function ChatPageNew() {
 
         <motion.div
           className="messages-area"
+          ref={messagesAreaRef}
           onDragOver={handleDragOver}
           onDrop={handleDrop}
           onScroll={() => {
@@ -2695,9 +2730,10 @@ function ChatPageNew() {
                 onChange={handleInputChange}
                 onKeyDown={(event) => event.key === 'Enter' && handleSendMessage()}
                 onFocus={() => {
-                  setTimeout(() => {
-                    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-                  }, 300)
+                  scrollMessagesToBottom('auto')
+                  setTimeout(() => scrollMessagesToBottom('auto'), 120)
+                  setTimeout(() => scrollMessagesToBottom('auto'), 320)
+                  setTimeout(() => scrollMessagesToBottom('auto'), 520)
                 }}
                 autoComplete="off"
                 autoCorrect="off"

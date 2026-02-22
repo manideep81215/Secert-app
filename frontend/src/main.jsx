@@ -18,10 +18,32 @@ if ('serviceWorker' in navigator) {
   })
 }
 
-createRoot(document.getElementById('root')).render(
+const rootEl = document.getElementById('root')
+createRoot(rootEl).render(
   <StrictMode>
     <HashRouter>
       <App />
     </HashRouter>
   </StrictMode>,
 )
+
+const hideStartupSplash = () => {
+  const splash = document.getElementById('app-splash')
+  if (!splash) return
+  splash.classList.add('app-splash-hidden')
+  window.setTimeout(() => {
+    splash.remove()
+  }, 260)
+}
+
+if (document.readyState === 'complete' || document.readyState === 'interactive') {
+  window.requestAnimationFrame(() => {
+    hideStartupSplash()
+  })
+} else {
+  window.addEventListener('DOMContentLoaded', () => {
+    window.requestAnimationFrame(() => {
+      hideStartupSplash()
+    })
+  })
+}

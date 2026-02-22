@@ -11,9 +11,45 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Simp Games Quest" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+    <style>
+      html, body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        background: #efe4c8;
+      }
+      #root {
+        width: 100%;
+        height: 100%;
+      }
+      #app-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(180deg, #f5deb6 0%, #efe4c8 100%);
+        transition: opacity 220ms ease;
+      }
+      #app-splash.app-splash-hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+      #app-splash-logo {
+        width: min(34vw, 132px);
+        height: min(34vw, 132px);
+        border-radius: 28px;
+        box-shadow: 0 14px 26px rgba(58, 44, 27, 0.22);
+        object-fit: cover;
+      }
+    </style>
     <title>Simp Games Quest</title>
   </head>
   <body>
+    <div id="app-splash" aria-hidden="true">
+      <img id="app-splash-logo" src="/theme/simp-games-quest-logo.png" alt="" />
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
