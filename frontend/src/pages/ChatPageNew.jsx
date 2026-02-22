@@ -26,7 +26,16 @@ const ACTIVE_CHAT_PEER_KEY_PREFIX = 'active_chat_peer_v1:'
 const EDIT_WINDOW_MS = 15 * 60 * 1000
 const MESSAGE_ACTION_LONG_PRESS_MS = 1000
 const TYPING_STALE_MS = 1400
-const QUICK_REACTIONS = ['❤️', '😂', '😮', '😢', '😡', '👍']
+const QUICK_REACTIONS = [
+  { code: 'heart', emoji: '❤️' },
+  { code: 'laugh', emoji: '😂' },
+  { code: 'wow', emoji: '😮' },
+  { code: 'sad', emoji: '😢' },
+  { code: 'angry', emoji: '😡' },
+  { code: 'like', emoji: '👍' },
+]
+const REACTION_CODE_TO_EMOJI = QUICK_REACTIONS.reduce((acc, item) => ({ ...acc, [item.code]: item.emoji }), {})
+const REACTION_EMOJI_TO_CODE = QUICK_REACTIONS.reduce((acc, item) => ({ ...acc, [item.emoji]: item.code }), {})
 
 function ChatPageNew() {
   const navigate = useNavigate()
@@ -238,6 +247,18 @@ function ChatPageNew() {
     if (messageType === 'voice') return 'Sent a voice message'
     if (messageType === 'file') return fileNameValue ? `Sent file: ${fileNameValue}` : 'Sent a file'
     return textValue || 'New message'
+  }
+  const decodeReaction = (value) => {
+    if (!value) return null
+    const normalized = String(value).trim()
+    if (!normalized) return null
+    return REACTION_CODE_TO_EMOJI[normalized] || normalized
+  }
+  const encodeReaction = (emojiValue) => {
+    if (!emojiValue) return null
+    const normalized = String(emojiValue).trim()
+    if (!normalized) return null
+    return REACTION_EMOJI_TO_CODE[normalized] || normalized
   }
   const getMessageCreatedAtMs = (message) => Number(message?.createdAt || message?.clientCreatedAt || 0)
   const isMessageFailed = (message) => message?.deliveryStatus === 'failed'
@@ -557,35 +578,17 @@ function ChatPageNew() {
   useEffect(() => {
     if (typeof window === 'undefined') return undefined
 
-    const resetViewportScroll = () => {
-      try {
-        window.scrollTo(0, 0)
-        document.documentElement.scrollTop = 0
-        document.body.scrollTop = 0
-      } catch {
-        // Ignore viewport scroll failures.
-      }
-    }
-
     const getKeyboardOffset = () => {
+      if (isIosPlatform) return 0
       const viewport = window.visualViewport
       const viewportHeight = Math.round(viewport?.height || window.innerHeight || 0)
       const viewportTop = Math.round(viewport?.offsetTop || 0)
       const effectiveHeight = viewportHeight + viewportTop
-      const innerHeight = Math.round(window.innerHeight || effectiveHeight)
 
       if (effectiveHeight > maxViewportHeightRef.current) {
         maxViewportHeightRef.current = effectiveHeight
       }
       const baseline = maxViewportHeightRef.current || effectiveHeight
-
-      // On iOS with webview resize enabled, fixed elements already follow the resized viewport.
-      // Use current viewport delta to avoid applying keyboard lift twice (which creates blank gap).
-      if (isIosPlatform) {
-        const liveOffset = Math.max(0, innerHeight - effectiveHeight)
-        return liveOffset > 40 ? liveOffset : 0
-      }
-
       const offset = Math.max(0, baseline - effectiveHeight)
       return offset > 40 ? offset : 0
     }
@@ -593,24 +596,23 @@ function ChatPageNew() {
     const syncKeyboardFromViewport = () => {
       const viewport = window.visualViewport
       const viewportHeightNow = Math.round((viewport?.height || window.innerHeight || 0) + (viewport?.offsetTop || 0))
-      setViewportHeight(viewportHeightNow || window.innerHeight)
+      setViewportHeight((prev) => {
+        const next = viewportHeightNow || window.innerHeight
+        return Math.abs((prev || 0) - next) <= 2 ? prev : next
+      })
       if (!isIosPlatform) {
-        setKeyboardOffset(0)
-        setIsKeyboardOpen(false)
+        const offset = getKeyboardOffset()
+        setKeyboardOffset((prev) => (Math.abs((prev || 0) - offset) <= 2 ? prev : offset))
+        setIsKeyboardOpen(offset > 0)
         return
       }
-      const offset = getKeyboardOffset()
-      setKeyboardOffset(offset)
-      setIsKeyboardOpen(offset > 0)
-      if (offset > 0) resetViewportScroll()
+      setKeyboardOffset(0)
     }
 
     const onFocusIn = (event) => {
       const target = event.target
       if (!(target instanceof HTMLElement)) return
       if (!target.closest('.message-input')) return
-      setTimeout(resetViewportScroll, 0)
-      setTimeout(resetViewportScroll, 120)
       setTimeout(syncKeyboardFromViewport, 0)
       setTimeout(syncKeyboardFromViewport, 220)
     }
@@ -628,7 +630,6 @@ function ChatPageNew() {
 
     const viewport = window.visualViewport
     viewport?.addEventListener('resize', syncKeyboardFromViewport)
-    viewport?.addEventListener('scroll', syncKeyboardFromViewport)
     window.addEventListener('resize', syncKeyboardFromViewport)
     window.addEventListener('orientationchange', syncKeyboardFromViewport)
 
@@ -645,12 +646,10 @@ function ChatPageNew() {
             setKeyboardOffset(nativeHeight)
           }
           setIsKeyboardOpen(true)
-          resetViewportScroll()
         }
         const onHide = () => {
           setKeyboardOffset(0)
           setIsKeyboardOpen(false)
-          resetViewportScroll()
           syncKeyboardFromViewport()
         }
         const showHandle = await keyboard.addListener('keyboardWillShow', onShow)
@@ -677,7 +676,6 @@ function ChatPageNew() {
       window.removeEventListener('focusin', onFocusIn)
       window.removeEventListener('focusout', onFocusOut)
       viewport?.removeEventListener('resize', syncKeyboardFromViewport)
-      viewport?.removeEventListener('scroll', syncKeyboardFromViewport)
       window.removeEventListener('resize', syncKeyboardFromViewport)
       window.removeEventListener('orientationchange', syncKeyboardFromViewport)
       handles.forEach((handle) => handle?.remove?.())
@@ -862,7 +860,7 @@ function ChatPageNew() {
           fileName: row.fileName || null,
           mediaUrl: normalizeMediaUrl(row.mediaUrl),
           mimeType: row.mimeType || null,
-          reaction: row.reaction || null,
+          reaction: decodeReaction(row.reaction),
           replyingTo: row.replyText ? { text: row.replyText, senderName: row.replySenderName || row.senderName } : null,
           senderName: formatUsername(row.senderName),
           messageId: row.id || null,
@@ -1008,7 +1006,7 @@ function ChatPageNew() {
               fileName: data?.fileName || null,
               mediaUrl: normalizeMediaUrl(data?.mediaUrl || null),
               mimeType: data?.mimeType || null,
-              reaction: data?.reaction || null,
+              reaction: decodeReaction(data?.reaction),
               replyingTo: data?.replyingTo || (data?.replyText ? { text: data.replyText, senderName: data?.replySenderName || fromUsername } : null),
               createdAt: incomingCreatedAt || null,
               clientCreatedAt: incomingCreatedAt || Date.now(),
@@ -1173,7 +1171,7 @@ function ChatPageNew() {
             const event = JSON.parse(frame.body)
             const messageId = Number(event?.messageId || 0)
             if (!messageId) return
-            const nextReaction = event?.reaction || null
+            const nextReaction = decodeReaction(event?.reaction)
             setMessages((prev) => prev.map((msg) => (
               Number(msg?.messageId || 0) === messageId
                 ? { ...msg, reaction: nextReaction }
@@ -1736,6 +1734,15 @@ function ChatPageNew() {
     }
   }
 
+  const waitForSocketConnected = async (timeoutMs = 12000, pollIntervalMs = 300) => {
+    const startedAt = Date.now()
+    while (Date.now() - startedAt < timeoutMs) {
+      if (socket?.connected) return true
+      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs))
+    }
+    return Boolean(socket?.connected)
+  }
+
   const sendMediaFile = async (file, type) => {
     if (!selectedUser || !file) return
 
@@ -1804,43 +1811,9 @@ function ChatPageNew() {
       )
     )
 
-    if (!socket?.connected) {
-      setMessages((prev) => prev.map((msg) => (msg.tempId === tempId ? { ...msg, deliveryStatus: 'failed' } : msg)))
-      toast.error('Realtime server disconnected. Message not sent.')
-      return
-    }
-
+    let uploaded
     try {
-      const uploaded = await uploadMedia(flow.token, uploadFile)
-      const uploadedUrl = normalizeMediaUrl(uploaded?.mediaUrl || localPreviewUrl)
-      const uploadedMime = uploaded?.mimeType || uploadFile.type || null
-
-      setMessages((prev) => prev.map((msg) => (
-        msg.tempId === tempId
-          ? { ...msg, mediaUrl: uploadedUrl, mimeType: uploadedMime, fileName: uploaded?.fileName || uploadFile.name }
-          : msg
-      )))
-
-      socket.publish({
-        destination: '/app/chat.send',
-        body: JSON.stringify({
-          toUsername: targetUser.username,
-          fromUsername: flow.username,
-          message: previewLabel,
-          tempId,
-          type: resolvedType,
-          fileName: uploaded?.fileName || uploadFile.name,
-          mediaUrl: uploadedUrl,
-          mimeType: uploadedMime,
-          replyingTo: currentReply ? { text: currentReply.text, senderName: currentReply.senderName } : null,
-          replyText: currentReply?.text || null,
-          replySenderName: currentReply?.senderName || null,
-        }),
-      })
-      sendAckTimeoutsRef.current[tempId] = setTimeout(() => {
-        setMessages((prev) => prev.map((msg) => (msg.tempId === tempId ? { ...msg, deliveryStatus: 'failed' } : msg)))
-        delete sendAckTimeoutsRef.current[tempId]
-      }, 12000)
+      uploaded = await uploadMedia(flow.token, uploadFile)
     } catch (error) {
       console.error('Media upload failed', error)
       if (error?.response?.status === 401) {
@@ -1855,6 +1828,51 @@ function ChatPageNew() {
       }
       setMessages((prev) => prev.map((msg) => (msg.tempId === tempId ? { ...msg, deliveryStatus: 'failed' } : msg)))
       toast.error('Media upload failed. Please try a smaller file.')
+      return
+    }
+
+    const uploadedUrl = normalizeMediaUrl(uploaded?.mediaUrl || localPreviewUrl)
+    const uploadedMime = uploaded?.mimeType || uploadFile.type || null
+    const uploadedFileName = uploaded?.fileName || uploadFile.name
+
+    setMessages((prev) => prev.map((msg) => (
+      msg.tempId === tempId
+        ? { ...msg, mediaUrl: uploadedUrl, mimeType: uploadedMime, fileName: uploadedFileName }
+        : msg
+    )))
+
+    const isRealtimeReady = await waitForSocketConnected(15000, 300)
+    if (!isRealtimeReady) {
+      setMessages((prev) => prev.map((msg) => (msg.tempId === tempId ? { ...msg, deliveryStatus: 'failed' } : msg)))
+      toast.error('Media uploaded, but realtime is disconnected. Tap resend when connection returns.')
+      return
+    }
+
+    try {
+      socket.publish({
+        destination: '/app/chat.send',
+        body: JSON.stringify({
+          toUsername: targetUser.username,
+          fromUsername: flow.username,
+          message: previewLabel,
+          tempId,
+          type: resolvedType,
+          fileName: uploadedFileName,
+          mediaUrl: uploadedUrl,
+          mimeType: uploadedMime,
+          replyingTo: currentReply ? { text: currentReply.text, senderName: currentReply.senderName } : null,
+          replyText: currentReply?.text || null,
+          replySenderName: currentReply?.senderName || null,
+        }),
+      })
+      sendAckTimeoutsRef.current[tempId] = setTimeout(() => {
+        setMessages((prev) => prev.map((msg) => (msg.tempId === tempId ? { ...msg, deliveryStatus: 'failed' } : msg)))
+        delete sendAckTimeoutsRef.current[tempId]
+      }, 12000)
+    } catch (error) {
+      console.error('Realtime publish failed after upload', error)
+      setMessages((prev) => prev.map((msg) => (msg.tempId === tempId ? { ...msg, deliveryStatus: 'failed' } : msg)))
+      toast.error('Media uploaded, but send failed. Tap resend.')
     }
   }
 
@@ -2215,7 +2233,7 @@ function ChatPageNew() {
       destination: '/app/chat.react',
       body: JSON.stringify({
         messageId: targetMessage.messageId,
-        reaction: nextReaction,
+        reaction: encodeReaction(nextReaction),
         fromUsername: flow.username,
       }),
     })
@@ -2288,7 +2306,7 @@ function ChatPageNew() {
       className={`chat-container ${selectedUser ? 'user-selected' : ''} ${showMobileUsers ? 'mobile-users-open' : ''} ${isKeyboardOpen ? 'keyboard-open' : ''}`}
       data-ios={isIosPlatform ? 'true' : 'false'}
       style={{
-        '--chat-keyboard-offset': `${Math.max(0, keyboardOffset)}px`,
+        '--chat-keyboard-offset': `${isIosPlatform ? 0 : Math.max(0, keyboardOffset)}px`,
         '--chat-viewport-height': `${Math.max(0, viewportHeight || fallbackViewportHeight)}px`,
       }}
     >
@@ -2492,16 +2510,16 @@ function ChatPageNew() {
         </motion.div>
         {reactionTray && (
           <div className="reaction-tray" style={getReactionTrayStyle()}>
-            {QUICK_REACTIONS.map((emoji) => (
+            {QUICK_REACTIONS.map((item) => (
               <button
-                key={`${reactionTray.messageKey}-${emoji}`}
+                key={`${reactionTray.messageKey}-${item.code}`}
                 type="button"
                 className="reaction-tray-btn"
-                onClick={() => applyMessageReaction(reactionTray.messageKey, emoji)}
-                aria-label={`React ${emoji}`}
-                title={`React ${emoji}`}
+                onClick={() => applyMessageReaction(reactionTray.messageKey, item.emoji)}
+                aria-label={`React ${item.emoji}`}
+                title={`React ${item.emoji}`}
               >
-                {emoji}
+                {item.emoji}
               </button>
             ))}
           </div>

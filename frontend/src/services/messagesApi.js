@@ -18,6 +18,7 @@ export async function uploadMedia(token, file) {
   const form = new FormData()
   form.append('file', file)
   const { data } = await messagesClient.post('/media', form, {
+    timeout: 0,
     headers: {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       'Content-Type': 'multipart/form-data',

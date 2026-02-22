@@ -5,7 +5,6 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.regex.Pattern;
 
 import org.springframework.context.event.EventListener;
 import org.springframework.beans.factory.annotation.Value;
@@ -25,7 +24,6 @@ import com.game.app.service.PushNotificationService;
 @Controller
 public class ChatWebSocketController {
   private static final long EDIT_WINDOW_MILLIS = 15 * 60 * 1000L;
-  private static final Pattern REACTION_PATTERN = Pattern.compile("^[\\p{So}\\p{Sk}\\uFE0F\\u200D]{1,16}$");
 
   private final SimpMessagingTemplate messagingTemplate;
   private final SimpUserRegistry simpUserRegistry;
@@ -377,8 +375,7 @@ public class ChatWebSocketController {
     if (reaction == null) return null;
     String trimmed = reaction.trim();
     if (trimmed.isBlank()) return null;
-    if (trimmed.length() > 16) return null;
-    if (!REACTION_PATTERN.matcher(trimmed).matches()) return null;
+    if (trimmed.length() > 24) return null;
     return trimmed;
   }
 
