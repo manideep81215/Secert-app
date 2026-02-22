@@ -2274,8 +2274,8 @@
     position: fixed !important;
     inset: 0 !important;
     width: 100vw !important;
-    height: 100dvh !important;
-    min-height: 100dvh !important;
+    height: var(--chat-viewport-height, 100dvh) !important;
+    min-height: var(--chat-viewport-height, 100dvh) !important;
     display: flex !important;
     flex-direction: column !important;
     overflow: hidden !important;
@@ -2309,7 +2309,7 @@
     right: auto !important;
     bottom: auto !important;
     z-index: 140 !important;
-    padding-bottom: calc(0.45rem + env(safe-area-inset-bottom)) !important;
+    padding-bottom: calc(0.45rem + var(--chat-safe-bottom, 0px)) !important;
   }
 
   .chat-container:not(.mobile-users-open) .reply-preview {
@@ -2320,5 +2320,16 @@
     bottom: auto !important;
     margin: 0 0.65rem !important;
     z-index: 150 !important;
+  }
+
+  /* Capacitor Android: keep composer tight to keyboard edge (no extra bottom gap). */
+  .chat-container[data-native="true"][data-android="true"].keyboard-open:not(.mobile-users-open) .input-area {
+    padding-bottom: 0.45rem !important;
+    margin-bottom: 0 !important;
+  }
+
+  .chat-container[data-native="true"][data-android="true"].keyboard-open:not(.mobile-users-open) .chat-area {
+    height: var(--chat-viewport-height, 100dvh) !important;
+    min-height: var(--chat-viewport-height, 100dvh) !important;
   }
 }
