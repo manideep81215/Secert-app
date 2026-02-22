@@ -3,6 +3,8 @@
 .chat-container {
   --chat-keyboard-offset: 0px;
   --chat-safe-bottom: env(safe-area-inset-bottom);
+  --chat-vv-top: 0px;
+  --chat-vv-bottom: 0px;
   display: grid;
   grid-template-columns: 280px 1fr;
   width: 100%;
@@ -2254,17 +2256,14 @@
   }
 }
 
-/* Final PWA layout (strict 100dvh flex stack):
-   - Header pinned at top
-   - Input pinned above keyboard
-   - Only messages area scrolls/resizes */
+/* Final keyboard-safe mobile layout:
+   - Header fixed at top (never pushed by keyboard)
+   - Composer fixed at bottom (0px gap from keyboard edge)
+   - Messages area shrinks between them (WhatsApp-style) */
 @media (max-width: 920px) {
   .chat-container:not(.mobile-users-open) {
     position: fixed !important;
     inset: 0 !important;
-    width: 100vw !important;
-    height: 100dvh !important;
-    min-height: 100dvh !important;
     overflow: hidden !important;
     overscroll-behavior: none !important;
   }
@@ -2273,33 +2272,27 @@
     position: fixed !important;
     inset: 0 !important;
     width: 100vw !important;
-    height: 100dvh !important;
-    min-height: 100dvh !important;
-    display: flex !important;
-    flex-direction: column !important;
+    height: var(--chat-viewport-height) !important;
+    min-height: var(--chat-viewport-height) !important;
     overflow: hidden !important;
   }
 
   .chat-container:not(.mobile-users-open) .chat-header {
-    position: sticky !important;
-    top: 0 !important;
+    position: fixed !important;
+    top: calc(var(--chat-vv-top) + env(safe-area-inset-top)) !important;
     left: 0 !important;
     right: 0 !important;
     z-index: 220 !important;
-    min-height: 64px !important;
+    min-height: 64px;
     margin: 0 !important;
-    flex: 0 0 auto !important;
-    padding-top: max(0.45rem, env(safe-area-inset-top)) !important;
   }
 
   .chat-container:not(.mobile-users-open) .messages-area {
-    position: relative !important;
-    top: auto !important;
-    left: auto !important;
-    right: auto !important;
-    bottom: auto !important;
-    flex: 1 1 auto !important;
-    min-height: 0 !important;
+    position: absolute !important;
+    top: calc(var(--chat-vv-top) + env(safe-area-inset-top) + 64px) !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: calc(70px + var(--chat-safe-bottom) + var(--chat-vv-bottom)) !important;
     overflow-y: auto !important;
     padding-top: 0.7rem !important;
     padding-bottom: 0.75rem !important;
@@ -2307,12 +2300,11 @@
   }
 
   .chat-container:not(.mobile-users-open) .input-area {
-    position: sticky !important;
-    left: auto !important;
-    right: auto !important;
-    bottom: 0 !important;
+    position: fixed !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: var(--chat-vv-bottom) !important;
     z-index: 230 !important;
-    flex: 0 0 auto !important;
     margin: 0 !important;
     padding-bottom: calc(0.45rem + var(--chat-safe-bottom)) !important;
   }
@@ -2321,7 +2313,7 @@
     position: fixed !important;
     left: max(0.65rem, env(safe-area-inset-left)) !important;
     right: max(0.65rem, env(safe-area-inset-right)) !important;
-    bottom: calc(68px + var(--chat-safe-bottom)) !important;
+    bottom: calc(68px + var(--chat-safe-bottom) + var(--chat-vv-bottom)) !important;
     margin: 0 !important;
     z-index: 240 !important;
     box-shadow: 0 8px 18px rgba(0, 0, 0, 0.2);
@@ -2330,10 +2322,11 @@
 
 @media (max-width: 680px) {
   .chat-container:not(.mobile-users-open) .chat-header {
-    min-height: 60px !important;
+    min-height: 60px;
   }
 
   .chat-container:not(.mobile-users-open) .messages-area {
-    padding-bottom: 0.7rem !important;
+    top: calc(var(--chat-vv-top) + env(safe-area-inset-top) + 60px) !important;
+    bottom: calc(68px + var(--chat-safe-bottom) + var(--chat-vv-bottom)) !important;
   }
 }
