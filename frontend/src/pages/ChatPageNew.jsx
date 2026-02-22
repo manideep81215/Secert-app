@@ -565,12 +565,19 @@ function ChatPageNew() {
 
   useEffect(() => {
     if (typeof document === 'undefined') return undefined
+    if (!isMobileView) return undefined
     const html = document.documentElement
     const body = document.body
     const root = document.getElementById('root')
+    const lockScrollY = typeof window !== 'undefined' ? window.scrollY : 0
     const prev = {
       htmlOverflow: html.style.overflow,
       htmlHeight: html.style.height,
+      bodyPosition: body.style.position,
+      bodyTop: body.style.top,
+      bodyLeft: body.style.left,
+      bodyRight: body.style.right,
+      bodyWidth: body.style.width,
       bodyOverflow: body.style.overflow,
       bodyHeight: body.style.height,
       rootOverflow: root?.style.overflow || '',
@@ -578,6 +585,11 @@ function ChatPageNew() {
     }
     html.style.overflow = 'hidden'
     html.style.height = '100%'
+    body.style.position = 'fixed'
+    body.style.top = `-${lockScrollY}px`
+    body.style.left = '0'
+    body.style.right = '0'
+    body.style.width = '100%'
     body.style.overflow = 'hidden'
     body.style.height = '100%'
     if (root) {
@@ -587,14 +599,22 @@ function ChatPageNew() {
     return () => {
       html.style.overflow = prev.htmlOverflow
       html.style.height = prev.htmlHeight
+      body.style.position = prev.bodyPosition
+      body.style.top = prev.bodyTop
+      body.style.left = prev.bodyLeft
+      body.style.right = prev.bodyRight
+      body.style.width = prev.bodyWidth
       body.style.overflow = prev.bodyOverflow
       body.style.height = prev.bodyHeight
       if (root) {
         root.style.overflow = prev.rootOverflow
         root.style.height = prev.rootHeight
       }
+      if (typeof window !== 'undefined') {
+        window.scrollTo(0, lockScrollY)
+      }
     }
-  }, [])
+  }, [isMobileView])
 
   useEffect(() => {
     if (typeof window === 'undefined' || !window.Capacitor) return
@@ -614,12 +634,15 @@ function ChatPageNew() {
   useEffect(() => {
     if (typeof window === 'undefined') return undefined
 
+    const isMessageInputFocused = () => {
+      const active = document.activeElement
+      return active instanceof HTMLElement && Boolean(active.closest('.message-input'))
+    }
+
     const getKeyboardOffset = () => {
       if (isIosPlatform || isAndroidPlatform) return 0
       const viewport = window.visualViewport
-      const viewportHeight = Math.round(viewport?.height || window.innerHeight || 0)
-      const viewportTop = Math.round(viewport?.offsetTop || 0)
-      const effectiveHeight = viewportHeight + viewportTop
+      const effectiveHeight = Math.round(viewport?.height || window.innerHeight || 0)
 
       if (effectiveHeight > maxViewportHeightRef.current) {
         maxViewportHeightRef.current = effectiveHeight
@@ -631,10 +654,13 @@ function ChatPageNew() {
 
     const syncKeyboardFromViewport = () => {
       const viewport = window.visualViewport
-      const viewportHeightNow = Math.round((viewport?.height || window.innerHeight || 0) + (viewport?.offsetTop || 0))
-      const layoutHeight = Math.round(window.innerHeight || viewportHeightNow || 0)
-      const keyboardDelta = Math.max(0, layoutHeight - viewportHeightNow)
-      const keyboardLikelyOpen = keyboardDelta > 120
+      const viewportHeightNow = Math.round(viewport?.height || window.innerHeight || 0)
+      if (viewportHeightNow > maxViewportHeightRef.current) {
+        maxViewportHeightRef.current = viewportHeightNow
+      }
+      const baselineHeight = Math.max(maxViewportHeightRef.current || 0, viewportHeightNow)
+      const keyboardDelta = Math.max(0, baselineHeight - viewportHeightNow)
+      const keyboardLikelyOpen = keyboardDelta > 120 || isMessageInputFocused()
       setViewportHeight((prev) => {
         const next = viewportHeightNow || window.innerHeight
         return Math.abs((prev || 0) - next) <= 2 ? prev : next
@@ -675,6 +701,7 @@ function ChatPageNew() {
 
     const viewport = window.visualViewport
     viewport?.addEventListener('resize', syncKeyboardFromViewport)
+    viewport?.addEventListener('scroll', syncKeyboardFromViewport)
     window.addEventListener('resize', syncKeyboardFromViewport)
     window.addEventListener('orientationchange', syncKeyboardFromViewport)
 
@@ -721,6 +748,7 @@ function ChatPageNew() {
       window.removeEventListener('focusin', onFocusIn)
       window.removeEventListener('focusout', onFocusOut)
       viewport?.removeEventListener('resize', syncKeyboardFromViewport)
+      viewport?.removeEventListener('scroll', syncKeyboardFromViewport)
       window.removeEventListener('resize', syncKeyboardFromViewport)
       window.removeEventListener('orientationchange', syncKeyboardFromViewport)
       handles.forEach((handle) => handle?.remove?.())
@@ -2350,9 +2378,11 @@ function ChatPageNew() {
     <div
       className={`chat-container ${selectedUser ? 'user-selected' : ''} ${showMobileUsers ? 'mobile-users-open' : ''} ${isKeyboardOpen ? 'keyboard-open' : ''}`}
       data-ios={isIosPlatform ? 'true' : 'false'}
+      data-android={isAndroidPlatform ? 'true' : 'false'}
       style={{
         '--chat-keyboard-offset': '0px',
         '--chat-viewport-height': `${Math.max(0, viewportHeight || fallbackViewportHeight)}px`,
+        '--chat-safe-bottom': isIosPlatform ? 'env(safe-area-inset-bottom)' : '0px',
       }}
     >
       <ChatUsersPanel
