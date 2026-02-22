@@ -2262,76 +2262,63 @@
 }
 
 /* Final keyboard-safe mobile layout:
-   - Header fixed at top (never pushed by keyboard)
-   - Composer fixed at bottom (0px gap from keyboard edge)
-   - Messages area shrinks between them (WhatsApp-style) */
+   Use pure flex stack so keyboard resize never blanks messages. */
 @media (max-width: 920px) {
   .chat-container:not(.mobile-users-open) {
     position: fixed !important;
     inset: 0 !important;
     overflow: hidden !important;
-    overscroll-behavior: none !important;
   }
 
   .chat-container:not(.mobile-users-open) .chat-area {
     position: fixed !important;
     inset: 0 !important;
     width: 100vw !important;
-    height: var(--chat-viewport-height) !important;
-    min-height: var(--chat-viewport-height) !important;
+    height: 100dvh !important;
+    min-height: 100dvh !important;
+    display: flex !important;
+    flex-direction: column !important;
     overflow: hidden !important;
   }
 
   .chat-container:not(.mobile-users-open) .chat-header {
-    position: fixed !important;
-    top: calc(var(--chat-vv-top) + env(safe-area-inset-top)) !important;
-    left: 0 !important;
-    right: 0 !important;
+    flex: 0 0 auto !important;
+    position: relative !important;
+    top: auto !important;
+    left: auto !important;
+    right: auto !important;
     z-index: 220 !important;
-    min-height: 64px;
-    margin: 0 !important;
   }
 
   .chat-container:not(.mobile-users-open) .messages-area {
-    position: absolute !important;
-    top: calc(var(--chat-vv-top) + env(safe-area-inset-top) + 64px) !important;
-    left: 0 !important;
-    right: 0 !important;
-    bottom: calc(70px + var(--chat-safe-bottom) + var(--chat-vv-bottom)) !important;
+    flex: 1 1 auto !important;
+    position: relative !important;
+    top: auto !important;
+    bottom: auto !important;
+    left: auto !important;
+    right: auto !important;
     overflow-y: auto !important;
-    padding-top: 0.7rem !important;
-    padding-bottom: 0.75rem !important;
-    overscroll-behavior: contain !important;
+    min-height: 0 !important;
+    padding: 0.7rem 0.9rem !important;
   }
 
   .chat-container:not(.mobile-users-open) .input-area {
-    position: fixed !important;
-    left: 0 !important;
-    right: 0 !important;
-    bottom: var(--chat-vv-bottom) !important;
-    z-index: 230 !important;
-    margin: 0 !important;
-    padding-bottom: calc(0.45rem + var(--chat-safe-bottom)) !important;
+    flex: 0 0 auto !important;
+    position: relative !important;
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    z-index: 140 !important;
+    padding-bottom: calc(0.45rem + env(safe-area-inset-bottom)) !important;
   }
 
   .chat-container:not(.mobile-users-open) .reply-preview {
-    position: fixed !important;
-    left: max(0.65rem, env(safe-area-inset-left)) !important;
-    right: max(0.65rem, env(safe-area-inset-right)) !important;
-    bottom: calc(68px + var(--chat-safe-bottom) + var(--chat-vv-bottom)) !important;
-    margin: 0 !important;
-    z-index: 240 !important;
-    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.2);
-  }
-}
-
-@media (max-width: 680px) {
-  .chat-container:not(.mobile-users-open) .chat-header {
-    min-height: 60px;
-  }
-
-  .chat-container:not(.mobile-users-open) .messages-area {
-    top: calc(var(--chat-vv-top) + env(safe-area-inset-top) + 60px) !important;
-    bottom: calc(68px + var(--chat-safe-bottom) + var(--chat-vv-bottom)) !important;
+    flex: 0 0 auto !important;
+    position: relative !important;
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    margin: 0 0.65rem !important;
+    z-index: 150 !important;
   }
 }

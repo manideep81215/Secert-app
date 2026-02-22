@@ -2480,18 +2480,20 @@ function ChatPageNew() {
   }
 
   const fallbackViewportHeight = typeof window !== 'undefined' ? window.innerHeight : 0
+  const isNativeRuntime = isNativeCapacitorRuntime()
 
   return (
     <div
       className={`chat-container ${selectedUser ? 'user-selected' : ''} ${showMobileUsers ? 'mobile-users-open' : ''} ${isKeyboardOpen ? 'keyboard-open' : ''}`}
       data-ios={isIosPlatform ? 'true' : 'false'}
       data-android={isAndroidPlatform ? 'true' : 'false'}
+      data-native={isNativeRuntime ? 'true' : 'false'}
       style={{
         '--chat-keyboard-offset': '0px',
         '--chat-viewport-height': `${Math.max(0, viewportHeight || fallbackViewportHeight)}px`,
         '--chat-safe-bottom': (isIosPlatform && !isKeyboardOpen) ? 'env(safe-area-inset-bottom)' : '0px',
         '--chat-vv-top': `${Math.max(0, visualViewportTop)}px`,
-        '--chat-vv-bottom': `${isIosPlatform ? 0 : Math.max(0, visualViewportBottomGap)}px`,
+        '--chat-vv-bottom': '0px',
       }}
     >
       <ChatUsersPanel
