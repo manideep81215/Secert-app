@@ -452,6 +452,8 @@
   min-height: 0;
   overflow-y: auto;
   overflow-anchor: none;
+  scroll-behavior: auto;
+  -webkit-overflow-scrolling: touch;
   padding: 1.5rem;
   display: flex;
   flex-direction: column;

@@ -1561,8 +1561,10 @@ function ChatPageNew() {
       } catch {
         listEl.scrollTop = listEl.scrollHeight
       }
+      return
     }
-    messagesEndRef.current?.scrollIntoView({ behavior, block: 'end' })
+    // Fallback only if list ref is temporarily unavailable.
+    messagesEndRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' })
   }
 
   useEffect(() => {
