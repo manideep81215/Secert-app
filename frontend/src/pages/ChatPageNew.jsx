@@ -109,6 +109,7 @@ function ChatPageNew() {
   const fileInputRef = useRef(null)
   const messagesAreaRef = useRef(null)
   const messagesEndRef = useRef(null)
+  const keyboardBottomLockRef = useRef({ rafId: 0, until: 0 })
   const selectedUserRef = useRef(null)
   const attachMenuRef = useRef(null)
   const typingTimeoutRef = useRef(null)
@@ -1019,6 +1020,7 @@ function ChatPageNew() {
       setTimeout(() => scrollMessagesToBottom('auto'), 120)
       setTimeout(() => scrollMessagesToBottom('auto'), 320)
       setTimeout(() => scrollMessagesToBottom('auto'), 650)
+      startKeyboardBottomLock(1500)
     }
 
     viewport.addEventListener('resize', keepBottomVisible)
@@ -1037,7 +1039,12 @@ function ChatPageNew() {
     setTimeout(() => scrollMessagesToBottom('auto'), 120)
     setTimeout(() => scrollMessagesToBottom('auto'), 320)
     setTimeout(() => scrollMessagesToBottom('auto'), 650)
+    startKeyboardBottomLock(1500)
   }, [isKeyboardOpen, viewportHeight, selectedUser?.username, isMobileView])
+
+  useEffect(() => () => {
+    stopKeyboardBottomLock()
+  }, [])
 
   useEffect(() => {
     if (!selectedUser?.username || !socket?.connected) return
@@ -1512,6 +1519,38 @@ function ChatPageNew() {
 
   const closeMediaPreview = () => {
     setActiveMediaPreview(null)
+  }
+
+  const stopKeyboardBottomLock = () => {
+    const rafId = Number(keyboardBottomLockRef.current.rafId || 0)
+    if (rafId) {
+      cancelAnimationFrame(rafId)
+    }
+    keyboardBottomLockRef.current = { rafId: 0, until: 0 }
+  }
+
+  const startKeyboardBottomLock = (durationMs = 1400) => {
+    if (typeof window === 'undefined') return
+    const until = Date.now() + Math.max(0, durationMs)
+    keyboardBottomLockRef.current.until = until
+    if (keyboardBottomLockRef.current.rafId) return
+
+    const tick = () => {
+      const active = document.activeElement
+      const isTypingTarget = active instanceof HTMLElement && Boolean(active.closest('.message-input'))
+      if (!isTypingTarget) {
+        stopKeyboardBottomLock()
+        return
+      }
+      scrollMessagesToBottom('auto')
+      if (Date.now() >= Number(keyboardBottomLockRef.current.until || 0)) {
+        stopKeyboardBottomLock()
+        return
+      }
+      keyboardBottomLockRef.current.rafId = requestAnimationFrame(tick)
+    }
+
+    keyboardBottomLockRef.current.rafId = requestAnimationFrame(tick)
   }
 
   const scrollMessagesToBottom = (behavior = 'auto') => {
@@ -2744,6 +2783,7 @@ function ChatPageNew() {
                   setTimeout(() => scrollMessagesToBottom('auto'), 120)
                   setTimeout(() => scrollMessagesToBottom('auto'), 320)
                   setTimeout(() => scrollMessagesToBottom('auto'), 520)
+                  startKeyboardBottomLock(1600)
                 }}
                 autoComplete="off"
                 autoCorrect="off"
