@@ -2391,7 +2391,7 @@ function ChatPageNew() {
         '--chat-viewport-height': `${Math.max(0, viewportHeight || fallbackViewportHeight)}px`,
         '--chat-safe-bottom': isIosPlatform ? 'env(safe-area-inset-bottom)' : '0px',
         '--chat-vv-top': `${Math.max(0, visualViewportTop)}px`,
-        '--chat-vv-bottom': `${Math.max(0, visualViewportBottomGap)}px`,
+        '--chat-vv-bottom': `${isIosPlatform ? 0 : Math.max(0, visualViewportBottomGap)}px`,
       }}
     >
       <ChatUsersPanel

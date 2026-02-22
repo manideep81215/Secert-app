@@ -360,7 +360,7 @@ function ChatInfoPage() {
             <span className="chat-info-action-label">Notify</span>
           </button>
           <button type="button" className={`chat-info-action ${showPushDebug ? 'active' : ''}`} onClick={() => setShowPushDebug((prev) => !prev)} aria-label="Toggle debug panel">
-            <span className="chat-info-action-icon">D</span>
+            <span className="chat-info-action-icon chat-info-action-icon-debug" aria-hidden="true" />
             <span className="chat-info-action-label">Debug</span>
           </button>
           <button type="button" className="chat-info-action" onClick={goBackToChat} aria-label="Back to chat">

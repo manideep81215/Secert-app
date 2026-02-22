@@ -118,6 +118,15 @@
   font-weight: 800;
 }
 
+.chat-info-action-icon-debug::before {
+  content: '';
+  width: 1.05rem;
+  height: 1.05rem;
+  display: block;
+  background: #000;
+  border-radius: 0.08rem;
+}
+
 .chat-info-action.active .chat-info-action-icon {
   background: #d5ecbf;
   border-color: #8bb962;
