@@ -1015,12 +1015,10 @@ function ChatPageNew() {
     if (!viewport) return undefined
 
     const keepBottomVisible = () => {
-      const active = document.activeElement
-      const isTypingTarget = active instanceof HTMLElement && Boolean(active.closest('.message-input'))
-      if (!isTypingTarget) return
       scrollMessagesToBottom('auto')
       setTimeout(() => scrollMessagesToBottom('auto'), 120)
       setTimeout(() => scrollMessagesToBottom('auto'), 320)
+      setTimeout(() => scrollMessagesToBottom('auto'), 650)
     }
 
     viewport.addEventListener('resize', keepBottomVisible)
@@ -1028,6 +1026,18 @@ function ChatPageNew() {
       viewport.removeEventListener('resize', keepBottomVisible)
     }
   }, [isMobileView])
+
+  useEffect(() => {
+    if (!isKeyboardOpen) return
+    if (!isMobileView) return
+    const active = document.activeElement
+    const isTypingTarget = active instanceof HTMLElement && Boolean(active.closest('.message-input'))
+    if (!isTypingTarget) return
+    scrollMessagesToBottom('auto')
+    setTimeout(() => scrollMessagesToBottom('auto'), 120)
+    setTimeout(() => scrollMessagesToBottom('auto'), 320)
+    setTimeout(() => scrollMessagesToBottom('auto'), 650)
+  }, [isKeyboardOpen, viewportHeight, selectedUser?.username, isMobileView])
 
   useEffect(() => {
     if (!selectedUser?.username || !socket?.connected) return
