@@ -96,6 +96,7 @@ function ChatPageNew() {
   const [keyboardOffset, setKeyboardOffset] = useState(0)
   const [viewportHeight, setViewportHeight] = useState(() => (typeof window !== 'undefined' ? window.innerHeight : 0))
   const [isIosPlatform, setIsIosPlatform] = useState(false)
+  const [isAndroidPlatform, setIsAndroidPlatform] = useState(false)
   const [reactionTray, setReactionTray] = useState(null)
   const [videoThumbMap, setVideoThumbMap] = useState({})
   const [notificationPermission, setNotificationPermission] = useState(
@@ -557,7 +558,42 @@ function ChatPageNew() {
     const platform = window.Capacitor?.getPlatform?.()
     const ua = window.navigator?.userAgent || ''
     const isiOS = platform === 'ios' || /iPad|iPhone|iPod/.test(ua)
+    const isAndroid = platform === 'android'
     setIsIosPlatform(isiOS)
+    setIsAndroidPlatform(isAndroid)
+  }, [])
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return undefined
+    const html = document.documentElement
+    const body = document.body
+    const root = document.getElementById('root')
+    const prev = {
+      htmlOverflow: html.style.overflow,
+      htmlHeight: html.style.height,
+      bodyOverflow: body.style.overflow,
+      bodyHeight: body.style.height,
+      rootOverflow: root?.style.overflow || '',
+      rootHeight: root?.style.height || '',
+    }
+    html.style.overflow = 'hidden'
+    html.style.height = '100%'
+    body.style.overflow = 'hidden'
+    body.style.height = '100%'
+    if (root) {
+      root.style.overflow = 'hidden'
+      root.style.height = '100%'
+    }
+    return () => {
+      html.style.overflow = prev.htmlOverflow
+      html.style.height = prev.htmlHeight
+      body.style.overflow = prev.bodyOverflow
+      body.style.height = prev.bodyHeight
+      if (root) {
+        root.style.overflow = prev.rootOverflow
+        root.style.height = prev.rootHeight
+      }
+    }
   }, [])
 
   useEffect(() => {
@@ -579,7 +615,7 @@ function ChatPageNew() {
     if (typeof window === 'undefined') return undefined
 
     const getKeyboardOffset = () => {
-      if (isIosPlatform) return 0
+      if (isIosPlatform || isAndroidPlatform) return 0
       const viewport = window.visualViewport
       const viewportHeight = Math.round(viewport?.height || window.innerHeight || 0)
       const viewportTop = Math.round(viewport?.offsetTop || 0)
@@ -596,17 +632,26 @@ function ChatPageNew() {
     const syncKeyboardFromViewport = () => {
       const viewport = window.visualViewport
       const viewportHeightNow = Math.round((viewport?.height || window.innerHeight || 0) + (viewport?.offsetTop || 0))
+      const layoutHeight = Math.round(window.innerHeight || viewportHeightNow || 0)
+      const keyboardDelta = Math.max(0, layoutHeight - viewportHeightNow)
+      const keyboardLikelyOpen = keyboardDelta > 120
       setViewportHeight((prev) => {
         const next = viewportHeightNow || window.innerHeight
         return Math.abs((prev || 0) - next) <= 2 ? prev : next
       })
+      if (isAndroidPlatform) {
+        setKeyboardOffset(0)
+        setIsKeyboardOpen(keyboardLikelyOpen)
+        return
+      }
       if (!isIosPlatform) {
         const offset = getKeyboardOffset()
         setKeyboardOffset((prev) => (Math.abs((prev || 0) - offset) <= 2 ? prev : offset))
-        setIsKeyboardOpen(offset > 0)
+        setIsKeyboardOpen(offset > 0 || keyboardLikelyOpen)
         return
       }
       setKeyboardOffset(0)
+      setIsKeyboardOpen(keyboardLikelyOpen)
     }
 
     const onFocusIn = (event) => {
@@ -642,7 +687,7 @@ function ChatPageNew() {
         if (!keyboard?.addListener) return
         const onShow = (info) => {
           const nativeHeight = Number(info?.keyboardHeight || 0)
-          if (nativeHeight > 0 && (!isIosPlatform || typeof window.visualViewport === 'undefined')) {
+          if (nativeHeight > 0 && isIosPlatform && typeof window.visualViewport === 'undefined') {
             setKeyboardOffset(nativeHeight)
           }
           setIsKeyboardOpen(true)
@@ -680,7 +725,7 @@ function ChatPageNew() {
       window.removeEventListener('orientationchange', syncKeyboardFromViewport)
       handles.forEach((handle) => handle?.remove?.())
     }
-  }, [isIosPlatform])
+  }, [isIosPlatform, isAndroidPlatform])
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined
@@ -2306,7 +2351,7 @@ function ChatPageNew() {
       className={`chat-container ${selectedUser ? 'user-selected' : ''} ${showMobileUsers ? 'mobile-users-open' : ''} ${isKeyboardOpen ? 'keyboard-open' : ''}`}
       data-ios={isIosPlatform ? 'true' : 'false'}
       style={{
-        '--chat-keyboard-offset': `${isIosPlatform ? 0 : Math.max(0, keyboardOffset)}px`,
+        '--chat-keyboard-offset': '0px',
         '--chat-viewport-height': `${Math.max(0, viewportHeight || fallbackViewportHeight)}px`,
       }}
     >

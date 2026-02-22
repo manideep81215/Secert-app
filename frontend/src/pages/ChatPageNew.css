@@ -2254,20 +2254,23 @@
 }
 
 /* Final keyboard-safe mobile layout:
-   - Header stays fixed under system status bar
-   - Messages scroll under header
-   - Composer stays fixed at bottom */
+   - Header fixed at top (never pushed by keyboard)
+   - Composer fixed at bottom (0px gap from keyboard edge)
+   - Messages area shrinks between them (WhatsApp-style) */
 @media (max-width: 920px) {
+  .chat-container:not(.mobile-users-open) {
+    position: fixed !important;
+    inset: 0 !important;
+    overflow: hidden !important;
+  }
+
   .chat-container:not(.mobile-users-open) .chat-area {
     position: fixed !important;
     inset: 0 !important;
     width: 100vw !important;
-    height: 100dvh !important;
-    overflow: hidden !important;
-  }
-
-  .chat-container[data-ios="true"]:not(.mobile-users-open) .chat-area {
     height: var(--chat-viewport-height) !important;
+    min-height: var(--chat-viewport-height) !important;
+    overflow: hidden !important;
   }
 
   .chat-container:not(.mobile-users-open) .chat-header {
@@ -2285,7 +2288,7 @@
     top: calc(env(safe-area-inset-top) + 64px) !important;
     left: 0 !important;
     right: 0 !important;
-    bottom: calc(70px + env(safe-area-inset-bottom) + var(--chat-keyboard-offset)) !important;
+    bottom: calc(70px + env(safe-area-inset-bottom)) !important;
     overflow-y: auto !important;
     padding-top: 0.7rem !important;
     padding-bottom: 0.75rem !important;
@@ -2295,7 +2298,7 @@
     position: fixed !important;
     left: 0 !important;
     right: 0 !important;
-    bottom: var(--chat-keyboard-offset) !important;
+    bottom: 0 !important;
     z-index: 230 !important;
     margin: 0 !important;
     padding-bottom: calc(0.45rem + env(safe-area-inset-bottom)) !important;
@@ -2305,7 +2308,7 @@
     position: fixed !important;
     left: max(0.65rem, env(safe-area-inset-left)) !important;
     right: max(0.65rem, env(safe-area-inset-right)) !important;
-    bottom: calc(68px + env(safe-area-inset-bottom) + var(--chat-keyboard-offset)) !important;
+    bottom: calc(68px + env(safe-area-inset-bottom)) !important;
     margin: 0 !important;
     z-index: 240 !important;
     box-shadow: 0 8px 18px rgba(0, 0, 0, 0.2);
@@ -2319,6 +2322,6 @@
 
   .chat-container:not(.mobile-users-open) .messages-area {
     top: calc(env(safe-area-inset-top) + 60px) !important;
-    bottom: calc(68px + env(safe-area-inset-bottom) + var(--chat-keyboard-offset)) !important;
+    bottom: calc(68px + env(safe-area-inset-bottom)) !important;
   }
 }
