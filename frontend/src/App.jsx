@@ -33,7 +33,7 @@ import './App.css'
 function App() {
   const navigate = useNavigate()
   const location = useLocation()
-  const [flow] = useFlowState()
+  const [flow, setFlow] = useFlowState()
   const isAuthenticated = Boolean((flow?.username || '').trim() && (flow?.token || '').trim())
   const routeHistoryRef = useRef([])
   const isAuthenticatedRef = useRef(isAuthenticated)

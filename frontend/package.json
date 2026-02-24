@@ -17,6 +17,7 @@
     "@capacitor/android": "^7.4.3",
     "@capacitor/app": "^7.0.2",
     "@capacitor/core": "^7.4.3",
+    "@capacitor/keyboard": "^7.0.2",
     "@capacitor/local-notifications": "^7.0.2",
     "@capacitor/push-notifications": "^7.0.2",
     "@stomp/stompjs": "^7.2.1",
