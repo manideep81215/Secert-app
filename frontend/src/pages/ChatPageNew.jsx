@@ -219,6 +219,27 @@ function ChatPageNew() {
     if (!value) return getTimeLabel()
     return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   }
+  const triggerFileDownload = async (url, suggestedName) => {
+    const safeUrl = String(url || '').trim()
+    if (!safeUrl) return
+    const downloadName = String(suggestedName || 'attachment').trim() || 'attachment'
+    try {
+      const response = await fetch(safeUrl)
+      if (!response.ok) throw new Error(`download-failed-${response.status}`)
+      const blob = await response.blob()
+      const blobUrl = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = blobUrl
+      anchor.download = downloadName
+      anchor.rel = 'noreferrer'
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 4000)
+    } catch {
+      window.open(safeUrl, '_blank', 'noopener,noreferrer')
+    }
+  }
   const linkRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi
   const splitUrlSuffix = (token) => {
     const match = token.match(/[),.!?:;]+$/)
@@ -2462,9 +2483,13 @@ function ChatPageNew() {
     }
     if (message.type === 'file') {
       return (
-        <a className="message-file-preview" href={message.mediaUrl} target="_blank" rel="noreferrer" download={message.fileName || 'attachment'}>
+        <button
+          type="button"
+          className="message-file-preview"
+          onClick={() => triggerFileDownload(message.mediaUrl, message.fileName || 'attachment')}
+        >
           {message.fileName || 'Download file'}
-        </a>
+        </button>
       )
     }
     return null

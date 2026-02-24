@@ -1,7 +1,9 @@
 package com.game.app.controller;
 
 import java.util.List;
+import java.nio.charset.StandardCharsets;
 
+import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -98,10 +100,26 @@ public class ChatMessageController {
   public ResponseEntity<byte[]> getMedia(@PathVariable Long id) {
     ChatMediaEntity media = chatMediaRepository.findById(id)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Media not found"));
-    return ResponseEntity.ok()
-        .contentType(MediaType.parseMediaType(media.getMimeType()))
-        .header(HttpHeaders.CACHE_CONTROL, "public, max-age=31536000")
-        .body(media.getData());
+    String mimeType = media.getMimeType() != null && !media.getMimeType().isBlank()
+        ? media.getMimeType()
+        : MediaType.APPLICATION_OCTET_STREAM_VALUE;
+    MediaType contentType = MediaType.parseMediaType(mimeType);
+    boolean inline = mimeType.startsWith("image/") || mimeType.startsWith("video/") || mimeType.startsWith("audio/");
+
+    ResponseEntity.BodyBuilder response = ResponseEntity.ok()
+        .contentType(contentType)
+        .header(HttpHeaders.CACHE_CONTROL, "public, max-age=31536000");
+
+    if (!inline) {
+      String fileName = media.getFileName() != null && !media.getFileName().isBlank()
+          ? media.getFileName()
+          : "attachment";
+      response.header(
+          HttpHeaders.CONTENT_DISPOSITION,
+          ContentDisposition.attachment().filename(fileName, StandardCharsets.UTF_8).build().toString());
+    }
+
+    return response.body(media.getData());
   }
 
   private ConversationMessageDto toDto(ChatMessageEntity row, String meUsername) {
@@ -135,16 +153,22 @@ public class ChatMessageController {
 
   private String normalizeMimeType(String contentType, String originalFilename) {
     String rawType = contentType != null ? contentType.trim().toLowerCase() : "";
-    if (rawType.startsWith("video/") || rawType.startsWith("image/")) {
+    if (rawType.startsWith("video/") || rawType.startsWith("image/") || rawType.startsWith("audio/")) {
       return rawType;
     }
 
     String name = originalFilename != null ? originalFilename.trim().toLowerCase() : "";
+    if (name.matches(".*\\.(apk)$")) {
+      return "application/vnd.android.package-archive";
+    }
     if (name.matches(".*\\.(mp4|mov|m4v|webm|mkv|avi|3gp)$")) {
       return "video/mp4";
     }
     if (name.matches(".*\\.(jpg|jpeg|png|gif|webp|heic|heif|bmp|svg)$")) {
       return "image/jpeg";
+    }
+    if (!rawType.isBlank()) {
+      return rawType;
     }
 
     return MediaType.APPLICATION_OCTET_STREAM_VALUE;
