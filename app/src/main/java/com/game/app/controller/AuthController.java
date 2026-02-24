@@ -2,6 +2,7 @@ package com.game.app.controller;
 
 import com.game.app.dto.AuthRequestDto;
 import com.game.app.dto.AuthResponseDto;
+import com.game.app.dto.RefreshTokenRequestDto;
 import com.game.app.service.AuthService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -29,6 +30,11 @@ public class AuthController {
     @PostMapping("/login")
     public AuthResponseDto login(@Valid @RequestBody AuthRequestDto request) {
         return authService.login(request);
+    }
+
+    @PostMapping("/refresh")
+    public AuthResponseDto refresh(@Valid @RequestBody RefreshTokenRequestDto request) {
+        return authService.refresh(request);
     }
 
     @GetMapping("/me")

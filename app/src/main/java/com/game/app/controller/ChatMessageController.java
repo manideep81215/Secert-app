@@ -1,7 +1,6 @@
 package com.game.app.controller;
 
 import java.util.List;
-import java.util.Map;
 
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -25,6 +24,7 @@ import com.game.app.model.UserEntity;
 import com.game.app.repository.ChatMessageRepository;
 import com.game.app.repository.ChatMediaRepository;
 import com.game.app.repository.UserRepository;
+import com.game.app.service.JwtTokenService;
 
 @RestController
 @RequestMapping("/api/app/messages")
@@ -33,15 +33,15 @@ public class ChatMessageController {
   private final ChatMessageRepository chatMessageRepository;
   private final ChatMediaRepository chatMediaRepository;
   private final UserRepository userRepository;
-  private final Map<String, Long> tokenStore;
+  private final JwtTokenService jwtTokenService;
 
   public ChatMessageController(ChatMessageRepository chatMessageRepository, ChatMediaRepository chatMediaRepository,
       UserRepository userRepository,
-      Map<String, Long> tokenStore) {
+      JwtTokenService jwtTokenService) {
     this.chatMessageRepository = chatMessageRepository;
     this.chatMediaRepository = chatMediaRepository;
     this.userRepository = userRepository;
-    this.tokenStore = tokenStore;
+    this.jwtTokenService = jwtTokenService;
   }
 
   @GetMapping("/conversation")
@@ -124,23 +124,9 @@ public class ChatMessageController {
   }
 
   private UserEntity requireAuthUser(String authHeader) {
-    String token = extractToken(authHeader);
-    Long tokenUserId = tokenStore.get(token);
-    if (tokenUserId == null) {
-      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid or expired token");
-    }
+    Long tokenUserId = jwtTokenService.extractAccessUserId(authHeader);
     return userRepository.findById(tokenUserId)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found"));
-  }
-
-  private String extractToken(String rawToken) {
-    if (rawToken == null || rawToken.isBlank()) {
-      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authorization header is required");
-    }
-    if (rawToken.startsWith("Bearer ")) {
-      return rawToken.substring(7).trim();
-    }
-    return rawToken.trim();
   }
 
   private String normalizeUsername(String username) {

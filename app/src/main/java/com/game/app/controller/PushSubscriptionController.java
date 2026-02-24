@@ -1,7 +1,5 @@
 package com.game.app.controller;
 
-import java.util.Map;
-
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -14,6 +12,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.game.app.model.UserEntity;
 import com.game.app.repository.UserRepository;
+import com.game.app.service.JwtTokenService;
 import com.game.app.service.PushNotificationService;
 
 @RestController
@@ -22,15 +21,15 @@ public class PushSubscriptionController {
 
   private final PushNotificationService pushNotificationService;
   private final UserRepository userRepository;
-  private final Map<String, Long> tokenStore;
+  private final JwtTokenService jwtTokenService;
 
   public PushSubscriptionController(
       PushNotificationService pushNotificationService,
       UserRepository userRepository,
-      Map<String, Long> tokenStore) {
+      JwtTokenService jwtTokenService) {
     this.pushNotificationService = pushNotificationService;
     this.userRepository = userRepository;
-    this.tokenStore = tokenStore;
+    this.jwtTokenService = jwtTokenService;
   }
 
   @GetMapping("/public-key")
@@ -123,23 +122,9 @@ public class PushSubscriptionController {
   }
 
   private UserEntity requireAuthUser(String authHeader) {
-    String token = extractToken(authHeader);
-    Long tokenUserId = tokenStore.get(token);
-    if (tokenUserId == null) {
-      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid or expired token");
-    }
+    Long tokenUserId = jwtTokenService.extractAccessUserId(authHeader);
     return userRepository.findById(tokenUserId)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found"));
-  }
-
-  private String extractToken(String rawToken) {
-    if (rawToken == null || rawToken.isBlank()) {
-      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authorization header is required");
-    }
-    if (rawToken.startsWith("Bearer ")) {
-      return rawToken.substring(7).trim();
-    }
-    return rawToken.trim();
   }
 
   public record PushSubscriptionRequest(String endpoint, PushKeys keys) {}

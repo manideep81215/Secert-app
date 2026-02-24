@@ -39,7 +39,7 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                .requestMatchers(HttpMethod.POST, "/api/app/auth/register", "/api/app/auth/login").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/app/auth/register", "/api/app/auth/login", "/api/app/auth/refresh").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/app/auth/me").permitAll()
                 .requestMatchers("/ws/**", "/ws-chat/**").permitAll()
                 .anyRequest().permitAll())

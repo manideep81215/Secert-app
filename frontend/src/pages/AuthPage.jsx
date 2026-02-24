@@ -66,6 +66,7 @@ function AuthPage() {
         userId: response.userId,
         username: response.username,
         token: response.token,
+        refreshToken: response.refreshToken || '',
         name: mode === 'register' ? name.trim() : (flow.name || ''),
         phone: mode === 'register' ? phone.trim() : (flow.phone || ''),
         dob: mode === 'register' ? dob.trim() : (flow.dob || ''),

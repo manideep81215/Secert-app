@@ -1,10 +1,6 @@
-import axios from 'axios'
-import { API_APP_BASE_URL } from '../config/apiConfig'
+import { createApiClient } from './apiClient'
 
-const pushClient = axios.create({
-  baseURL: `${API_APP_BASE_URL}/push`,
-  timeout: 10000,
-})
+const pushClient = createApiClient('/push', 10000)
 
 export async function getPushPublicKey() {
   const { data } = await pushClient.get('/public-key')

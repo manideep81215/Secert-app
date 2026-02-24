@@ -3,6 +3,7 @@ package com.game.app.controller;
 import com.game.app.dto.SecretKeyRequestDto;
 import com.game.app.model.UserEntity;
 import com.game.app.repository.UserRepository;
+import com.game.app.service.JwtTokenService;
 import jakarta.validation.Valid;
 import java.util.Map;
 import org.springframework.http.ResponseEntity;
@@ -18,11 +19,11 @@ import java.util.List;
 public class UserController {
 
   private final UserRepository userRepository;
-  private final Map<String, Long> tokenStore;
+  private final JwtTokenService jwtTokenService;
 
-  public UserController(UserRepository userRepository, Map<String, Long> tokenStore) {
+  public UserController(UserRepository userRepository, JwtTokenService jwtTokenService) {
     this.userRepository = userRepository;
-    this.tokenStore = tokenStore;
+    this.jwtTokenService = jwtTokenService;
   }
 
   @GetMapping
@@ -91,23 +92,9 @@ public class UserController {
   }
 
   private void authorizeUser(Long requestedUserId, String authHeader) {
-    String token = extractToken(authHeader);
-    Long tokenUserId = tokenStore.get(token);
-    if (tokenUserId == null) {
-      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid or expired token");
-    }
+    Long tokenUserId = jwtTokenService.extractAccessUserId(authHeader);
     if (!requestedUserId.equals(tokenUserId)) {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Cannot access another user's data");
     }
-  }
-
-  private String extractToken(String rawToken) {
-    if (rawToken == null || rawToken.isBlank()) {
-      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authorization header is required");
-    }
-    if (rawToken.startsWith("Bearer ")) {
-      return rawToken.substring(7).trim();
-    }
-    return rawToken.trim();
   }
 }

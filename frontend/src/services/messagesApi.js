@@ -1,10 +1,6 @@
-import axios from 'axios'
-import { API_APP_BASE_URL } from '../config/apiConfig'
+import { createApiClient } from './apiClient'
 
-const messagesClient = axios.create({
-  baseURL: `${API_APP_BASE_URL}/messages`,
-  timeout: 10000,
-})
+const messagesClient = createApiClient('/messages', 10000)
 
 export async function getConversation(token, withUsername) {
   const { data } = await messagesClient.get('/conversation', {

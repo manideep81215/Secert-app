@@ -14,7 +14,8 @@ import ChatPageNew from './pages/ChatPageNew'
 import ChatInfoPage from './pages/ChatInfoPage'
 import ProfilePage from './pages/ProfilePage'
 import { WS_CHAT_URL } from './config/apiConfig'
-import { useFlowState } from './hooks/useFlowState'
+import { resetFlowState, useFlowState } from './hooks/useFlowState'
+import { refreshAccessToken } from './services/authApi'
 import {
   clearActiveNotifications,
   ensureNotificationPermission as ensureLocalNotificationPermission,
@@ -41,6 +42,7 @@ function App() {
   const [installPromptEvent, setInstallPromptEvent] = useState(null)
   const [isAppInstalled, setIsAppInstalled] = useState(false)
   const [showIosInstallHelp, setShowIosInstallHelp] = useState(false)
+  const refreshTimerRef = useRef(null)
   const isFullBleedRoute =
     location.pathname === '/auth' ||
     location.pathname.startsWith('/games') ||
@@ -52,6 +54,63 @@ function App() {
   useEffect(() => {
     isAuthenticatedRef.current = isAuthenticated
   }, [isAuthenticated])
+
+  useEffect(() => {
+    if (refreshTimerRef.current) {
+      window.clearTimeout(refreshTimerRef.current)
+      refreshTimerRef.current = null
+    }
+
+    const accessToken = (flow?.token || '').trim()
+    const refreshToken = (flow?.refreshToken || '').trim()
+    if (!accessToken || !refreshToken) return undefined
+
+    const decodeExpMs = (token) => {
+      try {
+        const [, payload] = token.split('.')
+        if (!payload) return 0
+        const json = JSON.parse(window.atob(payload.replace(/-/g, '+').replace(/_/g, '/')))
+        return Number(json?.exp || 0) * 1000
+      } catch {
+        return 0
+      }
+    }
+
+    const refreshNow = async () => {
+      try {
+        const data = await refreshAccessToken(refreshToken)
+        const nextAccess = (data?.token || '').trim()
+        const nextRefresh = (data?.refreshToken || '').trim()
+        if (!nextAccess || !nextRefresh) throw new Error('invalid-refresh-response')
+        setFlow((prev) => ({
+          ...prev,
+          token: nextAccess,
+          refreshToken: nextRefresh,
+        }))
+      } catch {
+        resetFlowState(setFlow)
+      }
+    }
+
+    const expMs = decodeExpMs(accessToken)
+    if (!expMs) return undefined
+
+    const now = Date.now()
+    const refreshLeadMs = 60 * 1000
+    const delay = expMs - now - refreshLeadMs
+    if (delay <= 0) {
+      refreshNow()
+      return undefined
+    }
+
+    refreshTimerRef.current = window.setTimeout(refreshNow, delay)
+    return () => {
+      if (refreshTimerRef.current) {
+        window.clearTimeout(refreshTimerRef.current)
+        refreshTimerRef.current = null
+      }
+    }
+  }, [flow?.token, flow?.refreshToken, setFlow])
 
   useEffect(() => {
     currentPathRef.current = location.pathname

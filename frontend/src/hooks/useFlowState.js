@@ -6,6 +6,7 @@ const emptyFlow = {
   userId: null,
   username: '',
   token: '',
+  refreshToken: '',
   name: '',
   phone: '',
   dob: '',
@@ -86,6 +87,14 @@ export function useFlowState() {
   }, [])
 
   return [flow, setFlow]
+}
+
+export function getFlowSnapshot() {
+  return flowSnapshot
+}
+
+export function setFlowStateSnapshot(nextOrUpdater) {
+  updateFlowSnapshot(nextOrUpdater)
 }
 
 export function resetFlowState(setFlow) {

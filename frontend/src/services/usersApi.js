@@ -1,9 +1,6 @@
-import axios from 'axios'
-import { API_APP_BASE_URL } from '../config/apiConfig'
+import { createApiClient } from './apiClient'
 
-const usersClient = axios.create({
-  baseURL: `${API_APP_BASE_URL}/users`
-})
+const usersClient = createApiClient('/users')
 
 export async function getAllUsers(token) {
   const { data } = await usersClient.get('', {

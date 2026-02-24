@@ -2,10 +2,9 @@ package com.game.app.service;
 
 import com.game.app.dto.AuthRequestDto;
 import com.game.app.dto.AuthResponseDto;
+import com.game.app.dto.RefreshTokenRequestDto;
 import com.game.app.model.UserEntity;
 import com.game.app.repository.UserRepository;
-import java.util.Map;
-import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -16,12 +15,12 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    private final Map<String, Long> tokenStore;
+    private final JwtTokenService jwtTokenService;
 
-    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder, Map<String, Long> tokenStore) {
+    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtTokenService jwtTokenService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
-        this.tokenStore = tokenStore;
+        this.jwtTokenService = jwtTokenService;
     }
 
     public AuthResponseDto register(AuthRequestDto request) {
@@ -44,8 +43,9 @@ public class AuthService {
         user.setEmail(email);
         user.setDob(dob);
         user = userRepository.save(user);
-        String token = issueToken(user.getId());
-        return new AuthResponseDto(user.getId(), user.getUsername(), token, "Registration successful");
+        String token = issueAccessToken(user);
+        String refreshToken = issueRefreshToken(user);
+        return new AuthResponseDto(user.getId(), user.getUsername(), token, refreshToken, "Registration successful");
     }
 
     public AuthResponseDto login(AuthRequestDto request) {
@@ -57,27 +57,39 @@ public class AuthService {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid email or password");
         }
 
-        String token = issueToken(user.getId());
-        return new AuthResponseDto(user.getId(), user.getUsername(), token, "Login successful");
+        String token = issueAccessToken(user);
+        String refreshToken = issueRefreshToken(user);
+        return new AuthResponseDto(user.getId(), user.getUsername(), token, refreshToken, "Login successful");
     }
 
     public AuthResponseDto me(String rawToken) {
+        Long userId = jwtTokenService.extractAccessUserId(rawToken);
         String token = extractToken(rawToken);
-        Long userId = tokenStore.get(token);
-        if (userId == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid or expired token");
-        }
 
         UserEntity user = userRepository.findById(userId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found"));
 
-        return new AuthResponseDto(user.getId(), user.getUsername(), token, "Authenticated");
+        return new AuthResponseDto(user.getId(), user.getUsername(), token, null, "Authenticated");
     }
 
-    private String issueToken(Long userId) {
-        String token = UUID.randomUUID().toString();
-        tokenStore.put(token, userId);
-        return token;
+    public AuthResponseDto refresh(RefreshTokenRequestDto request) {
+        String refreshToken = request.refreshToken().trim();
+        Long userId = jwtTokenService.extractRefreshUserId(refreshToken);
+
+        UserEntity user = userRepository.findById(userId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found"));
+
+        String newAccessToken = issueAccessToken(user);
+        String newRefreshToken = issueRefreshToken(user);
+        return new AuthResponseDto(user.getId(), user.getUsername(), newAccessToken, newRefreshToken, "Token refreshed");
+    }
+
+    private String issueAccessToken(UserEntity user) {
+        return jwtTokenService.issueAccessToken(user);
+    }
+
+    private String issueRefreshToken(UserEntity user) {
+        return jwtTokenService.issueRefreshToken(user);
     }
 
     private String extractToken(String rawToken) {
