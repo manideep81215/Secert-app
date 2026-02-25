@@ -138,6 +138,7 @@ function ChatPageNew() {
   const wsErrorTimerRef = useRef(null)
   const offlineSinceRef = useRef({})
   const maxViewportHeightRef = useRef(0)
+  const keyboardSettleUntilRef = useRef(0)
   const conversationCacheRef = useRef({})
   const CLEAR_CUTOFFS_KEY = 'chat_clear_cutoffs_v1'
   const USERS_CACHE_KEY_PREFIX = 'chat_users_cache_v1:'
@@ -821,6 +822,8 @@ function ChatPageNew() {
       const viewport = window.visualViewport
       const viewportHeightNow = Math.round(viewport?.height || window.innerHeight || 0)
       const viewportTopNow = Math.max(0, Math.round(viewport?.offsetTop || 0))
+      const inputFocused = isMessageInputFocused()
+      const settleWindowActive = Date.now() < Number(keyboardSettleUntilRef.current || 0)
       if (viewportHeightNow > maxViewportHeightRef.current) {
         maxViewportHeightRef.current = viewportHeightNow
       }
@@ -828,7 +831,7 @@ function ChatPageNew() {
       const layoutHeight = Math.round(window.innerHeight || viewportHeightNow || 0)
       const viewportBottomGap = Math.max(0, layoutHeight - (viewportTopNow + viewportHeightNow))
       const keyboardDelta = Math.max(0, baselineHeight - viewportHeightNow)
-      const keyboardLikelyOpen = keyboardDelta > 120 || viewportBottomGap > 80 || isMessageInputFocused()
+      const keyboardLikelyOpen = keyboardDelta > 120 || viewportBottomGap > 80
       setViewportHeight((prev) => {
         const next = viewportHeightNow || window.innerHeight
         return Math.abs((prev || 0) - next) <= 2 ? prev : next
@@ -837,43 +840,57 @@ function ChatPageNew() {
       setVisualViewportBottomGap((prev) => (Math.abs((prev || 0) - viewportBottomGap) <= 1 ? prev : viewportBottomGap))
       if (isAndroidPlatform) {
         setKeyboardOffset(0)
+        if (settleWindowActive && inputFocused && !keyboardLikelyOpen) return
         setIsKeyboardOpen(keyboardLikelyOpen)
         return
       }
       if (!isIosPlatform) {
         const offset = getKeyboardOffset()
         setKeyboardOffset((prev) => (Math.abs((prev || 0) - offset) <= 2 ? prev : offset))
+        if (settleWindowActive && inputFocused && offset <= 0 && !keyboardLikelyOpen) return
         setIsKeyboardOpen(offset > 0 || keyboardLikelyOpen)
         return
       }
       setKeyboardOffset(0)
+      if (settleWindowActive && inputFocused && !keyboardLikelyOpen) return
       setIsKeyboardOpen(keyboardLikelyOpen)
+    }
+
+    let syncRafId = 0
+    const queueSyncKeyboardFromViewport = () => {
+      if (syncRafId) cancelAnimationFrame(syncRafId)
+      syncRafId = requestAnimationFrame(() => {
+        syncRafId = 0
+        syncKeyboardFromViewport()
+      })
     }
 
     const onFocusIn = (event) => {
       const target = event.target
       if (!(target instanceof HTMLElement)) return
       if (!target.closest('.message-input')) return
-      setTimeout(syncKeyboardFromViewport, 0)
-      setTimeout(syncKeyboardFromViewport, 220)
+      keyboardSettleUntilRef.current = Date.now() + 520
+      queueSyncKeyboardFromViewport()
+      setTimeout(queueSyncKeyboardFromViewport, 220)
     }
 
     const onFocusOut = (event) => {
       const target = event.target
       if (!(target instanceof HTMLElement)) return
       if (!target.closest('.message-input')) return
-      setTimeout(syncKeyboardFromViewport, 60)
-      setTimeout(syncKeyboardFromViewport, 260)
+      keyboardSettleUntilRef.current = Date.now() + 200
+      setTimeout(queueSyncKeyboardFromViewport, 60)
+      setTimeout(queueSyncKeyboardFromViewport, 260)
     }
 
     window.addEventListener('focusin', onFocusIn)
     window.addEventListener('focusout', onFocusOut)
 
     const viewport = window.visualViewport
-    viewport?.addEventListener('resize', syncKeyboardFromViewport)
-    viewport?.addEventListener('scroll', syncKeyboardFromViewport)
-    window.addEventListener('resize', syncKeyboardFromViewport)
-    window.addEventListener('orientationchange', syncKeyboardFromViewport)
+    viewport?.addEventListener('resize', queueSyncKeyboardFromViewport)
+    viewport?.addEventListener('scroll', queueSyncKeyboardFromViewport)
+    window.addEventListener('resize', queueSyncKeyboardFromViewport)
+    window.addEventListener('orientationchange', queueSyncKeyboardFromViewport)
 
     let isCancelled = false
     const handles = []
@@ -884,15 +901,17 @@ function ChatPageNew() {
         if (!keyboard?.addListener) return
         const onShow = (info) => {
           const nativeHeight = Number(info?.keyboardHeight || 0)
+          keyboardSettleUntilRef.current = Date.now() + 420
           if (nativeHeight > 0 && isIosPlatform && typeof window.visualViewport === 'undefined') {
             setKeyboardOffset(nativeHeight)
           }
           setIsKeyboardOpen(true)
         }
         const onHide = () => {
+          keyboardSettleUntilRef.current = Date.now() + 220
           setKeyboardOffset(0)
           setIsKeyboardOpen(false)
-          syncKeyboardFromViewport()
+          queueSyncKeyboardFromViewport()
         }
         const showHandle = await keyboard.addListener('keyboardWillShow', onShow)
         const didShowHandle = await keyboard.addListener('keyboardDidShow', onShow)
@@ -912,15 +931,16 @@ function ChatPageNew() {
     }
 
     setupKeyboardListeners()
-    syncKeyboardFromViewport()
+    queueSyncKeyboardFromViewport()
     return () => {
       isCancelled = true
       window.removeEventListener('focusin', onFocusIn)
       window.removeEventListener('focusout', onFocusOut)
-      viewport?.removeEventListener('resize', syncKeyboardFromViewport)
-      viewport?.removeEventListener('scroll', syncKeyboardFromViewport)
-      window.removeEventListener('resize', syncKeyboardFromViewport)
-      window.removeEventListener('orientationchange', syncKeyboardFromViewport)
+      viewport?.removeEventListener('resize', queueSyncKeyboardFromViewport)
+      viewport?.removeEventListener('scroll', queueSyncKeyboardFromViewport)
+      window.removeEventListener('resize', queueSyncKeyboardFromViewport)
+      window.removeEventListener('orientationchange', queueSyncKeyboardFromViewport)
+      if (syncRafId) cancelAnimationFrame(syncRafId)
       handles.forEach((handle) => handle?.remove?.())
     }
   }, [isIosPlatform, isAndroidPlatform])

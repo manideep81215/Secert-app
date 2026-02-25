@@ -88,6 +88,7 @@ public class ChatMessageController {
 
       String mediaUrl = ServletUriComponentsBuilder.fromCurrentContextPath()
           .path("/api/app/messages/media/{id}")
+          .queryParam("v", System.currentTimeMillis())
           .buildAndExpand(media.getId())
           .toUriString();
       return new MediaUploadResponse(mediaUrl, media.getFileName(), media.getMimeType());
@@ -108,7 +109,9 @@ public class ChatMessageController {
 
     ResponseEntity.BodyBuilder response = ResponseEntity.ok()
         .contentType(contentType)
-        .header(HttpHeaders.CACHE_CONTROL, "public, max-age=31536000");
+        .header(HttpHeaders.CACHE_CONTROL, "no-store, no-cache, must-revalidate, max-age=0")
+        .header(HttpHeaders.PRAGMA, "no-cache")
+        .header(HttpHeaders.EXPIRES, "0");
 
     if (!inline) {
       String fileName = media.getFileName() != null && !media.getFileName().isBlank()
