@@ -5,10 +5,13 @@ import 'bootstrap/dist/css/bootstrap.min.css'
 import 'react-toastify/dist/ReactToastify.css'
 import './styles/base.css'
 import App from './App.jsx'
+import { installToastGuard } from './lib/toastGuard'
 
 if (typeof globalThis.global === 'undefined') {
   globalThis.global = globalThis
 }
+
+installToastGuard()
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {

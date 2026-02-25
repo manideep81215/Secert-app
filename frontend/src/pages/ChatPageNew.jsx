@@ -138,7 +138,10 @@ function ChatPageNew() {
   const wsErrorTimerRef = useRef(null)
   const offlineSinceRef = useRef({})
   const maxViewportHeightRef = useRef(0)
+  const conversationCacheRef = useRef({})
   const CLEAR_CUTOFFS_KEY = 'chat_clear_cutoffs_v1'
+  const USERS_CACHE_KEY_PREFIX = 'chat_users_cache_v1:'
+  const CONVERSATION_CACHE_KEY_PREFIX = 'chat_conversation_cache_v1:'
 
   const formatUsername = (name) => {
     const raw = (name || '').trim().replace(/^@+/, '')
@@ -159,6 +162,8 @@ function ChatPageNew() {
   const getTimeLabel = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   const getConversationKey = (peerUsername) => `${(flow.username || '').toLowerCase()}::${(peerUsername || '').toLowerCase()}`
   const getConversationClearCutoff = (peerUsername) => conversationClears[getConversationKey(peerUsername)] || 0
+  const getUsersCacheKey = () => `${USERS_CACHE_KEY_PREFIX}${toUserKey(flow.username)}`
+  const getConversationCacheKey = (peerUsername) => `${CONVERSATION_CACHE_KEY_PREFIX}${getConversationKey(peerUsername)}`
   const isNativeCapacitorRuntime = () => {
     if (typeof window === 'undefined') return false
     const cap = window.Capacitor
@@ -192,6 +197,105 @@ function ChatPageNew() {
   const writeConversationClears = (value) => {
     try {
       window.localStorage.setItem(CLEAR_CUTOFFS_KEY, JSON.stringify(value))
+    } catch {
+      // Ignore localStorage write failures.
+    }
+  }
+  const readUsersCache = () => {
+    try {
+      const raw = window.localStorage.getItem(getUsersCacheKey())
+      const parsed = raw ? JSON.parse(raw) : []
+      if (!Array.isArray(parsed)) return []
+      return parsed
+        .filter((row) => row && typeof row === 'object')
+        .map((row) => ({
+          id: row.id,
+          username: String(row.username || '').trim(),
+          name: String(row.name || '').trim(),
+          status: 'offline',
+          lastMessage: String(row.lastMessage || ''),
+          timestamp: String(row.timestamp || ''),
+        }))
+        .filter((row) => row.username)
+    } catch {
+      return []
+    }
+  }
+  const writeUsersCache = (rows) => {
+    try {
+      const serialized = (rows || [])
+        .map((row) => ({
+          id: row.id,
+          username: row.username,
+          name: row.name || '',
+          lastMessage: row.lastMessage || '',
+          timestamp: row.timestamp || '',
+        }))
+      window.localStorage.setItem(getUsersCacheKey(), JSON.stringify(serialized))
+    } catch {
+      // Ignore localStorage write failures.
+    }
+  }
+  const normalizeConversationRows = (rows, clearCutoff = 0) => (rows || [])
+    .filter((row) => {
+      if (!clearCutoff) return true
+      const createdAt = Number(row?.createdAt || row?.clientCreatedAt || 0)
+      if (!createdAt) return false
+      return createdAt > clearCutoff
+    })
+    .map((row) => {
+      const createdAt = Number(row?.createdAt || row?.clientCreatedAt || 0) || null
+      return {
+        sender: row?.sender || 'other',
+        text: row?.text || '',
+        type: row?.type || null,
+        fileName: row?.fileName || null,
+        mediaUrl: normalizeMediaUrl(row?.mediaUrl || null),
+        mimeType: row?.mimeType || null,
+        reaction: decodeReaction(row?.reaction),
+        replyingTo: row?.replyText
+          ? { text: row.replyText, senderName: row.replySenderName || row.senderName }
+          : (row?.replyingTo || null),
+        senderName: formatUsername(row?.senderName),
+        messageId: row?.id || row?.messageId || null,
+        createdAt,
+        clientCreatedAt: createdAt,
+        timestamp: formatTimestamp(createdAt),
+        edited: Boolean(row?.edited || row?.isEdited),
+        editedAt: Number(row?.editedAt || 0) || null,
+      }
+    })
+  const readConversationCache = (peerUsername, clearCutoff = 0) => {
+    try {
+      const raw = window.localStorage.getItem(getConversationCacheKey(peerUsername))
+      const parsed = raw ? JSON.parse(raw) : []
+      if (!Array.isArray(parsed)) return []
+      return normalizeConversationRows(parsed, clearCutoff)
+    } catch {
+      return []
+    }
+  }
+  const writeConversationCache = (peerUsername, rows) => {
+    try {
+      const snapshot = (rows || [])
+        .filter((row) => row?.messageId || row?.createdAt)
+        .slice(-220)
+        .map((row) => ({
+          messageId: row.messageId || null,
+          sender: row.sender || 'other',
+          senderName: row.senderName || '',
+          text: row.text || '',
+          type: row.type || null,
+          fileName: row.fileName || null,
+          mediaUrl: row.mediaUrl || null,
+          mimeType: row.mimeType || null,
+          reaction: row.reaction || null,
+          replyingTo: row.replyingTo || null,
+          createdAt: Number(row.createdAt || row.clientCreatedAt || 0) || null,
+          edited: Boolean(row.edited),
+          editedAt: Number(row.editedAt || 0) || null,
+        }))
+      window.localStorage.setItem(getConversationCacheKey(peerUsername), JSON.stringify(snapshot))
     } catch {
       // Ignore localStorage write failures.
     }
@@ -323,6 +427,31 @@ function ChatPageNew() {
     return message?.timestamp || getTimeLabel()
   }
   const createTempId = () => (window.crypto?.randomUUID?.() || `${Date.now()}_${Math.random().toString(16).slice(2)}`)
+  const isSameIncomingMessage = (left, right) => {
+    if (!left || !right) return false
+    const leftId = Number(left.messageId || 0)
+    const rightId = Number(right.messageId || 0)
+    if (leftId > 0 && rightId > 0) return leftId === rightId
+
+    const leftCreatedAt = Number(left.createdAt || left.clientCreatedAt || 0)
+    const rightCreatedAt = Number(right.createdAt || right.clientCreatedAt || 0)
+    const closeInTime = leftCreatedAt > 0 && rightCreatedAt > 0 && Math.abs(leftCreatedAt - rightCreatedAt) <= 2000
+    const sameSender = (left.sender || '') === (right.sender || '') && (left.senderName || '') === (right.senderName || '')
+    const sameType = (left.type || '') === (right.type || '')
+    const sameText = (left.text || '') === (right.text || '')
+    const sameMedia = (left.mediaUrl || '') === (right.mediaUrl || '') && (left.fileName || '') === (right.fileName || '')
+    return sameSender && sameType && sameText && sameMedia && closeInTime
+  }
+  const copyTextToClipboard = async (value) => {
+    const text = String(value || '').trim()
+    if (!text) return
+    try {
+      await navigator.clipboard.writeText(text)
+      toast.success('Copied')
+    } catch {
+      toast.error('Copy failed')
+    }
+  }
   const MAX_MEDIA_BYTES = 200 * 1024 * 1024
   const inferMediaKind = (inputFile) => {
     const mime = (inputFile?.type || '').toLowerCase()
@@ -909,6 +1038,13 @@ function ChatPageNew() {
   }, [flow.token, setFlow, navigate])
 
   useEffect(() => {
+    if (!flow.username) return
+    const cachedUsers = readUsersCache()
+    if (!cachedUsers.length) return
+    setUsers((prev) => (prev.length ? prev : cachedUsers))
+  }, [flow.username])
+
+  useEffect(() => {
     if (!flow.token || !flow.username) return
 
     const loadUsersFromDb = async () => {
@@ -930,6 +1066,7 @@ function ChatPageNew() {
           }))
 
         setUsers(list)
+        writeUsersCache(list)
         // Don't auto-select user - let user manually select from list
       } catch (error) {
         console.error('Failed loading users from database', error)
@@ -939,6 +1076,11 @@ function ChatPageNew() {
 
     loadUsersFromDb()
   }, [flow.token, flow.username, isMobileView, usersReloadTick])
+
+  useEffect(() => {
+    if (!flow.username || !users.length) return
+    writeUsersCache(users)
+  }, [users, flow.username])
 
   useEffect(() => {
     if (!flow.username) return
@@ -956,34 +1098,33 @@ function ChatPageNew() {
       return
     }
     const targetUsername = selectedUser.username
+    const targetKey = toUserKey(targetUsername)
     const clearCutoff = getConversationClearCutoff(targetUsername)
+    const memoryCachedRows = conversationCacheRef.current[targetKey]
+    const diskCachedRows = readConversationCache(targetUsername, clearCutoff)
+    const cachedRows = memoryCachedRows?.length ? memoryCachedRows : diskCachedRows
+    const hasImmediateData = Array.isArray(cachedRows) && cachedRows.length > 0
+    if (Array.isArray(cachedRows) && cachedRows.length) {
+      setMessages((prev) => {
+        const pendingUploads = (prev || []).filter((msg) =>
+          msg?.sender === 'user' &&
+          msg?.deliveryStatus === 'uploading' &&
+          msg?.tempId
+        )
+        if (!pendingUploads.length) return cachedRows
+        return [...cachedRows, ...pendingUploads]
+      })
+    }
     let cancelled = false
-    getConversation(flow.token, targetUsername)
+    let attempt = 0
+    const fetchConversation = () => {
+      getConversation(flow.token, targetUsername)
       .then((rows) => {
         if (cancelled) return
         if (selectedUserRef.current?.username !== targetUsername) return
-        const filteredRows = (rows || []).filter((row) => {
-          if (!clearCutoff) return true
-          if (!row?.createdAt) return false
-          return new Date(row.createdAt).getTime() > clearCutoff
-        })
-        const normalized = filteredRows.map((row) => ({
-          sender: row.sender || 'other',
-          text: row.text || '',
-          type: row.type || null,
-          fileName: row.fileName || null,
-          mediaUrl: normalizeMediaUrl(row.mediaUrl),
-          mimeType: row.mimeType || null,
-          reaction: decodeReaction(row.reaction),
-          replyingTo: row.replyText ? { text: row.replyText, senderName: row.replySenderName || row.senderName } : null,
-          senderName: formatUsername(row.senderName),
-          messageId: row.id || null,
-          createdAt: row.createdAt || null,
-          clientCreatedAt: Number(row.createdAt || 0) || null,
-          timestamp: formatTimestamp(row.createdAt),
-          edited: Boolean(row.edited || row.isEdited),
-          editedAt: Number(row.editedAt || 0) || null,
-        }))
+        const normalized = normalizeConversationRows(rows, clearCutoff)
+        conversationCacheRef.current[targetKey] = normalized
+        writeConversationCache(targetUsername, normalized)
         setMessages((prev) => {
           const pendingUploads = (prev || []).filter((msg) =>
             msg?.sender === 'user' &&
@@ -1009,13 +1150,44 @@ function ChatPageNew() {
           navigate('/auth')
           return
         }
+        const status = Number(error?.response?.status || 0)
+        const code = String(error?.code || '')
+        const transientFailure =
+          !status ||
+          status === 429 ||
+          status >= 500 ||
+          code === 'ERR_NETWORK' ||
+          code === 'ECONNABORTED' ||
+          code === 'ETIMEDOUT'
+
+        if (transientFailure && attempt < 2) {
+          attempt += 1
+          const delay = 500 * attempt
+          setTimeout(() => {
+            if (!cancelled) fetchConversation()
+          }, delay)
+          return
+        }
+
         console.error('Failed loading conversation', error)
-        toast.error('Failed to load conversation history.')
+        if (!hasImmediateData) {
+          toast.error('Failed to load conversation history.')
+        }
       })
+    }
+    fetchConversation()
     return () => {
       cancelled = true
     }
   }, [selectedUser, flow.token, conversationClears, conversationReloadTick])
+
+  useEffect(() => {
+    if (!flow.username || !selectedUser?.username || !messages?.length) return
+    const stableRows = messages.filter((row) => !(row?.tempId || row?.deliveryStatus === 'uploading'))
+    if (!stableRows.length) return
+    conversationCacheRef.current[toUserKey(selectedUser.username)] = stableRows
+    writeConversationCache(selectedUser.username, stableRows)
+  }, [messages, selectedUser?.username, flow.username])
 
   useEffect(() => {
     if (!flow.token || !flow.username) return
@@ -1189,15 +1361,15 @@ function ChatPageNew() {
             if (selectedUserRef.current?.username === fromUsername) {
               // Update existing message or add new one
               setMessages((prev) => {
-                const existingIndex = prev.findIndex((msg) => 
-                  msg.text === incoming.text && 
-                  msg.senderName === incoming.senderName &&
-                  msg.sender === 'other' &&
-                  msg.createdAt === null
-                )
+                const existingIndex = prev.findIndex((msg) => isSameIncomingMessage(msg, incoming))
                 if (existingIndex >= 0) {
                   const updated = [...prev]
-                  updated[existingIndex] = { ...updated[existingIndex], ...incoming, createdAt: incoming.createdAt }
+                  updated[existingIndex] = {
+                    ...updated[existingIndex],
+                    ...incoming,
+                    createdAt: incoming.createdAt,
+                    clientCreatedAt: incoming.clientCreatedAt,
+                  }
                   return updated
                 }
                 return [...prev, incoming]
@@ -1387,6 +1559,7 @@ function ChatPageNew() {
     let syncing = false
 
     const notifyMissedWhileOffline = async () => {
+      if (selectedUserRef.current?.username) return
       if (syncing) return
       syncing = true
       try {
@@ -1423,7 +1596,6 @@ function ChatPageNew() {
       notifyMissedWhileOffline()
     }
 
-    notifyMissedWhileOffline()
     window.addEventListener('focus', notifyMissedWhileOffline)
     window.addEventListener('online', notifyMissedWhileOffline)
     document.addEventListener('visibilitychange', onResume)
@@ -1433,7 +1605,7 @@ function ChatPageNew() {
       window.removeEventListener('online', notifyMissedWhileOffline)
       document.removeEventListener('visibilitychange', onResume)
     }
-  }, [flow.token, flow.username, users])
+  }, [flow.token, flow.username, users, selectedUser?.username])
 
   useEffect(() => {
     return () => {
@@ -2749,6 +2921,15 @@ function ChatPageNew() {
                 <span className="reply-label">Editing message:</span>
                 <span className="reply-msg">{editingMessage.preview}</span>
               </div>
+              <button
+                type="button"
+                className="btn-cancel-reply btn-reply-copy"
+                onClick={() => copyTextToClipboard(editingMessage.preview)}
+                title="Copy text"
+                aria-label="Copy text"
+              >
+                Copy
+              </button>
               <button className="btn-cancel-reply" onClick={cancelEditingMessage}>X</button>
             </motion.div>
           )}
@@ -2766,6 +2947,15 @@ function ChatPageNew() {
                 <span className="reply-label">Replying to @{formatUsername(replyingTo.senderName)}:</span>
                 <span className="reply-msg">{replyingTo.text}</span>
               </div>
+              <button
+                type="button"
+                className="btn-cancel-reply btn-reply-copy"
+                onClick={() => copyTextToClipboard(replyingTo.text)}
+                title="Copy text"
+                aria-label="Copy text"
+              >
+                Copy
+              </button>
               <button className="btn-cancel-reply" onClick={() => setReplyingTo(null)}>X</button>
             </motion.div>
           )}

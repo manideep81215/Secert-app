@@ -1,6 +1,7 @@
 import { createApiClient } from './apiClient'
 
 const messagesClient = createApiClient('/messages', 10000)
+messagesClient.defaults.timeout = 20000
 
 export async function getConversation(token, withUsername) {
   const { data } = await messagesClient.get('/conversation', {
