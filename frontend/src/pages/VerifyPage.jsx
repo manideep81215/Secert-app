@@ -3,11 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import { resetFlowState, useFlowState } from '../hooks/useFlowState'
 import { pushNotify } from '../lib/notifications'
-import { API_APP_BASE_URL } from '../config/apiConfig'
+import { verifySecretKey } from '../services/usersApi'
 import BackIcon from '../components/BackIcon'
 import './VerifyPage.css'
-
-const API_BASE = API_APP_BASE_URL
 
 function VerifyPage() {
   const navigate = useNavigate()
@@ -42,26 +40,7 @@ function VerifyPage() {
 
     setIsLoading(true)
     try {
-      const response = await fetch(`${API_BASE}/users/${flow.userId}/verify-secret-key`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${flow.token}`,
-        },
-        body: JSON.stringify({ secretKey: secretKey.trim() }),
-      })
-
-      if (response.status === 401) {
-        handleUnauthorized()
-        return
-      }
-
-      if (!response.ok) {
-        toast.error('Verification failed.')
-        return
-      }
-
-      const data = await response.json()
+      const data = await verifySecretKey(flow.userId, secretKey.trim(), flow.token)
       if (!data.verified) {
         toast.error('Wrong secret key.')
         return
@@ -70,7 +49,11 @@ function VerifyPage() {
       setFlow((prev) => ({ ...prev, verified: true }))
       pushNotify('Checkpoint cleared', 'Bonus room is now available.')
       navigate('/chat')
-    } catch {
+    } catch (error) {
+      if (error?.response?.status === 401) {
+        handleUnauthorized()
+        return
+      }
       toast.error('Unable to reach server.')
     } finally {
       setIsLoading(false)

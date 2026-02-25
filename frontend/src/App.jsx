@@ -87,8 +87,20 @@ function App() {
           token: nextAccess,
           refreshToken: nextRefresh,
         }))
-      } catch {
-        resetFlowState(setFlow)
+      } catch (error) {
+        const status = Number(error?.response?.status || 0)
+        // Logout only when refresh token is truly invalid/expired.
+        if (status === 401 || status === 403) {
+          resetFlowState(setFlow)
+          return
+        }
+        // For transient network/server issues, keep session and retry soon.
+        if (!refreshTimerRef.current) {
+          refreshTimerRef.current = window.setTimeout(() => {
+            refreshTimerRef.current = null
+            refreshNow()
+          }, 60 * 1000)
+        }
       }
     }
 

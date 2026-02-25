@@ -2,12 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import { resetFlowScores, resetFlowState, useFlowState } from '../hooks/useFlowState'
-import { getUserById } from '../services/usersApi'
-import { API_APP_BASE_URL } from '../config/apiConfig'
+import { getUserById, hasSecretKey, setSecretKey, verifySecretKey } from '../services/usersApi'
 import BackIcon from '../components/BackIcon'
 import './ProfilePage.css'
-
-const API_BASE = API_APP_BASE_URL
 
 function ProfilePage() {
   const navigate = useNavigate()
@@ -71,31 +68,15 @@ function ProfilePage() {
   const openSecretKeyModal = async () => {
     setIsLoading(true)
     try {
-      // Check if user has a secret key in the database
-      const response = await fetch(
-        `${API_BASE}/users/${flow.userId}/secret-key-exists`,
-        {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${flow.token}`,
-          }
-        }
-      )
-
-      if (response.status === 401) {
+      const data = await hasSecretKey(flow.userId, flow.token)
+      setIsFirstTime(!data?.exists)
+      setShowSecretKeyModal(true)
+      setSecretKey('')
+    } catch (error) {
+      if (error?.response?.status === 401) {
         handleUnauthorized()
         return
       }
-
-      if (response.ok) {
-        const data = await response.json()
-        setIsFirstTime(!data.exists)
-        setShowSecretKeyModal(true)
-        setSecretKey('')
-      } else {
-        toast.error('Unable to check secret key status.')
-      }
-    } catch (error) {
       console.error('Error checking secret key:', error)
       toast.error('Unable to reach server.')
     } finally {
@@ -148,75 +129,34 @@ function ProfilePage() {
     setIsLoading(true)
     try {
       if (isFirstTime) {
-        // Create/Set secret key for first time
-        const response = await fetch(
-          `${API_BASE}/users/${flow.userId}/secret-key`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${flow.token}`,
-            },
-            body: JSON.stringify({ secretKey: secretKey })
-          }
-        )
-
-        if (response.status === 401) {
-          handleUnauthorized()
-          return
-        }
-
-        if (response.ok) {
+        await setSecretKey(flow.userId, secretKey, flow.token)
+        setFlow((prev) => ({ ...prev, verified: true }))
+        toast.success('Confirmation key created successfully! Redirecting to chat...')
+        setShowSecretKeyModal(false)
+        setSecretKey('')
+        setTimeout(() => {
+          navigate('/users')
+        }, 500)
+      } else {
+        const data = await verifySecretKey(flow.userId, secretKey, flow.token)
+        if (data?.verified) {
           setFlow((prev) => ({ ...prev, verified: true }))
-          toast.success('Confirmation key created successfully! Redirecting to chat...')
+          toast.success('Confirmation key verified! Redirecting to chat...')
           setShowSecretKeyModal(false)
           setSecretKey('')
           setTimeout(() => {
             navigate('/users')
           }, 500)
         } else {
-          toast.error('Failed to create confirmation key')
-          setSecretKey('')
-        }
-      } else {
-        // Verify existing secret key
-        const response = await fetch(
-          `${API_BASE}/users/${flow.userId}/verify-secret-key`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${flow.token}`,
-            },
-            body: JSON.stringify({ secretKey: secretKey })
-          }
-        )
-
-        if (response.status === 401) {
-          handleUnauthorized()
-          return
-        }
-
-        if (response.ok) {
-          const data = await response.json()
-          if (data.verified) {
-            setFlow((prev) => ({ ...prev, verified: true }))
-            toast.success('Confirmation key verified! Redirecting to chat...')
-            setShowSecretKeyModal(false)
-            setSecretKey('')
-            setTimeout(() => {
-              navigate('/users')
-            }, 500)
-          } else {
-            toast.error('Wrong confirmation key! Few chances left!')
-            setSecretKey('')
-          }
-        } else {
-          toast.error('Error verifying confirmation key')
+          toast.error('Wrong confirmation key! Few chances left!')
           setSecretKey('')
         }
       }
     } catch (error) {
+      if (error?.response?.status === 401) {
+        handleUnauthorized()
+        return
+      }
       console.error('Error with secret key:', error)
       toast.error('An error occurred. Please try again.')
       setSecretKey('')

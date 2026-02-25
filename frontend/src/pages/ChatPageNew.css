@@ -2326,12 +2326,54 @@
 
   /* Capacitor Android: keep composer tight to keyboard edge (no extra bottom gap). */
   .chat-container[data-native="true"][data-android="true"].keyboard-open:not(.mobile-users-open) .input-area {
-    padding-bottom: 0.45rem !important;
+    position: fixed !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    margin-top: 0 !important;
+    padding-top: 0.4rem !important;
+    padding-bottom: 0.35rem !important;
     margin-bottom: 0 !important;
+  }
+
+  .chat-container[data-native="true"][data-android="true"].keyboard-open:not(.mobile-users-open) .messages-area {
+    padding-bottom: 4.4rem !important;
   }
 
   .chat-container[data-native="true"][data-android="true"].keyboard-open:not(.mobile-users-open) .chat-area {
     height: var(--chat-viewport-height, 100dvh) !important;
     min-height: var(--chat-viewport-height, 100dvh) !important;
+  }
+}
+
+/* Universal mobile keyboard-open fix (Web + PWA + Capacitor):
+   keep composer attached to keyboard edge and remove extra blank gap. */
+@media (max-width: 920px) {
+  .chat-container.keyboard-open:not(.mobile-users-open) .chat-area {
+    position: fixed !important;
+    inset: 0 !important;
+    height: var(--chat-viewport-height, 100dvh) !important;
+    min-height: var(--chat-viewport-height, 100dvh) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+  }
+
+  .chat-container.keyboard-open:not(.mobile-users-open) .messages-area {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    padding-bottom: 4.4rem !important;
+  }
+
+  .chat-container.keyboard-open:not(.mobile-users-open) .input-area {
+    position: fixed !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    margin: 0 !important;
+    padding-top: 0.4rem !important;
+    padding-bottom: 0.35rem !important;
+    z-index: 260 !important;
   }
 }

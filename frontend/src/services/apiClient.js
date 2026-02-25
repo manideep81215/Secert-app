@@ -32,11 +32,14 @@ async function refreshSession() {
     return nextAccessToken
   })()
     .catch((error) => {
-      setFlowStateSnapshot((prev) => ({
-        ...prev,
-        token: '',
-        refreshToken: '',
-      }))
+      const status = Number(error?.response?.status || 0)
+      if (status === 401 || status === 403) {
+        setFlowStateSnapshot((prev) => ({
+          ...prev,
+          token: '',
+          refreshToken: '',
+        }))
+      }
       throw error
     })
     .finally(() => {
