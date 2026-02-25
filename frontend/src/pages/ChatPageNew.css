@@ -766,6 +766,7 @@
 
 .btn-reply,
 .btn-delete,
+.btn-copy,
 .btn-edit,
 .btn-resend {
   width: 2rem;
@@ -782,6 +783,7 @@
 
 .btn-reply:hover,
 .btn-delete:hover,
+.btn-copy:hover,
 .btn-edit:hover,
 .btn-resend:hover {
   transform: scale(1.15);
@@ -792,11 +794,22 @@
   color: #3d3d3d;
 }
 
+.btn-copy {
+  color: #2f4f3a;
+}
+
 .btn-resend {
   color: #1f5f2f;
 }
 
 .btn-reply:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.btn-copy:disabled {
   opacity: 0.42;
   cursor: not-allowed;
   transform: none;
@@ -1924,8 +1937,14 @@
 }
 
 .chat-container .message-content {
-  max-width: 41%;
+  max-width: min(72%, 560px);
   padding: 0.55rem 0.75rem;
+}
+
+.chat-container .message-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .chat-container .message-image-preview {

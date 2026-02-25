@@ -309,6 +309,7 @@ function ChatPageNew() {
     reply: '\u21A9',
     delete: '\uD83D\uDDD1',
     edit: '\u270E',
+    copy: '\u2398',
     resend: '\u21BB',
     send: '\u27A4',
     game: '\uD83C\uDFAE',
@@ -2876,6 +2877,15 @@ function ChatPageNew() {
                 </div>
                 <div className={`message-actions ${activeMessageActionsKey === messageKey ? 'active' : ''}`}>
                   <button
+                    className="btn-copy"
+                    onClick={() => copyTextToClipboard(message?.text || message?.fileName || '')}
+                    title="Copy"
+                    aria-label="Copy"
+                    disabled={!(message?.text || message?.fileName)}
+                  >
+                    {icons.copy}
+                  </button>
+                  <button
                     className="btn-reply"
                     onClick={() => handleReply(message)}
                     title={messageFailed ? 'Cannot reply to unsent message' : 'Reply'}
@@ -2941,15 +2951,6 @@ function ChatPageNew() {
                 <span className="reply-label">Editing message:</span>
                 <span className="reply-msg">{editingMessage.preview}</span>
               </div>
-              <button
-                type="button"
-                className="btn-cancel-reply btn-reply-copy"
-                onClick={() => copyTextToClipboard(editingMessage.preview)}
-                title="Copy text"
-                aria-label="Copy text"
-              >
-                Copy
-              </button>
               <button className="btn-cancel-reply" onClick={cancelEditingMessage}>X</button>
             </motion.div>
           )}
@@ -2967,15 +2968,6 @@ function ChatPageNew() {
                 <span className="reply-label">Replying to @{formatUsername(replyingTo.senderName)}:</span>
                 <span className="reply-msg">{replyingTo.text}</span>
               </div>
-              <button
-                type="button"
-                className="btn-cancel-reply btn-reply-copy"
-                onClick={() => copyTextToClipboard(replyingTo.text)}
-                title="Copy text"
-                aria-label="Copy text"
-              >
-                Copy
-              </button>
               <button className="btn-cancel-reply" onClick={() => setReplyingTo(null)}>X</button>
             </motion.div>
           )}
