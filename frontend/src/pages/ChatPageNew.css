@@ -2380,4 +2380,18 @@
     padding-bottom: calc(0.35rem + var(--chat-safe-bottom, 0px)) !important;
     z-index: 260 !important;
   }
+
+  /* Mobile web/PWA: keep container stable and lift composer by keyboard overlay gap. */
+  .chat-container[data-native="false"]:not(.mobile-users-open) .chat-area {
+    height: 100dvh !important;
+    min-height: 100dvh !important;
+  }
+
+  .chat-container[data-native="false"].keyboard-open:not(.mobile-users-open) .input-area {
+    margin-bottom: var(--chat-vv-bottom, 0px) !important;
+  }
+
+  .chat-container[data-native="false"].keyboard-open:not(.mobile-users-open) .messages-area {
+    padding-bottom: calc(0.5rem + var(--chat-vv-bottom, 0px)) !important;
+  }
 }
