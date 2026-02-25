@@ -2,7 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import { resetFlowScores, resetFlowState, useFlowState } from '../hooks/useFlowState'
-import { getUserById, hasSecretKey, setSecretKey, verifySecretKey } from '../services/usersApi'
+import {
+  getUserById,
+  hasSecretKey,
+  setSecretKey as saveSecretKeyApi,
+  verifySecretKey as verifySecretKeyApi,
+} from '../services/usersApi'
 import BackIcon from '../components/BackIcon'
 import './ProfilePage.css'
 
@@ -120,7 +125,7 @@ function ProfilePage() {
     }
   }
 
-  const verifySecretKey = async () => {
+  const submitSecretKey = async () => {
     if (!secretKey.trim()) {
       toast.error('Secret key cannot be empty')
       return
@@ -129,7 +134,7 @@ function ProfilePage() {
     setIsLoading(true)
     try {
       if (isFirstTime) {
-        await setSecretKey(flow.userId, secretKey, flow.token)
+        await saveSecretKeyApi(flow.userId, secretKey, flow.token)
         setFlow((prev) => ({ ...prev, verified: true }))
         toast.success('Confirmation key created successfully! Redirecting to chat...')
         setShowSecretKeyModal(false)
@@ -138,7 +143,7 @@ function ProfilePage() {
           navigate('/users')
         }, 500)
       } else {
-        const data = await verifySecretKey(flow.userId, secretKey, flow.token)
+        const data = await verifySecretKeyApi(flow.userId, secretKey, flow.token)
         if (data?.verified) {
           setFlow((prev) => ({ ...prev, verified: true }))
           toast.success('Confirmation key verified! Redirecting to chat...')
@@ -241,7 +246,7 @@ function ProfilePage() {
               type="password"
               value={secretKey}
               onChange={(e) => setSecretKey(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && !isLoading && verifySecretKey()}
+              onKeyPress={(e) => e.key === 'Enter' && !isLoading && submitSecretKey()}
               placeholder="Enter your confirmation key"
               autoFocus
               disabled={isLoading}
@@ -249,7 +254,7 @@ function ProfilePage() {
             />
             <div className="modal-buttons">
               <button
-                onClick={verifySecretKey}
+                onClick={submitSecretKey}
                 disabled={isLoading}
                 className="modal-btn modal-btn-primary"
               >
