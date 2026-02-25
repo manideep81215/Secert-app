@@ -948,12 +948,17 @@ function ChatPageNew() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined
+    const nativeRuntime = isNativeCapacitorRuntime()
+    const shouldDeferVideoThumbs = isTouchDevice || isMobileView || nativeRuntime || messages.length > 90
+    if (shouldDeferVideoThumbs) return undefined
     const videoUrls = [...new Set(
       messages
         .filter((msg) => msg?.type === 'video' && msg?.mediaUrl)
         .map((msg) => String(msg.mediaUrl))
     )]
     if (videoUrls.length === 0) return undefined
+    const pendingUrls = videoUrls.filter((url) => videoThumbMap[url] === undefined).slice(-4)
+    if (pendingUrls.length === 0) return undefined
 
     let cancelled = false
     const generateThumb = (url) => new Promise((resolve) => {
@@ -1012,7 +1017,7 @@ function ChatPageNew() {
     })
 
     const loadThumbs = async () => {
-      for (const url of videoUrls) {
+      for (const url of pendingUrls) {
         if (cancelled) return
         if (videoThumbMap[url] !== undefined) continue
         const thumb = await generateThumb(url)
@@ -1024,11 +1029,19 @@ function ChatPageNew() {
       }
     }
 
-    loadThumbs()
+    let idleCallbackId = null
+    let timeoutId = null
+    if (window.requestIdleCallback) {
+      idleCallbackId = window.requestIdleCallback(() => { loadThumbs() }, { timeout: 900 })
+    } else {
+      timeoutId = window.setTimeout(() => { loadThumbs() }, 140)
+    }
     return () => {
       cancelled = true
+      if (idleCallbackId !== null) window.cancelIdleCallback?.(idleCallbackId)
+      if (timeoutId !== null) window.clearTimeout(timeoutId)
     }
-  }, [messages, videoThumbMap])
+  }, [messages, videoThumbMap, isTouchDevice, isMobileView])
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -2664,7 +2677,7 @@ function ChatPageNew() {
             {thumb ? (
               <img className="message-video-thumb-image" src={thumb} alt={message.fileName || 'video thumbnail'} />
             ) : (
-              <video className="message-video-preview" src={message.mediaUrl} preload="metadata" muted playsInline />
+              <div className="message-video-placeholder" aria-hidden="true" />
             )}
             <span className="message-video-play-icon">{icons.video}</span>
           </div>
@@ -2699,6 +2712,15 @@ function ChatPageNew() {
 
   const fallbackViewportHeight = typeof window !== 'undefined' ? window.innerHeight : 0
   const isNativeRuntime = isNativeCapacitorRuntime()
+  const shouldReduceMessageMotion = isTouchDevice || isMobileView || isNativeRuntime || messages.length > 70
+  const messageMotionProps = shouldReduceMessageMotion
+    ? {}
+    : {
+        initial: { opacity: 0, y: 20 },
+        animate: { opacity: 1, y: 0 },
+        exit: { opacity: 0, y: -20 },
+        whileHover: { scale: 1.02 },
+      }
 
   return (
     <div
@@ -2711,7 +2733,7 @@ function ChatPageNew() {
         '--chat-viewport-height': `${Math.max(0, viewportHeight || fallbackViewportHeight)}px`,
         '--chat-safe-bottom': (isIosPlatform && !isKeyboardOpen) ? 'env(safe-area-inset-bottom)' : '0px',
         '--chat-vv-top': `${Math.max(0, visualViewportTop)}px`,
-        '--chat-vv-bottom': `${Math.max(0, visualViewportBottomGap)}px`,
+        '--chat-vv-bottom': isNativeRuntime ? '0px' : `${Math.max(0, visualViewportBottomGap)}px`,
       }}
     >
       <ChatUsersPanel
@@ -2819,12 +2841,12 @@ function ChatPageNew() {
           animate={{ opacity: 1 }}
           transition={{ duration: 0.3 }}
         >
-          <AnimatePresence>
-            {messages.map((message, index) => {
+          {shouldReduceMessageMotion ? (
+            messages.map((message, index) => {
               const messageKey = getMessageUiKey(message, index)
               const messageFailed = isMessageFailed(message)
               return (
-              <motion.div
+              <div
                 key={messageKey}
                 className={`message ${message.sender}`}
                 draggable={!isTouchDevice}
@@ -2839,10 +2861,6 @@ function ChatPageNew() {
                 onTouchEnd={handleMessageTouchEnd}
                 onTouchCancel={handleMessageTouchEnd}
                 onClick={(event) => handleMessageTap(event, messageKey)}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                whileHover={{ scale: 1.02 }}
               >
                 <div className={`message-content ${message.type === 'image' || message.type === 'video' ? 'has-media' : ''}`}>
                   {message.sender === 'user' && message.deliveryStatus === 'uploading' && (
@@ -2901,9 +2919,92 @@ function ChatPageNew() {
                     <button className="btn-resend" onClick={() => handleResendMessage(message)} title="Resend" aria-label="Resend">{icons.resend}</button>
                   )}
                 </div>
-              </motion.div>
-            )})}
-          </AnimatePresence>
+              </div>
+            )})
+          ) : (
+            <AnimatePresence>
+              {messages.map((message, index) => {
+                const messageKey = getMessageUiKey(message, index)
+                const messageFailed = isMessageFailed(message)
+                return (
+                <motion.div
+                  key={messageKey}
+                  className={`message ${message.sender}`}
+                  draggable={!isTouchDevice}
+                  onDragStart={(event) => handleDragStart(event, message)}
+                  onDragEnd={handleDragEnd}
+                  onPointerDown={(event) => handleMessagePointerDown(event, message, messageKey)}
+                  onPointerMove={handleMessagePointerMove}
+                  onPointerUp={handleMessagePointerEnd}
+                  onPointerCancel={handleMessagePointerEnd}
+                  onTouchStart={(event) => handleMessageTouchStart(event, message, messageKey)}
+                  onTouchMove={handleMessageTouchMove}
+                  onTouchEnd={handleMessageTouchEnd}
+                  onTouchCancel={handleMessageTouchEnd}
+                  onClick={(event) => handleMessageTap(event, messageKey)}
+                  {...messageMotionProps}
+                >
+                  <div className={`message-content ${message.type === 'image' || message.type === 'video' ? 'has-media' : ''}`}>
+                    {message.sender === 'user' && message.deliveryStatus === 'uploading' && (
+                      <span className="message-upload-ring" title="Uploading" />
+                    )}
+                    {message.sender === 'user' && message.deliveryStatus === 'failed' && (
+                      <span className="message-upload-failed" title="Failed">!</span>
+                    )}
+                    {message.replyingTo && (
+                      <div className="message-reply-context">
+                        <div className="reply-label">Replying to {message.replyingTo.senderName ? `@${formatUsername(message.replyingTo.senderName)}` : 'message'}:</div>
+                        <div className="reply-text">{renderTextWithLinks(message.replyingTo.text)}</div>
+                      </div>
+                    )}
+                    {renderMessageMedia(message)}
+                    {message.fileName && message.type !== 'file' && <div className="message-file-name">{message.fileName}</div>}
+                    {(message.type === 'text' || !message.type) && (
+                      <div className="message-text">{renderTextWithLinks(message.text)}</div>
+                    )}
+                    {(message.type && message.type !== 'text' && !message.mediaUrl) && (
+                      <div className="message-media-fallback">{renderTextWithLinks(`${getTypeIcon(message.type)} ${message.text}`.trim())}</div>
+                    )}
+                    <span className="message-time">{getMessageFooterLabel(message)}</span>
+                    {shouldShowSeenInline && index === lastOutgoingIndex && activeMessageActionsKey !== messageKey && (
+                      <span className="message-seen-inline">Seen</span>
+                    )}
+                    {message.reaction && (
+                      <span className="message-reaction-badge" aria-label={`Reaction ${message.reaction}`}>
+                        {message.reaction}
+                      </span>
+                    )}
+                  </div>
+                  <div className={`message-actions ${activeMessageActionsKey === messageKey ? 'active' : ''}`}>
+                    <button
+                      className="btn-copy"
+                      onClick={() => copyTextToClipboard(message?.text || message?.fileName || '')}
+                      title="Copy"
+                      aria-label="Copy"
+                      disabled={!(message?.text || message?.fileName)}
+                    >
+                      {icons.copy}
+                    </button>
+                    <button
+                      className="btn-reply"
+                      onClick={() => handleReply(message)}
+                      title={messageFailed ? 'Cannot reply to unsent message' : 'Reply'}
+                      aria-label="Reply"
+                      disabled={messageFailed}
+                    >
+                      {icons.reply}
+                    </button>
+                    {message.sender === 'user' && !messageFailed && canEditMessage(message) && (
+                      <button className="btn-edit" onClick={() => handleStartEdit(message)} title="Edit" aria-label="Edit">{icons.edit}</button>
+                    )}
+                    {message.sender === 'user' && messageFailed && (
+                      <button className="btn-resend" onClick={() => handleResendMessage(message)} title="Resend" aria-label="Resend">{icons.resend}</button>
+                    )}
+                  </div>
+                </motion.div>
+              )})}
+            </AnimatePresence>
+          )}
           <AnimatePresence>
             {selectedUser && selectedTyping && (
               <motion.div
