@@ -284,6 +284,18 @@ function TttGamePage() {
       awardOnlineWinIfNeeded(event?.winner, event?.roomId || '', event?.updatedAt || Date.now(), myMark)
     }
 
+    const msg = String(event?.message || '')
+    const toastKey = `${event?.roomId || ''}:${event?.updatedAt || ''}:${msg}`
+    if (msg && onlinePresenceToastRef.current !== toastKey) {
+      if (msg.toLowerCase().includes('both players connected')) {
+        toast.success('Opponent joined the room.')
+        onlinePresenceToastRef.current = toastKey
+      } else if (msg.toLowerCase().includes('left')) {
+        toast.info('A player left the room.')
+        onlinePresenceToastRef.current = toastKey
+      }
+    }
+
     if (event?.winner === 'draw') {
       setMatchEnded(true)
       setText('Online: draw match.')
@@ -303,17 +315,6 @@ function TttGamePage() {
     }
 
     const turnName = turn === 'X' ? xPlayer : oPlayer
-    const msg = String(event?.message || '')
-    const toastKey = `${event?.roomId || ''}:${event?.updatedAt || ''}:${msg}`
-    if (msg && onlinePresenceToastRef.current !== toastKey) {
-      if (msg.toLowerCase().includes('both players connected')) {
-        toast.success('Opponent joined the room.')
-        onlinePresenceToastRef.current = toastKey
-      } else if (msg.toLowerCase().includes('left')) {
-        toast.info('A player left the room.')
-        onlinePresenceToastRef.current = toastKey
-      }
-    }
     setText(`Online: ${turnName} turn (${turn}).`)
   }
 
