@@ -421,14 +421,8 @@ function App() {
     })
   }, [flow?.token])
 
-  const cap = typeof window !== 'undefined' ? window.Capacitor : null
-  const nativePlatform = typeof cap?.getPlatform === 'function' ? cap.getPlatform() : null
-  const isNativeAndroid = typeof cap?.isNativePlatform === 'function'
-    ? cap.isNativePlatform() && nativePlatform === 'android'
-    : nativePlatform === 'android'
-
   return (
-    <div className={`app-wrap container-fluid ${isNativeAndroid ? 'native-android' : ''} ${isFullBleedRoute ? 'app-auth-route p-0' : 'py-4 px-3 px-md-4'}`}>
+    <div className={`app-wrap container-fluid ${isFullBleedRoute ? 'app-auth-route p-0' : 'py-4 px-3 px-md-4'}`}>
       <div className={isFullBleedRoute ? 'app-auth-max' : 'mx-auto app-max'}>
         <Routes>
           <Route path="/" element={<Navigate to={isAuthenticated ? '/games' : '/auth'} replace />} />

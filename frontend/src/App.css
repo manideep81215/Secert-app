@@ -3,10 +3,6 @@
   min-height: 100dvh;
 }
 
-.app-wrap.native-android {
-  padding-top: max(env(safe-area-inset-top), 26px) !important;
-}
-
 .app-auth-route {
   min-height: 100vh;
   min-height: 100dvh;

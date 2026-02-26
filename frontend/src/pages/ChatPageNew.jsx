@@ -900,6 +900,13 @@ function ChatPageNew() {
         const onShow = (info) => {
           const nativeHeight = Number(info?.keyboardHeight || 0)
           keyboardSettleUntilRef.current = Date.now() + 420
+          if (isAndroidPlatform) {
+            const layoutHeight = Math.round(window.innerHeight || 0)
+            const baseline = Math.max(maxViewportHeightRef.current || 0, layoutHeight)
+            const resizedDelta = Math.max(0, baseline - layoutHeight)
+            // If viewport is already resized by OS, avoid double-shifting the composer.
+            setKeyboardOffset(resizedDelta > 100 ? 0 : Math.max(0, nativeHeight))
+          }
           if (nativeHeight > 0 && isIosPlatform && typeof window.visualViewport === 'undefined') {
             setKeyboardOffset(nativeHeight)
           }
@@ -2735,6 +2742,11 @@ function ChatPageNew() {
 
   const fallbackViewportHeight = typeof window !== 'undefined' ? window.innerHeight : 0
   const isNativeRuntime = isNativeCapacitorRuntime()
+  const renderReplyInsideComposer = Boolean(
+    isNativeRuntime &&
+    isAndroidPlatform &&
+    isKeyboardOpen
+  )
   const shouldReduceMessageMotion = isTouchDevice || isMobileView || isNativeRuntime || messages.length > 70
   const messageMotionProps = shouldReduceMessageMotion
     ? {}
@@ -2752,10 +2764,10 @@ function ChatPageNew() {
       data-android={isAndroidPlatform ? 'true' : 'false'}
       data-native={isNativeRuntime ? 'true' : 'false'}
       style={{
-        '--chat-keyboard-offset': '0px',
+        '--chat-keyboard-offset': `${Math.max(0, keyboardOffset || 0)}px`,
         '--chat-viewport-height': `${Math.max(0, viewportHeight || fallbackViewportHeight)}px`,
         '--chat-safe-bottom': (isIosPlatform && !isKeyboardOpen) ? 'env(safe-area-inset-bottom)' : '0px',
-        '--chat-safe-top': (isNativeRuntime && isAndroidPlatform) ? '26px' : 'env(safe-area-inset-top)',
+        '--chat-safe-top': isIosPlatform ? 'env(safe-area-inset-top)' : '0px',
         '--chat-vv-top': `${Math.max(0, visualViewportTop)}px`,
         '--chat-vv-bottom': isNativeRuntime ? '0px' : `${Math.max(0, visualViewportBottomGap)}px`,
       }}
@@ -3064,39 +3076,43 @@ function ChatPageNew() {
           </div>
         )}
 
-        <AnimatePresence>
-          {editingMessage && (
-            <motion.div
-              className="reply-preview edit-preview"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 10 }}
-            >
-              <div className="reply-info">
-                <span className="reply-label">Editing message:</span>
-                <span className="reply-msg">{editingMessage.preview}</span>
-              </div>
-              <button className="btn-cancel-reply" onClick={cancelEditingMessage}>X</button>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {!renderReplyInsideComposer && (
+          <>
+            <AnimatePresence>
+              {editingMessage && (
+                <motion.div
+                  className="reply-preview edit-preview"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                >
+                  <div className="reply-info">
+                    <span className="reply-label">Editing message:</span>
+                    <span className="reply-msg">{editingMessage.preview}</span>
+                  </div>
+                  <button className="btn-cancel-reply" onClick={cancelEditingMessage}>X</button>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
-        <AnimatePresence>
-          {replyingTo && (
-            <motion.div
-              className="reply-preview"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 10 }}
-            >
-              <div className="reply-info">
-                <span className="reply-label">Replying to @{formatUsername(replyingTo.senderName)}:</span>
-                <span className="reply-msg">{replyingTo.text}</span>
-              </div>
-              <button className="btn-cancel-reply" onClick={() => setReplyingTo(null)}>X</button>
-            </motion.div>
-          )}
-        </AnimatePresence>
+            <AnimatePresence>
+              {replyingTo && (
+                <motion.div
+                  className="reply-preview"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                >
+                  <div className="reply-info">
+                    <span className="reply-label">Replying to @{formatUsername(replyingTo.senderName)}:</span>
+                    <span className="reply-msg">{replyingTo.text}</span>
+                  </div>
+                  <button className="btn-cancel-reply" onClick={() => setReplyingTo(null)}>X</button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </>
+        )}
 
         <motion.div
           className={`input-area ${isDraggingMessage ? 'drop-target' : ''}`}
@@ -3106,6 +3122,24 @@ function ChatPageNew() {
           animate={{ y: 0 }}
           transition={{ duration: 0.3 }}
         >
+          {renderReplyInsideComposer && editingMessage && (
+            <div className="reply-preview reply-preview-inline edit-preview">
+              <div className="reply-info">
+                <span className="reply-label">Editing message:</span>
+                <span className="reply-msg">{editingMessage.preview}</span>
+              </div>
+              <button className="btn-cancel-reply" onClick={cancelEditingMessage}>X</button>
+            </div>
+          )}
+          {renderReplyInsideComposer && replyingTo && (
+            <div className="reply-preview reply-preview-inline">
+              <div className="reply-info">
+                <span className="reply-label">Replying to @{formatUsername(replyingTo.senderName)}:</span>
+                <span className="reply-msg">{replyingTo.text}</span>
+              </div>
+              <button className="btn-cancel-reply" onClick={() => setReplyingTo(null)}>X</button>
+            </div>
+          )}
           <div className="input-wrapper">
             <div className="input-actions" ref={attachMenuRef}>
               <button
