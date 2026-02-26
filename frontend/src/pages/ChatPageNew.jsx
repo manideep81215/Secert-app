@@ -1,9 +1,8 @@
-﻿import { useState, useRef, useEffect, useMemo } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Client } from '@stomp/stompjs'
 import SockJS from 'sockjs-client'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { toast } from 'react-toastify'
 import { getMe } from '../services/authApi'
 import { getConversation, uploadMedia } from '../services/messagesApi'
 import { getAllUsers } from '../services/usersApi'
@@ -20,6 +19,8 @@ import { API_BASE_URL, WS_CHAT_URL } from '../config/apiConfig'
 import { resetFlowState, useFlowState } from '../hooks/useFlowState'
 import './ChatPageNew.css'
 
+const notify = { success: () => {}, error: () => {}, info: () => {}, warn: () => {}, clearWaitingQueue: () => {} }
+
 const REALTIME_TOAST_ID = 'realtime-connection'
 const PRESENCE_LAST_SEEN_KEY = 'chat_presence_last_seen_v1'
 const ACTIVE_CHAT_PEER_KEY_PREFIX = 'active_chat_peer_v1:'
@@ -27,12 +28,12 @@ const EDIT_WINDOW_MS = 15 * 60 * 1000
 const MESSAGE_ACTION_LONG_PRESS_MS = 1000
 const TYPING_STALE_MS = 1400
 const QUICK_REACTIONS = [
-  { code: 'heart', emoji: 'â¤ï¸' },
-  { code: 'laugh', emoji: 'ðŸ˜‚' },
-  { code: 'wow', emoji: 'ðŸ˜®' },
-  { code: 'sad', emoji: 'ðŸ˜¢' },
-  { code: 'angry', emoji: 'ðŸ˜¡' },
-  { code: 'like', emoji: 'ðŸ‘' },
+  { code: 'heart', emoji: '❤️' },
+  { code: 'laugh', emoji: '😂' },
+  { code: 'wow', emoji: '😮' },
+  { code: 'sad', emoji: '😢' },
+  { code: 'angry', emoji: '😡' },
+  { code: 'like', emoji: '👍' },
 ]
 const REACTION_CODE_TO_EMOJI = QUICK_REACTIONS.reduce((acc, item) => ({ ...acc, [item.code]: item.emoji }), {})
 const REACTION_EMOJI_TO_CODE = QUICK_REACTIONS.reduce((acc, item) => ({ ...acc, [item.emoji]: item.code }), {})
@@ -426,9 +427,9 @@ function ChatPageNew() {
     return (Date.now() - createdAt) <= EDIT_WINDOW_MS
   }
   const getMessageFooterLabel = (message) => {
-    if (isMessageFailed(message)) return `Not sent Â· ${message.timestamp}`
-    if (message?.deliveryStatus === 'uploading') return `Sending... Â· ${message.timestamp}`
-    if (message?.edited) return `edited Â· ${message.timestamp}`
+    if (isMessageFailed(message)) return `Not sent · ${message.timestamp}`
+    if (message?.deliveryStatus === 'uploading') return `Sending... · ${message.timestamp}`
+    if (message?.edited) return `edited · ${message.timestamp}`
     return message?.timestamp || getTimeLabel()
   }
   const createTempId = () => (window.crypto?.randomUUID?.() || `${Date.now()}_${Math.random().toString(16).slice(2)}`)
@@ -452,9 +453,9 @@ function ChatPageNew() {
     if (!text) return
     try {
       await navigator.clipboard.writeText(text)
-      toast.success('Copied')
+      notify.success('Copied')
     } catch {
-      toast.error('Copy failed')
+      notify.error('Copy failed')
     }
   }
   const MAX_MEDIA_BYTES = 200 * 1024 * 1024
@@ -905,8 +906,8 @@ function ChatPageNew() {
             const layoutHeight = Math.round(window.innerHeight || 0)
             const baseline = Math.max(maxViewportHeightRef.current || 0, layoutHeight)
             const resizedDelta = Math.max(0, baseline - layoutHeight)
-            // If viewport is already resized by OS, avoid double-shifting the composer.
-            setKeyboardOffset(resizedDelta > 100 ? 0 : Math.max(0, nativeHeight))
+            // Use only the remaining keyboard height not already applied by viewport resize.
+            setKeyboardOffset(Math.max(0, nativeHeight - resizedDelta))
           }
           if (nativeHeight > 0 && isIosPlatform && typeof window.visualViewport === 'undefined') {
             setKeyboardOffset(nativeHeight)
@@ -1061,7 +1062,6 @@ function ChatPageNew() {
       return
     }
     if ((flow.role || 'game') !== 'chat') {
-      toast.error('Chat is available only for chat role users.')
       navigate('/games')
       return
     }
@@ -1074,7 +1074,7 @@ function ChatPageNew() {
     if (!flow.token) return
     getMe(flow.token).catch((error) => {
       if (error?.response?.status === 401) {
-        toast.error('Session expired, login again.')
+        notify.error('Session expired, login again.')
         resetFlowState(setFlow)
         navigate('/auth')
       }
@@ -1114,7 +1114,7 @@ function ChatPageNew() {
         // Don't auto-select user - let user manually select from list
       } catch (error) {
         console.error('Failed loading users from database', error)
-        toast.error('Failed to load users from database.')
+        notify.error('Failed to load users from database.')
       }
     }
 
@@ -1189,7 +1189,7 @@ function ChatPageNew() {
       .catch((error) => {
         if (cancelled) return
         if (error?.response?.status === 401) {
-          toast.error('Session expired. Please login again.')
+          notify.error('Session expired. Please login again.')
           resetFlowState(setFlow)
           navigate('/auth')
           return
@@ -1215,7 +1215,7 @@ function ChatPageNew() {
 
         console.error('Failed loading conversation', error)
         if (!hasImmediateData) {
-          toast.error('Failed to load conversation history.')
+          notify.error('Failed to load conversation history.')
         }
       })
     }
@@ -1512,9 +1512,9 @@ function ChatPageNew() {
             const ack = JSON.parse(frame.body)
             if (ack?.success) return
             if (ack?.reason) {
-              toast.error(`Edit failed: ${ack.reason}`)
+              notify.error(`Edit failed: ${ack.reason}`)
             } else {
-              toast.error('Edit failed.')
+              notify.error('Edit failed.')
             }
           } catch {
             // Ignore invalid edit acks.
@@ -1702,8 +1702,8 @@ function ChatPageNew() {
     if (typeof navigator !== 'undefined' && navigator.onLine === false) return
     if (now - wsErrorToastAtRef.current < 3000) return
     wsErrorToastAtRef.current = now
-    toast.clearWaitingQueue()
-    toast.error(message, {
+    notify.clearWaitingQueue()
+    notify.error(message, {
       toastId: REALTIME_TOAST_ID,
       autoClose: 1500,
     })
@@ -2037,17 +2037,17 @@ function ChatPageNew() {
     if (editingMessage?.key) {
       const currentTarget = messages.find((msg) => isSameMessage(msg, editingMessage.key))
       if (!currentTarget) {
-        toast.error('Message not found for edit.')
+        notify.error('Message not found for edit.')
         setEditingMessage(null)
         return
       }
       if (!canEditMessage(currentTarget)) {
-        toast.error('Message can only be edited within 15 minutes.')
+        notify.error('Message can only be edited within 15 minutes.')
         setEditingMessage(null)
         return
       }
       if (!socket?.connected) {
-        toast.error('Realtime server disconnected. Edit not sent.')
+        notify.error('Realtime server disconnected. Edit not sent.')
         return
       }
 
@@ -2121,7 +2121,7 @@ function ChatPageNew() {
       }, 10000)
     } else {
       setMessages((prev) => prev.map((msg) => (msg.tempId === tempId ? { ...msg, deliveryStatus: 'failed' } : msg)))
-      toast.error('Realtime server disconnected. Message saved locally only.')
+      notify.error('Realtime server disconnected. Message saved locally only.')
     }
   }
 
@@ -2180,22 +2180,22 @@ function ChatPageNew() {
     let uploadFile = file
     const maxBytes = MAX_MEDIA_BYTES
     if (uploadFile.size > maxBytes) {
-      toast.info('Large media detected. Compressing to fit 200MB limit...')
+      notify.info('Large media detected. Compressing to fit 200MB limit...')
       const compressedResult = await compressMediaToLimit(uploadFile, resolvedType, maxBytes)
       if (!compressedResult?.file) {
-        toast.error('Upload must be below 200MB. Compression could not reduce this media enough.')
+        notify.error('Upload must be below 200MB. Compression could not reduce this media enough.')
         return
       }
       uploadFile = compressedResult.file
       if (compressedResult.compressed) {
         const beforeMb = Math.round(file.size / (1024 * 1024))
         const afterMb = Math.round(uploadFile.size / (1024 * 1024))
-        toast.info(`Compressed media from ${beforeMb}MB to ${afterMb}MB`)
+        notify.info(`Compressed media from ${beforeMb}MB to ${afterMb}MB`)
       }
     }
 
     if (uploadFile.size > maxBytes) {
-      toast.error('Upload must be below 200MB.')
+      notify.error('Upload must be below 200MB.')
       return
     }
 
@@ -2243,17 +2243,17 @@ function ChatPageNew() {
     } catch (error) {
       console.error('Media upload failed', error)
       if (error?.response?.status === 401) {
-        toast.error('Session expired. Please login again.')
+        notify.error('Session expired. Please login again.')
         resetFlowState(setFlow)
         navigate('/auth')
         return
       }
       if (error?.response?.status === 413) {
-        toast.error('File exceeds upload limit (200MB max).')
+        notify.error('File exceeds upload limit (200MB max).')
         return
       }
       setMessages((prev) => prev.map((msg) => (msg.tempId === tempId ? { ...msg, deliveryStatus: 'failed' } : msg)))
-      toast.error('Media upload failed. Please try a smaller file.')
+      notify.error('Media upload failed. Please try a smaller file.')
       return
     }
 
@@ -2270,7 +2270,7 @@ function ChatPageNew() {
     const isRealtimeReady = await waitForSocketConnected(15000, 300)
     if (!isRealtimeReady) {
       setMessages((prev) => prev.map((msg) => (msg.tempId === tempId ? { ...msg, deliveryStatus: 'failed' } : msg)))
-      toast.error('Media uploaded, but realtime is disconnected. Tap resend when connection returns.')
+      notify.error('Media uploaded, but realtime is disconnected. Tap resend when connection returns.')
       return
     }
 
@@ -2298,7 +2298,7 @@ function ChatPageNew() {
     } catch (error) {
       console.error('Realtime publish failed after upload', error)
       setMessages((prev) => prev.map((msg) => (msg.tempId === tempId ? { ...msg, deliveryStatus: 'failed' } : msg)))
-      toast.error('Media uploaded, but send failed. Tap resend.')
+      notify.error('Media uploaded, but send failed. Tap resend.')
     }
   }
 
@@ -2347,11 +2347,11 @@ function ChatPageNew() {
 
   const startVoiceRecording = async () => {
     if (!selectedUser) {
-      toast.error('Select a user first.')
+      notify.error('Select a user first.')
       return
     }
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
-      toast.error('Voice recording is not supported on this browser.')
+      notify.error('Voice recording is not supported on this browser.')
       return
     }
 
@@ -2392,7 +2392,7 @@ function ChatPageNew() {
       }
 
       recorder.onerror = () => {
-        toast.error('Voice recording failed.')
+        notify.error('Voice recording failed.')
         setIsRecordingVoice(false)
         setRecordingSeconds(0)
         stopRecordingTimer()
@@ -2428,7 +2428,7 @@ function ChatPageNew() {
       recorder.start(250)
     } catch (error) {
       console.error('Unable to start voice recording', error)
-      toast.error('Microphone permission denied or unavailable.')
+      notify.error('Microphone permission denied or unavailable.')
       setIsRecordingVoice(false)
       setRecordingSeconds(0)
       stopRecordingTimer()
@@ -2449,7 +2449,7 @@ function ChatPageNew() {
     if (!selectedUser || !message || message.sender !== 'user') return
     if (!isMessageFailed(message)) return
     if (!socket?.connected) {
-      toast.error('Realtime server disconnected. Message not sent.')
+      notify.error('Realtime server disconnected. Message not sent.')
       return
     }
 
@@ -2457,7 +2457,7 @@ function ChatPageNew() {
     const type = message.type || 'text'
     const mediaUrl = message.mediaUrl || null
     if (type !== 'text' && (!mediaUrl || String(mediaUrl).startsWith('blob:'))) {
-      toast.error('Cannot resend local media. Please upload the file again.')
+      notify.error('Cannot resend local media. Please upload the file again.')
       return
     }
 
@@ -2492,7 +2492,7 @@ function ChatPageNew() {
 
   const handleStartEdit = (message) => {
     if (!canEditMessage(message)) {
-      toast.error('Message can only be edited within 15 minutes.')
+      notify.error('Message can only be edited within 15 minutes.')
       return
     }
     setReplyingTo(null)
@@ -2666,7 +2666,7 @@ function ChatPageNew() {
           : msg
       )))
       if (!targetMessage.messageId) {
-        toast.error('Reaction will sync after the message is sent.')
+        notify.error('Reaction will sync after the message is sent.')
       }
       setReactionTray(null)
       setActiveMessageActionsKey(messageKey)
@@ -3324,6 +3324,7 @@ function ChatPageNew() {
 }
 
 export default ChatPageNew
+
 
 
 

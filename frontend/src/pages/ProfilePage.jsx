@@ -107,7 +107,6 @@ function ProfilePage() {
     if (isLoading) return
     if (event?.pointerType === 'mouse' && event?.button !== 0) return
     if ((flow.role || 'game') !== 'chat') {
-      toast.error('Long press action is only available for chat role users.')
       return
     }
     longPressTriggeredRef.current = false
@@ -141,7 +140,6 @@ function ProfilePage() {
       if (isFirstTime) {
         await saveSecretKeyApi(flow.userId, secretKey, flow.token)
         setFlow((prev) => ({ ...prev, verified: true }))
-        toast.success('Confirmation key created successfully! Redirecting to chat...')
         setShowSecretKeyModal(false)
         setSecretKey('')
         setTimeout(() => {
@@ -151,7 +149,6 @@ function ProfilePage() {
         const data = await verifySecretKeyApi(flow.userId, secretKey, flow.token)
         if (data?.verified) {
           setFlow((prev) => ({ ...prev, verified: true }))
-          toast.success('Confirmation key verified! Redirecting to chat...')
           setShowSecretKeyModal(false)
           setSecretKey('')
           setTimeout(() => {

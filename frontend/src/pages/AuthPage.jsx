@@ -28,10 +28,12 @@ function AuthPage() {
   const [dob, setDob] = useState(flow.dob || '')
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [, startTransition] = useTransition()
 
   const submit = async (event) => {
     event.preventDefault()
+    if (isSubmitting) return
     if (!username.trim() || password.length < 4) {
       toast.error('Enter username and min 4-char password.')
       return
@@ -46,6 +48,7 @@ function AuthPage() {
     }
 
     try {
+      setIsSubmitting(true)
       const payload = mode === 'register'
         ? {
             username: username.trim(),
@@ -72,7 +75,10 @@ function AuthPage() {
         unlocked: false,
         verified: false,
       })
-      toast.success(response.message || `${mode === 'login' ? 'Welcome back' : 'Profile created'} ${response.username}`)
+      toast.success(
+        response.message || `${mode === 'login' ? 'Welcome back' : 'Profile created'} ${response.username}`,
+        { toastId: `auth-success-${mode}` },
+      )
       navigate('/games')
     } catch (error) {
       const status = Number(error?.response?.status || 0)
@@ -80,6 +86,8 @@ function AuthPage() {
         ? 'Invalid email or password'
         : (error?.response?.data?.message || error?.response?.data?.detail || 'Authentication failed')
       toast.error(message)
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -183,8 +191,8 @@ function AuthPage() {
               )}
             </AnimatePresence>
 
-            <motion.button className="btn-enter" type="submit" whileTap={{ scale: 0.97 }}>
-              {mode === 'login' ? 'Enter' : 'Create'}
+            <motion.button className="btn-enter" type="submit" whileTap={{ scale: 0.97 }} disabled={isSubmitting}>
+              {isSubmitting ? 'Please wait...' : mode === 'login' ? 'Enter' : 'Create'}
             </motion.button>
           </form>
 

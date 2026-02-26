@@ -3,7 +3,6 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Client } from '@stomp/stompjs'
 import SockJS from 'sockjs-client'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { toast } from 'react-toastify'
 import BackIcon from '../components/BackIcon'
 import {
   ensureNotificationPermission,
@@ -16,6 +15,8 @@ import { getPushPublicKey, sendTestPush } from '../services/pushApi'
 import { useFlowState } from '../hooks/useFlowState'
 import { WS_CHAT_URL } from '../config/apiConfig'
 import './ChatInfoPage.css'
+
+const notify = { success: () => {}, error: () => {}, info: () => {}, warn: () => {} }
 
 const CLEAR_CUTOFFS_KEY = 'chat_clear_cutoffs_v1'
 
@@ -57,7 +58,6 @@ function ChatInfoPage() {
     : nativePlatform === 'android'
   useEffect(() => {
     if ((flow?.role || 'game') !== 'chat') {
-      toast.error('Chat is available only for chat role users.')
       navigate('/games', { replace: true })
       return
     }
@@ -115,7 +115,7 @@ function ChatInfoPage() {
     const current = granted ? 'granted' : getNotificationPermissionState()
     setNotificationPermission(current)
     if (granted) {
-      toast.success('Notifications enabled.')
+      notify.success('Notifications enabled.')
       if (flow?.token) {
         try {
           const keyConfig = await getPushPublicKey()
@@ -130,9 +130,9 @@ function ChatInfoPage() {
       return
     }
     if (current === 'denied') {
-      toast.error(getNotificationBlockedHelp(), { autoClose: 5500 })
+      notify.error(getNotificationBlockedHelp(), { autoClose: 5500 })
     } else {
-      toast.error('Notification permission not granted.')
+      notify.error('Notification permission not granted.')
     }
   }
 
@@ -225,30 +225,28 @@ function ChatInfoPage() {
 
   const handleSendTestPush = async () => {
     if (!flow?.token) {
-      toast.error('Login required for test push.')
+      notify.error('Login required for test push.')
       return
     }
     try {
       const result = await sendTestPush(flow.token, {})
       if (result?.success) {
-        toast.success(result?.message || 'Test push sent.')
+        notify.success(result?.message || 'Test push sent.')
       } else {
-        toast.error(result?.message || 'Test push failed.')
+        notify.error(result?.message || 'Test push failed.')
       }
       refreshPushDebug('test-push')
     } catch (error) {
       const message = error?.response?.data?.message || error?.response?.data?.detail || 'Failed to send test push.'
-      toast.error(message)
+      notify.error(message)
     }
   }
 
   const handleDeleteChatForMe = () => {
     if (!selectedUser?.username) {
-      toast.error('No chat selected to delete.')
       return
     }
     if (!flow?.username) {
-      toast.error('Login required. Please re-open chat and try again.')
       return
     }
     const key = `${(flow.username || '').toLowerCase()}::${(selectedUser.username || '').toLowerCase()}`
@@ -267,7 +265,6 @@ function ChatInfoPage() {
     } catch {
       // Ignore localStorage failures.
     }
-    toast.success('Chat deleted for you.')
     setShowDeleteConfirm(false)
     navigate('/chat', {
       replace: true,
@@ -486,3 +483,4 @@ function ChatInfoPage() {
 }
 
 export default ChatInfoPage
+
