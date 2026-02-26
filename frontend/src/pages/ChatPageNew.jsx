@@ -1060,10 +1060,15 @@ function ChatPageNew() {
       navigate('/auth')
       return
     }
+    if ((flow.role || 'game') !== 'chat') {
+      toast.error('Chat is available only for chat role users.')
+      navigate('/games')
+      return
+    }
     if (!flow.verified) {
       navigate('/verify')
     }
-  }, [flow.username, flow.token, flow.verified, navigate])
+  }, [flow.username, flow.token, flow.role, flow.verified, navigate])
 
   useEffect(() => {
     if (!flow.token) return

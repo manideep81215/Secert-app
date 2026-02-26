@@ -56,9 +56,14 @@ function ChatInfoPage() {
     ? cap.isNativePlatform() && nativePlatform === 'android'
     : nativePlatform === 'android'
   useEffect(() => {
+    if ((flow?.role || 'game') !== 'chat') {
+      toast.error('Chat is available only for chat role users.')
+      navigate('/games', { replace: true })
+      return
+    }
     if (selectedUser?.username) return
     navigate('/chat', { replace: true })
-  }, [navigate, selectedUser?.username])
+  }, [flow?.role, navigate, selectedUser?.username])
 
   const formatUsername = (name) => {
     const raw = (name || '').trim().replace(/^@+/, '')

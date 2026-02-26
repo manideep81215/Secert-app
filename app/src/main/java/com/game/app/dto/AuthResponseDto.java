@@ -5,6 +5,7 @@ public record AuthResponseDto(
     String username,
     String token,
     String refreshToken,
+    String role,
     String message
 ) {
 }

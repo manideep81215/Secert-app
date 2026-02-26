@@ -36,10 +36,6 @@ function AuthPage() {
       toast.error('Enter username and min 4-char password.')
       return
     }
-    if (mode === 'register') {
-      toast.error('Registration not working.')
-      return
-    }
     if (mode === 'register' && password !== confirmPassword) {
       toast.error('Password and confirm password must match.')
       return
@@ -67,6 +63,7 @@ function AuthPage() {
         username: response.username,
         token: response.token,
         refreshToken: response.refreshToken || '',
+        role: response.role || 'game',
         name: mode === 'register' ? name.trim() : (flow.name || ''),
         phone: mode === 'register' ? phone.trim() : (flow.phone || ''),
         dob: mode === 'register' ? dob.trim() : (flow.dob || ''),

@@ -46,6 +46,7 @@ function ProfilePage() {
           phone: dbUser.phone || '',
           dob: dbUser.dob || '',
           email: dbUser.email || '',
+          role: dbUser.role || prev.role || 'game',
         }))
       } catch (error) {
         if (error?.response?.status === 401) {
@@ -105,6 +106,10 @@ function ProfilePage() {
   const handleResetScoreLongPressStart = (event) => {
     if (isLoading) return
     if (event?.pointerType === 'mouse' && event?.button !== 0) return
+    if ((flow.role || 'game') !== 'chat') {
+      toast.error('Long press action is only available for chat role users.')
+      return
+    }
     longPressTriggeredRef.current = false
     if (longPressTimerRef.current) {
       clearTimeout(longPressTimerRef.current)

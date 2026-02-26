@@ -36,6 +36,9 @@ public class UserEntity {
     @Column(length = 255)
     private String secretKey;
 
+    @Column(length = 20)
+    private String role = "game";
+
     protected UserEntity() {
     }
 
@@ -94,5 +97,13 @@ public class UserEntity {
 
     public void setDob(String dob) {
         this.dob = dob;
+    }
+
+    public String getRole() {
+        return (role == null || role.isBlank()) ? "game" : role;
+    }
+
+    public void setRole(String role) {
+        this.role = (role == null || role.isBlank()) ? "game" : role.trim().toLowerCase();
     }
 }

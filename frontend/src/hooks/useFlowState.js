@@ -11,6 +11,7 @@ const emptyFlow = {
   phone: '',
   dob: '',
   email: '',
+  role: 'game',
   wins: {
     rps: 0,
     coin: 0,

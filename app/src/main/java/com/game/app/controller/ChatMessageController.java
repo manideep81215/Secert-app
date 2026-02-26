@@ -146,8 +146,12 @@ public class ChatMessageController {
 
   private UserEntity requireAuthUser(String authHeader) {
     Long tokenUserId = jwtTokenService.extractAccessUserId(authHeader);
-    return userRepository.findById(tokenUserId)
+    UserEntity user = userRepository.findById(tokenUserId)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found"));
+    if (!"chat".equalsIgnoreCase(user.getRole())) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Chat access is allowed only for chat role users");
+    }
+    return user;
   }
 
   private String normalizeUsername(String username) {

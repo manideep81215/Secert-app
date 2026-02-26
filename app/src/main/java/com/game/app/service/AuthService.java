@@ -38,6 +38,7 @@ public class AuthService {
         }
 
         UserEntity user = new UserEntity(username, passwordEncoder.encode(request.password()));
+        user.setRole("game");
         user.setName(name);
         user.setPhone(phone);
         user.setEmail(email);
@@ -45,7 +46,7 @@ public class AuthService {
         user = userRepository.save(user);
         String token = issueAccessToken(user);
         String refreshToken = issueRefreshToken(user);
-        return new AuthResponseDto(user.getId(), user.getUsername(), token, refreshToken, "Registration successful");
+        return new AuthResponseDto(user.getId(), user.getUsername(), token, refreshToken, user.getRole(), "Registration successful");
     }
 
     public AuthResponseDto login(AuthRequestDto request) {
@@ -59,7 +60,7 @@ public class AuthService {
 
         String token = issueAccessToken(user);
         String refreshToken = issueRefreshToken(user);
-        return new AuthResponseDto(user.getId(), user.getUsername(), token, refreshToken, "Login successful");
+        return new AuthResponseDto(user.getId(), user.getUsername(), token, refreshToken, user.getRole(), "Login successful");
     }
 
     public AuthResponseDto me(String rawToken) {
@@ -69,7 +70,7 @@ public class AuthService {
         UserEntity user = userRepository.findById(userId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found"));
 
-        return new AuthResponseDto(user.getId(), user.getUsername(), token, null, "Authenticated");
+        return new AuthResponseDto(user.getId(), user.getUsername(), token, null, user.getRole(), "Authenticated");
     }
 
     public AuthResponseDto refresh(RefreshTokenRequestDto request) {
@@ -81,7 +82,7 @@ public class AuthService {
 
         String newAccessToken = issueAccessToken(user);
         String newRefreshToken = issueRefreshToken(user);
-        return new AuthResponseDto(user.getId(), user.getUsername(), newAccessToken, newRefreshToken, "Token refreshed");
+        return new AuthResponseDto(user.getId(), user.getUsername(), newAccessToken, newRefreshToken, user.getRole(), "Token refreshed");
     }
 
     private String issueAccessToken(UserEntity user) {

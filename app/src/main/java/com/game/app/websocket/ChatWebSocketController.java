@@ -8,18 +8,22 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import org.springframework.context.event.EventListener;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.messaging.simp.user.SimpSession;
 import org.springframework.messaging.simp.user.SimpUser;
 import org.springframework.messaging.simp.user.SimpUserRegistry;
 import org.springframework.stereotype.Controller;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 
 import com.game.app.model.ChatMessageEntity;
 import com.game.app.model.ChatReadReceiptEntity;
+import com.game.app.model.UserEntity;
 import com.game.app.repository.ChatMessageRepository;
 import com.game.app.repository.ChatReadReceiptRepository;
+import com.game.app.repository.UserRepository;
 import com.game.app.service.PushNotificationService;
 
 @Controller
@@ -30,6 +34,7 @@ public class ChatWebSocketController {
   private final SimpUserRegistry simpUserRegistry;
   private final ChatMessageRepository chatMessageRepository;
   private final ChatReadReceiptRepository chatReadReceiptRepository;
+  private final UserRepository userRepository;
   private final PushNotificationService pushNotificationService;
   private final boolean notifyWhenOnline;
   private final Set<String> onlineUsers = ConcurrentHashMap.newKeySet();
@@ -40,12 +45,14 @@ public class ChatWebSocketController {
       SimpUserRegistry simpUserRegistry,
       ChatMessageRepository chatMessageRepository,
       ChatReadReceiptRepository chatReadReceiptRepository,
+      UserRepository userRepository,
       PushNotificationService pushNotificationService,
       @Value("${app.push.notify-when-online:true}") boolean notifyWhenOnline) {
     this.messagingTemplate = messagingTemplate;
     this.simpUserRegistry = simpUserRegistry;
     this.chatMessageRepository = chatMessageRepository;
     this.chatReadReceiptRepository = chatReadReceiptRepository;
+    this.userRepository = userRepository;
     this.pushNotificationService = pushNotificationService;
     this.notifyWhenOnline = notifyWhenOnline;
   }
@@ -64,6 +71,26 @@ public class ChatWebSocketController {
 
     String normalizedFrom = normalizeUsername(fromUsername);
     String normalizedTo = normalizeUsername(payload.toUsername());
+    if (!hasChatRole(normalizedFrom)) {
+      messagingTemplate.convertAndSendToUser(
+          normalizedFrom,
+          "/queue/send-ack",
+          new SendAck(payload.tempId(), false, null, null));
+      messagingTemplate.convertAndSendToUser(normalizedFrom, "/queue/errors", Map.of(
+          "type", "forbidden",
+          "message", "Chat access is allowed only for chat role users"));
+      return;
+    }
+    if (!hasChatRole(normalizedTo)) {
+      messagingTemplate.convertAndSendToUser(
+          normalizedFrom,
+          "/queue/send-ack",
+          new SendAck(payload.tempId(), false, null, null));
+      messagingTemplate.convertAndSendToUser(normalizedFrom, "/queue/errors", Map.of(
+          "type", "forbidden",
+          "message", "Recipient is not allowed to use chat"));
+      return;
+    }
 
     ChatMessageEntity entity = new ChatMessageEntity();
     entity.setFromUsername(normalizedFrom);
@@ -129,6 +156,10 @@ public class ChatWebSocketController {
     }
 
     String normalizedEditor = normalizeUsername(editor);
+    if (!hasChatRole(normalizedEditor)) {
+      messagingTemplate.convertAndSendToUser(normalizedEditor, "/queue/edit-ack", new EditAck(payload.messageId(), false, "Chat access denied"));
+      return;
+    }
     ChatMessageEntity entity = chatMessageRepository.findById(payload.messageId()).orElse(null);
     if (entity == null) {
       messagingTemplate.convertAndSendToUser(normalizedEditor, "/queue/edit-ack", new EditAck(payload.messageId(), false, "Message not found"));
@@ -180,6 +211,12 @@ public class ChatWebSocketController {
 
     String normalizedReader = normalizeUsername(reader);
     String normalizedPeer = normalizeUsername(payload.peerUsername());
+    if (!hasChatRole(normalizedReader) || !hasChatRole(normalizedPeer)) {
+      messagingTemplate.convertAndSendToUser(normalizedReader, "/queue/errors", Map.of(
+          "type", "forbidden",
+          "message", "Chat access is allowed only for chat role users"));
+      return;
+    }
     if (normalizedPeer.isBlank() || normalizedPeer.equals(normalizedReader)) {
       return;
     }
@@ -223,6 +260,12 @@ public class ChatWebSocketController {
     }
 
     String normalizedReactor = normalizeUsername(reactor);
+    if (!hasChatRole(normalizedReactor)) {
+      messagingTemplate.convertAndSendToUser(normalizedReactor, "/queue/errors", Map.of(
+          "type", "forbidden",
+          "message", "Chat access is allowed only for chat role users"));
+      return;
+    }
     ChatMessageEntity entity = chatMessageRepository.findById(payload.messageId()).orElse(null);
     if (entity == null) {
       return;
@@ -255,6 +298,12 @@ public class ChatWebSocketController {
       return;
     }
     String normalized = normalizeUsername(username);
+    if (!hasChatRole(normalized)) {
+      messagingTemplate.convertAndSendToUser(normalized, "/queue/errors", Map.of(
+          "type", "forbidden",
+          "message", "Chat access is allowed only for chat role users"));
+      return;
+    }
     onlineUsers.add(normalized);
     lastSeenMap.remove(normalized);
     broadcastUserStatus(normalized, "online", null);
@@ -269,6 +318,9 @@ public class ChatWebSocketController {
       return;
     }
     String normalized = normalizeUsername(username);
+    if (!hasChatRole(normalized)) {
+      return;
+    }
     if (!isUserConnected(normalized)) {
       onlineUsers.remove(normalized);
       long lastSeenAt = Instant.now().toEpochMilli();
@@ -287,12 +339,20 @@ public class ChatWebSocketController {
     if (fromUsername == null || fromUsername.isBlank()) {
       return;
     }
+    String normalizedFrom = normalizeUsername(fromUsername);
+    String normalizedTo = normalizeUsername(payload.toUsername());
+    if (!hasChatRole(normalizedFrom) || !hasChatRole(normalizedTo)) {
+      messagingTemplate.convertAndSendToUser(normalizedFrom, "/queue/errors", Map.of(
+          "type", "forbidden",
+          "message", "Chat access is allowed only for chat role users"));
+      return;
+    }
 
     boolean typing = payload.typing() != null && payload.typing();
     messagingTemplate.convertAndSendToUser(
-        payload.toUsername(),
+        normalizedTo,
         "/queue/typing",
-        new TypingPayload(fromUsername, typing));
+        new TypingPayload(normalizedFrom, typing));
   }
 
   @EventListener
@@ -398,6 +458,14 @@ public class ChatWebSocketController {
     if (trimmed.isBlank()) return null;
     if (trimmed.length() > 24) return null;
     return trimmed;
+  }
+
+  private boolean hasChatRole(String username) {
+    String normalized = normalizeUsername(username);
+    if (normalized.isBlank()) return false;
+    UserEntity user = userRepository.findByUsername(normalized)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found"));
+    return "chat".equalsIgnoreCase(user.getRole());
   }
 
   public record ChatMessage(
