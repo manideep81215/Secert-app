@@ -90,6 +90,7 @@ function ChatPageNew() {
   const [isDraggingMessage, setIsDraggingMessage] = useState(false)
   const [activeMessageActionsKey, setActiveMessageActionsKey] = useState(null)
   const [socket, setSocket] = useState(null)
+  const [isManualRefreshing, setIsManualRefreshing] = useState(false)
   const [isRecordingVoice, setIsRecordingVoice] = useState(false)
   const [recordingSeconds, setRecordingSeconds] = useState(0)
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false)
@@ -1971,6 +1972,13 @@ function ChatPageNew() {
       },
     })
   }
+  const handleManualReload = () => {
+    if (isManualRefreshing) return
+    setIsManualRefreshing(true)
+    setUsersReloadTick(Date.now())
+    setConversationReloadTick(Date.now())
+    window.setTimeout(() => setIsManualRefreshing(false), 900)
+  }
 
   useEffect(() => {
     const shouldOpenUsersList = Boolean(location.state?.openUsersList)
@@ -2844,6 +2852,15 @@ function ChatPageNew() {
               disabled={!selectedUser}
             >
               i
+            </button>
+            <button
+              className="btn-chat-reload"
+              onClick={handleManualReload}
+              title="Reload chat"
+              aria-label="Reload chat"
+              disabled={!selectedUser || isManualRefreshing}
+            >
+              {isManualRefreshing ? '...' : '\u21BB'}
             </button>
             <button
               className="btn-home-game"

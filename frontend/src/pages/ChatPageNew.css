@@ -408,6 +408,20 @@
   place-items: center;
 }
 
+.btn-chat-reload {
+  width: 2.5rem;
+  height: 2.5rem;
+  border: none;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #29b6f6 0%, #0277bd 100%);
+  color: #fff;
+  font-size: 1.15rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: grid;
+  place-items: center;
+}
+
 .btn-user-details:hover {
   transform: scale(1.05);
   box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
@@ -420,6 +434,16 @@
 .btn-home-game:hover {
   transform: scale(1.05);
   box-shadow: 0 4px 12px rgba(76, 175, 80, 0.35);
+}
+
+.btn-chat-reload:hover:not(:disabled) {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(2, 119, 189, 0.35);
+}
+
+.btn-chat-reload:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .btn-back-mobile {
@@ -1873,6 +1897,14 @@
   font-size: 0.92rem;
 }
 
+.chat-container .btn-chat-reload {
+  background: linear-gradient(to bottom, var(--btn-orange-top), var(--btn-orange-bot));
+  border-bottom: 4px solid var(--btn-shadow);
+  width: 1.9rem;
+  height: 1.9rem;
+  font-size: 0.88rem;
+}
+
 .chat-container .btn-delete-chat {
   width: 1.9rem;
   height: 1.9rem;
@@ -2290,7 +2322,8 @@
     padding: 0.9rem 0.9rem 2px 0.9rem;
   }
 
-  .chat-container .btn-home-game {
+  .chat-container .btn-home-game,
+  .chat-container .btn-chat-reload {
     width: 2.7rem !important;
     height: 2.7rem !important;
     font-size: 1.22rem !important;
