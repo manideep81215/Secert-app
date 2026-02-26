@@ -84,30 +84,6 @@
   color: #fff7df;
 }
 
-.ttt-layout-switch {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  border: 2px solid #6a391b;
-  border-radius: 0.7rem;
-  padding: 0.22rem;
-  background: #fff2cf;
-}
-
-.ttt-layout-btn {
-  border: 0;
-  border-radius: 0.55rem;
-  background: transparent;
-  color: #4f2d17;
-  font-weight: 900;
-  padding: 0.4rem 0.6rem;
-}
-
-.ttt-layout-btn.active {
-  background: linear-gradient(180deg, #9bcafe, #5e9eea);
-  color: #17325b;
-}
-
 .ttt-friend-input-wrap {
   width: min(320px, 100%);
   display: flex;

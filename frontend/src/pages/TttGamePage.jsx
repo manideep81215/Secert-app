@@ -282,20 +282,26 @@ function TttGamePage() {
           </button>
         </div>
 
-        <div className="ttt-layout-switch" role="group" aria-label="Board layout">
-          {BOARD_LAYOUTS.map((size) => (
-            <button
-              key={size}
-              type="button"
-              className={`ttt-layout-btn ${boardSize === size ? 'active' : ''}`}
-              onClick={() => {
+        <div className="ttt-difficulty-bar">
+          <label className="ttt-difficulty-select-wrap" htmlFor="ttt-layout-select">
+            Layout:
+            <select
+              id="ttt-layout-select"
+              className="ttt-difficulty-select"
+              value={boardSize}
+              onChange={(event) => {
+                const size = Number(event.target.value)
                 setBoardSize(size)
                 resetRound(difficulty, mode, size)
               }}
             >
-              {size}x{size}
-            </button>
-          ))}
+              {BOARD_LAYOUTS.map((size) => (
+                <option key={size} value={size}>
+                  {size}x{size}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
 
         {mode === 'friend' ? (
