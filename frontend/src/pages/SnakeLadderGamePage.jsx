@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Client } from '@stomp/stompjs'
 import SockJS from 'sockjs-client'
+import { toast } from 'react-toastify'
 import { useFlowState } from '../hooks/useFlowState'
 import BackIcon from '../components/BackIcon'
 import { WS_CHAT_URL } from '../config/apiConfig'
@@ -131,6 +132,7 @@ function SnakeLadderGamePage() {
   const onlineQueueSubRef = useRef(null)
   const onlineRoomSubRef = useRef(null)
   const onlineRoomIdRef = useRef('')
+  const onlinePresenceToastRef = useRef('')
 
   useEffect(() => {
     if (!flow.username || !flow.token) navigate('/auth')
@@ -352,6 +354,17 @@ function SnakeLadderGamePage() {
     }
 
     if (event?.message) {
+      const msg = String(event.message)
+      const toastKey = `${event?.roomId || ''}:${event?.updatedAt || ''}:${msg}`
+      if (onlinePresenceToastRef.current !== toastKey) {
+        if (msg.toLowerCase().includes('both players connected')) {
+          toast.success('Opponent joined the room.')
+          onlinePresenceToastRef.current = toastKey
+        } else if (msg.toLowerCase().includes('left')) {
+          toast.info('A player left the room.')
+          onlinePresenceToastRef.current = toastKey
+        }
+      }
       setStatus(event.message)
     }
   }
@@ -446,6 +459,17 @@ function SnakeLadderGamePage() {
               setOnlineRole(event.role)
             }
             if (event?.message) {
+              const msg = String(event.message)
+              const toastKey = `${event?.roomId || ''}:${msg}`
+              if (onlinePresenceToastRef.current !== toastKey) {
+                if (msg.toLowerCase().includes('both players connected')) {
+                  toast.success('Opponent joined the room.')
+                  onlinePresenceToastRef.current = toastKey
+                } else if (msg.toLowerCase().includes('left')) {
+                  toast.info('A player left the room.')
+                  onlinePresenceToastRef.current = toastKey
+                }
+              }
               setStatus(`Online: ${event.message}`)
             }
           } catch {

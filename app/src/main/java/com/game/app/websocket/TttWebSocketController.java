@@ -189,6 +189,41 @@ public class TttWebSocketController {
     }
   }
 
+  @MessageMapping("/ttt.replay")
+  public void replayRoom(TttRoomRequest payload, Principal principal) {
+    String username = normalizeUsername(principal != null ? principal.getName() : null);
+    if (username.isBlank()) {
+      return;
+    }
+
+    String roomId = sanitizeRoomId(payload != null ? payload.roomId() : null);
+    if (roomId.isBlank()) {
+      return;
+    }
+
+    RoomState state = rooms.get(roomId);
+    if (state == null) {
+      sendUserError(username, roomId, "Room not found.");
+      return;
+    }
+
+    synchronized (state) {
+      String mark = markForUser(state, username);
+      if (mark == null) {
+        sendUserError(username, roomId, "You are not a player in this room.");
+        return;
+      }
+      if (state.oPlayer() == null || state.oPlayer().isBlank()) {
+        sendUserError(username, roomId, "Waiting for opponent to join.");
+        return;
+      }
+
+      state.resetBoard();
+      state.setUpdatedAt(Instant.now().toEpochMilli());
+      broadcastState(state, "New round started.");
+    }
+  }
+
   @EventListener
   public void onDisconnect(SessionDisconnectEvent event) {
     Principal principal = event.getUser();

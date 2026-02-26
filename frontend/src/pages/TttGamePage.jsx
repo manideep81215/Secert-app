@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Client } from '@stomp/stompjs'
 import SockJS from 'sockjs-client'
+import { toast } from 'react-toastify'
 import { useFlowState } from '../hooks/useFlowState'
 import BackIcon from '../components/BackIcon'
 import { WS_CHAT_URL } from '../config/apiConfig'
@@ -167,6 +168,7 @@ function TttGamePage() {
   const onlineQueueSubRef = useRef(null)
   const onlineRoomIdRef = useRef('')
   const awardedWinRef = useRef('')
+  const onlinePresenceToastRef = useRef('')
 
   useEffect(() => {
     if (!flow.username || !flow.token) navigate('/auth')
@@ -301,6 +303,17 @@ function TttGamePage() {
     }
 
     const turnName = turn === 'X' ? xPlayer : oPlayer
+    const msg = String(event?.message || '')
+    const toastKey = `${event?.roomId || ''}:${event?.updatedAt || ''}:${msg}`
+    if (msg && onlinePresenceToastRef.current !== toastKey) {
+      if (msg.toLowerCase().includes('both players connected')) {
+        toast.success('Opponent joined the room.')
+        onlinePresenceToastRef.current = toastKey
+      } else if (msg.toLowerCase().includes('left')) {
+        toast.info('A player left the room.')
+        onlinePresenceToastRef.current = toastKey
+      }
+    }
     setText(`Online: ${turnName} turn (${turn}).`)
   }
 
@@ -401,9 +414,20 @@ function TttGamePage() {
             if (event?.yourMark === 'X' || event?.yourMark === 'O') {
               setOnlineMark(event.yourMark)
             }
-            if (event?.message) {
-              setText(`Online: ${event.message}`)
-            }
+    if (event?.message) {
+      const msg = String(event.message)
+      const toastKey = `${event?.roomId || ''}:${event?.updatedAt || ''}:${msg}`
+      if (onlinePresenceToastRef.current !== toastKey) {
+        if (msg.toLowerCase().includes('both players connected')) {
+          toast.success('Opponent joined the room.')
+          onlinePresenceToastRef.current = toastKey
+        } else if (msg.toLowerCase().includes('left')) {
+          toast.info('A player left the room.')
+          onlinePresenceToastRef.current = toastKey
+        }
+      }
+      setText(`Online: ${event.message}`)
+    }
           } catch {
             setText('Online: invalid server event.')
           }
@@ -587,6 +611,19 @@ function TttGamePage() {
     setText('Online: left room.')
     onlineRoomSubRef.current?.unsubscribe?.()
     onlineRoomSubRef.current = null
+  }
+
+  const onReplay = () => {
+    if (mode === 'online' && onlineRoomIdRef.current) {
+      const ok = publishOnline('/app/ttt.replay', { roomId: onlineRoomIdRef.current })
+      if (!ok) {
+        setText('Online: unable to start replay.')
+      } else {
+        setMatchEnded(false)
+      }
+      return
+    }
+    resetRound()
   }
 
   return (
@@ -775,7 +812,7 @@ function TttGamePage() {
         </div>
         <div className="ttt-bottom">
           <p>{text}</p>
-          <button onClick={() => resetRound()}>{matchEnded ? 'Replay' : 'Reset'}</button>
+          <button onClick={onReplay}>{matchEnded ? 'Replay' : 'Reset'}</button>
         </div>
       </div>
     </section>
