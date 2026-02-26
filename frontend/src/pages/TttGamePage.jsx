@@ -11,6 +11,11 @@ const PLAYER = 'X'
 const CPU = 'O'
 const TTT_DIFFICULTIES = ['easy', 'medium', 'hard']
 const BOARD_LAYOUTS = [3, 4, 5]
+const MODE_OPTIONS = [
+  { value: 'cpu', label: 'Vs CPU' },
+  { value: 'friend', label: 'Play with Friend' },
+  { value: 'online', label: 'Online Multiplayer' },
+]
 
 function getWinner(board, size) {
   for (let row = 0; row < size; row += 1) {
@@ -143,6 +148,7 @@ function TttGamePage() {
   const [mode, setMode] = useState('cpu')
   const [friendName, setFriendName] = useState('Friend')
   const [friendTurn, setFriendTurn] = useState(PLAYER)
+  const [isModeMenuOpen, setIsModeMenuOpen] = useState(false)
   const [isLayoutMenuOpen, setIsLayoutMenuOpen] = useState(false)
   const [isDifficultyMenuOpen, setIsDifficultyMenuOpen] = useState(false)
   const [onlineRoomInput, setOnlineRoomInput] = useState('')
@@ -151,6 +157,7 @@ function TttGamePage() {
   const [onlineXPlayer, setOnlineXPlayer] = useState('')
   const [onlineOPlayer, setOnlineOPlayer] = useState('')
   const [isOnlineConnected, setIsOnlineConnected] = useState(false)
+  const modeMenuRef = useRef(null)
   const layoutMenuRef = useRef(null)
   const difficultyMenuRef = useRef(null)
   const onlineClientRef = useRef(null)
@@ -165,11 +172,13 @@ function TttGamePage() {
 
   useEffect(() => {
     const handleOutsidePress = (event) => {
+      if (!modeMenuRef.current?.contains(event.target)) setIsModeMenuOpen(false)
       if (!layoutMenuRef.current?.contains(event.target)) setIsLayoutMenuOpen(false)
       if (!difficultyMenuRef.current?.contains(event.target)) setIsDifficultyMenuOpen(false)
     }
     const handleEscape = (event) => {
       if (event.key === 'Escape') {
+        setIsModeMenuOpen(false)
         setIsLayoutMenuOpen(false)
         setIsDifficultyMenuOpen(false)
       }
@@ -190,6 +199,7 @@ function TttGamePage() {
   }
 
   const activeFriendName = friendName.trim() || 'Friend'
+  const selectedModeLabel = MODE_OPTIONS.find((item) => item.value === mode)?.label || 'Vs CPU'
   const selectedDifficultyLabel = `${difficulty[0].toUpperCase()}${difficulty.slice(1)}`
 
   const boardStyle = useMemo(() => ({
@@ -564,37 +574,41 @@ function TttGamePage() {
 
       <div className="ttt-stage">
         <img src="/theme/icon-tic-tac-toe.png" alt="Tic Tac Toe" className="single-game-icon" />
-        <div className="ttt-mode-switch" role="group" aria-label="Match mode">
+        <div className="ttt-dropdown-wrap" ref={modeMenuRef}>
           <button
             type="button"
-            className={`ttt-mode-btn ${mode === 'cpu' ? 'active' : ''}`}
+            className={`ttt-dropdown-trigger ${isModeMenuOpen ? 'open' : ''}`}
             onClick={() => {
-              setMode('cpu')
-              resetRound(difficulty, 'cpu', boardSize)
+              setIsModeMenuOpen((prev) => !prev)
+              setIsLayoutMenuOpen(false)
+              setIsDifficultyMenuOpen(false)
             }}
+            aria-haspopup="menu"
+            aria-expanded={isModeMenuOpen}
           >
-            Vs CPU
+            Mode: {selectedModeLabel}
+            <span className="ttt-dropdown-caret">v</span>
           </button>
-          <button
-            type="button"
-            className={`ttt-mode-btn ${mode === 'friend' ? 'active' : ''}`}
-            onClick={() => {
-              setMode('friend')
-              resetRound(difficulty, 'friend', boardSize)
-            }}
-          >
-            Play with Friend
-          </button>
-          <button
-            type="button"
-            className={`ttt-mode-btn ${mode === 'online' ? 'active' : ''}`}
-            onClick={() => {
-              setMode('online')
-              resetRound(difficulty, 'online', boardSize)
-            }}
-          >
-            Online Multiplayer
-          </button>
+          {isModeMenuOpen && (
+            <div className="ttt-dropdown-popover" role="menu" aria-label="Match mode">
+              {MODE_OPTIONS.map((item) => (
+                <button
+                  key={item.value}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={mode === item.value}
+                  className={`ttt-dropdown-option ${mode === item.value ? 'active' : ''}`}
+                  onClick={() => {
+                    setMode(item.value)
+                    resetRound(difficulty, item.value, boardSize)
+                    setIsModeMenuOpen(false)
+                  }}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="ttt-dropdown-wrap" ref={layoutMenuRef}>

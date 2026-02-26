@@ -74,6 +74,11 @@ const BOARD_ROWS = Array.from({ length: 10 }, (_, rowFromTop) => {
 })
 
 const DIFFICULTY_KEYS = ['easy', 'medium', 'hard']
+const MODE_OPTIONS = [
+  { value: 'cpu', label: 'Vs CPU' },
+  { value: 'friend', label: 'Play with Friend' },
+  { value: 'online', label: 'Online Multiplayer' },
+]
 
 function randomDice() {
   return Math.floor(Math.random() * 6) + 1
@@ -101,11 +106,13 @@ function SnakeLadderGamePage() {
   const [status, setStatus] = useState('Pick difficulty and roll the dice.')
   const [winner, setWinner] = useState('')
   const [isRolling, setIsRolling] = useState(false)
+  const [isModeMenuOpen, setIsModeMenuOpen] = useState(false)
   const [isDifficultyMenuOpen, setIsDifficultyMenuOpen] = useState(false)
   const opponentTimerRef = useRef(null)
   const positionsRef = useRef({ you: 1, opponent: 1 })
   const waitTimersRef = useRef(new Set())
   const animationVersionRef = useRef(0)
+  const modeMenuRef = useRef(null)
   const difficultyMenuRef = useRef(null)
 
   useEffect(() => {
@@ -128,12 +135,18 @@ function SnakeLadderGamePage() {
 
   useEffect(() => {
     const handleOutsidePress = (event) => {
+      if (!modeMenuRef.current?.contains(event.target)) {
+        setIsModeMenuOpen(false)
+      }
       if (!difficultyMenuRef.current?.contains(event.target)) {
         setIsDifficultyMenuOpen(false)
       }
     }
     const handleEscape = (event) => {
-      if (event.key === 'Escape') setIsDifficultyMenuOpen(false)
+      if (event.key === 'Escape') {
+        setIsModeMenuOpen(false)
+        setIsDifficultyMenuOpen(false)
+      }
     }
     document.addEventListener('mousedown', handleOutsidePress)
     document.addEventListener('touchstart', handleOutsidePress, { passive: true })
@@ -154,10 +167,13 @@ function SnakeLadderGamePage() {
   }, [preset])
 
   const activeFriendName = friendName.trim() || 'Friend'
+  const selectedModeLabel = MODE_OPTIONS.find((item) => item.value === mode)?.label || 'Vs CPU'
 
   const getPlayerLabel = (playerKey) => {
     if (playerKey === 'you') return flow.username || 'You'
-    return mode === 'cpu' ? 'Computer' : activeFriendName
+    if (mode === 'cpu') return 'Computer'
+    if (mode === 'online') return 'Opponent'
+    return activeFriendName
   }
 
   const resetGame = (nextDifficulty = difficulty, nextMode = mode) => {
@@ -176,6 +192,12 @@ function SnakeLadderGamePage() {
     setDiceValue(null)
     setWinner('')
     setIsRolling(false)
+    setIsModeMenuOpen(false)
+    setIsDifficultyMenuOpen(false)
+    if (nextMode === 'online') {
+      setStatus('Online multiplayer for Snake & Ladders will be added next.')
+      return
+    }
     setStatus(`Difficulty: ${DIFFICULTY_PRESETS[nextDifficulty].label}. ${flow.username || 'You'} turn, roll the dice.`)
   }
 
@@ -272,6 +294,10 @@ function SnakeLadderGamePage() {
 
   const onRoll = () => {
     if (winner || isRolling) return
+    if (mode === 'online') {
+      setStatus('Online multiplayer for Snake & Ladders is not active yet.')
+      return
+    }
     if (mode === 'cpu' && turn !== 'you') return
     runTurn(turn)
   }
@@ -286,21 +312,40 @@ function SnakeLadderGamePage() {
 
       <div className="snake-card">
         <div className="snake-toolbar">
-          <div className="snake-mode-switch" role="group" aria-label="Match mode">
+          <div className="snake-mode-bar" ref={modeMenuRef}>
             <button
               type="button"
-              className={`snake-mode-btn ${mode === 'cpu' ? 'active' : ''}`}
-              onClick={() => resetGame(difficulty, 'cpu')}
+              className={`snake-mode-trigger ${isModeMenuOpen ? 'open' : ''}`}
+              onClick={() => {
+                setIsModeMenuOpen((prev) => !prev)
+                setIsDifficultyMenuOpen(false)
+              }}
+              aria-haspopup="menu"
+              aria-expanded={isModeMenuOpen}
+              aria-label="Open mode menu"
             >
-              Vs CPU
+              Mode: {selectedModeLabel}
+              <span className="snake-mode-caret">v</span>
             </button>
-            <button
-              type="button"
-              className={`snake-mode-btn ${mode === 'friend' ? 'active' : ''}`}
-              onClick={() => resetGame(difficulty, 'friend')}
-            >
-              Play with Friend
-            </button>
+            {isModeMenuOpen && (
+              <div className="snake-mode-popover" role="menu" aria-label="Mode">
+                {MODE_OPTIONS.map((item) => (
+                  <button
+                    key={item.value}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={mode === item.value}
+                    className={`snake-mode-option ${mode === item.value ? 'active' : ''}`}
+                    onClick={() => {
+                      resetGame(difficulty, item.value)
+                      setIsModeMenuOpen(false)
+                    }}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="snake-difficulty-bar" ref={difficultyMenuRef}>
@@ -432,7 +477,7 @@ function SnakeLadderGamePage() {
                 <div key={cell} className="snake-cell">
                   <span className="snake-cell-number">{cell}</span>
                   {positions.you === cell && <span className="snake-token snake-token-you">Y</span>}
-                  {positions.opponent === cell && <span className="snake-token snake-token-cpu">{mode === 'cpu' ? 'C' : 'F'}</span>}
+                  {positions.opponent === cell && <span className="snake-token snake-token-cpu">{mode === 'cpu' ? 'C' : mode === 'online' ? 'O' : 'F'}</span>}
                 </div>
               ))}
             </div>
@@ -441,7 +486,7 @@ function SnakeLadderGamePage() {
 
         <div className="snake-controls">
           <div className="snake-dice-face">{diceValue || '?'}</div>
-          <button className="snake-roll-btn" onClick={onRoll} disabled={(mode === 'cpu' && turn !== 'you') || !!winner || isRolling}>
+          <button className="snake-roll-btn" onClick={onRoll} disabled={mode === 'online' || (mode === 'cpu' && turn !== 'you') || !!winner || isRolling}>
             {isRolling ? 'Rolling...' : `Roll: ${getPlayerLabel(turn)}`}
           </button>
         </div>

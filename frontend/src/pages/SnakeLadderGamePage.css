@@ -58,28 +58,69 @@
   flex-wrap: wrap;
 }
 
-.snake-mode-switch {
+.snake-mode-bar {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.snake-mode-trigger {
+  border: 2px solid #6a3a1b;
+  border-radius: 0.65rem;
+  background: linear-gradient(180deg, #9a6a3b, #7c4f28);
+  color: #fff1d2;
+  font-weight: 900;
+  font-size: 1rem;
+  padding: 0.45rem 0.68rem;
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  border: 2px solid #6a3a1b;
-  border-radius: 0.7rem;
-  background: #f9ebc8;
-  padding: 0.22rem;
+  min-height: 44px;
 }
 
-.snake-mode-btn {
+.snake-mode-trigger.open {
+  box-shadow: 0 0 0 2px rgba(120, 71, 35, 0.25);
+}
+
+.snake-mode-caret {
+  font-size: 0.78rem;
+  line-height: 1;
+}
+
+.snake-mode-popover {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  min-width: 260px;
+  border: 2px solid #724525;
+  border-radius: 0.9rem;
+  background: #f4e9c8;
+  padding: 0.45rem;
+  box-shadow: 0 9px 20px rgba(58, 34, 18, 0.24);
+  z-index: 30;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.snake-mode-option {
   border: 0;
   border-radius: 0.55rem;
+  text-align: left;
   background: transparent;
   color: #4d2d1a;
   font-weight: 900;
-  padding: 0.4rem 0.6rem;
+  font-size: 1rem;
+  padding: 0.55rem 0.7rem;
+  cursor: pointer;
 }
 
-.snake-mode-btn.active {
+.snake-mode-option.active {
   background: linear-gradient(180deg, #9a6a3b, #7c4f28);
   color: #fff1d2;
+}
+
+.snake-mode-option:hover {
+  background: rgba(121, 72, 38, 0.12);
 }
 
 .snake-difficulty-bar {
