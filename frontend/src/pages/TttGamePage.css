@@ -60,6 +60,77 @@
   object-fit: contain;
 }
 
+.ttt-mode-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 2px solid #6a391b;
+  border-radius: 0.7rem;
+  padding: 0.22rem;
+  background: #fff2cf;
+}
+
+.ttt-mode-btn {
+  border: 0;
+  border-radius: 0.55rem;
+  background: transparent;
+  color: #4f2d17;
+  font-weight: 900;
+  padding: 0.4rem 0.6rem;
+}
+
+.ttt-mode-btn.active {
+  background: linear-gradient(180deg, #8bc34a, #4f8f41);
+  color: #fff7df;
+}
+
+.ttt-layout-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 2px solid #6a391b;
+  border-radius: 0.7rem;
+  padding: 0.22rem;
+  background: #fff2cf;
+}
+
+.ttt-layout-btn {
+  border: 0;
+  border-radius: 0.55rem;
+  background: transparent;
+  color: #4f2d17;
+  font-weight: 900;
+  padding: 0.4rem 0.6rem;
+}
+
+.ttt-layout-btn.active {
+  background: linear-gradient(180deg, #9bcafe, #5e9eea);
+  color: #17325b;
+}
+
+.ttt-friend-input-wrap {
+  width: min(320px, 100%);
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  border: 2px solid #6a391b;
+  border-radius: 0.65rem;
+  background: #fff2cf;
+  color: #4f2d17;
+  font-weight: 800;
+  padding: 0.4rem 0.56rem;
+}
+
+.ttt-friend-input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: #4f2d17;
+  font-weight: 800;
+  outline: none;
+}
+
 .ttt-difficulty-bar {
   width: min(320px, 100%);
   display: grid;
@@ -95,7 +166,8 @@
   background-repeat: no-repeat;
 }
 
-.ttt-difficulty-select-wrap:focus-within {
+.ttt-difficulty-select-wrap:focus-within,
+.ttt-friend-input-wrap:focus-within {
   box-shadow: 0 0 0 2px rgba(121, 72, 38, 0.2);
 }
 
@@ -116,15 +188,15 @@
 }
 
 .ttt-board-grid {
-  width: min(320px, 100%);
+  width: min(var(--ttt-board-max, 320px), 100%);
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--ttt-size, 3), minmax(0, 1fr));
   gap: 0.4rem;
 }
 
 .ttt-board-cell {
-  min-height: 3rem;
-  font-size: 1.15rem;
+  min-height: clamp(2.35rem, calc(15rem / var(--ttt-size, 3)), 3rem);
+  font-size: clamp(0.9rem, calc(1.3rem - (var(--ttt-size, 3) - 3) * 0.14rem), 1.15rem);
 }
 
 .ttt-board-cell-last {

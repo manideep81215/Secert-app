@@ -58,6 +58,30 @@
   flex-wrap: wrap;
 }
 
+.snake-mode-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 2px solid #6a3a1b;
+  border-radius: 0.7rem;
+  background: #f9ebc8;
+  padding: 0.22rem;
+}
+
+.snake-mode-btn {
+  border: 0;
+  border-radius: 0.55rem;
+  background: transparent;
+  color: #4d2d1a;
+  font-weight: 900;
+  padding: 0.4rem 0.6rem;
+}
+
+.snake-mode-btn.active {
+  background: linear-gradient(180deg, #9a6a3b, #7c4f28);
+  color: #fff1d2;
+}
+
 .snake-difficulty-bar {
   position: relative;
   display: inline-flex;
@@ -112,6 +136,29 @@
   z-index: 30;
   display: grid;
   gap: 0.2rem;
+}
+
+.snake-friend-input-wrap {
+  margin-top: 0.65rem;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  border: 2px solid #6a3a1b;
+  border-radius: 0.65rem;
+  background: #f9ebc8;
+  color: #52301a;
+  font-weight: 900;
+  padding: 0.42rem 0.66rem;
+}
+
+.snake-friend-input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: #52301a;
+  font-weight: 800;
+  outline: none;
 }
 
 .snake-difficulty-option {

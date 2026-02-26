@@ -93,16 +93,17 @@ function SnakeLadderGamePage() {
   const navigate = useNavigate()
   const [flow, setFlow] = useFlowState()
   const [difficulty, setDifficulty] = useState('medium')
-  const [positions, setPositions] = useState({ you: 1, cpu: 1 })
+  const [mode, setMode] = useState('cpu')
+  const [friendName, setFriendName] = useState('Friend')
+  const [positions, setPositions] = useState({ you: 1, opponent: 1 })
   const [turn, setTurn] = useState('you')
   const [diceValue, setDiceValue] = useState(null)
   const [status, setStatus] = useState('Pick difficulty and roll the dice.')
   const [winner, setWinner] = useState('')
   const [isRolling, setIsRolling] = useState(false)
   const [isDifficultyMenuOpen, setIsDifficultyMenuOpen] = useState(false)
-  const cpuTimerRef = useRef(null)
-  const rollTimerRef = useRef(null)
-  const positionsRef = useRef({ you: 1, cpu: 1 })
+  const opponentTimerRef = useRef(null)
+  const positionsRef = useRef({ you: 1, opponent: 1 })
   const waitTimersRef = useRef(new Set())
   const animationVersionRef = useRef(0)
   const difficultyMenuRef = useRef(null)
@@ -113,13 +114,9 @@ function SnakeLadderGamePage() {
 
   useEffect(() => () => {
     animationVersionRef.current += 1
-    if (cpuTimerRef.current) {
-      clearTimeout(cpuTimerRef.current)
-      cpuTimerRef.current = null
-    }
-    if (rollTimerRef.current) {
-      clearTimeout(rollTimerRef.current)
-      rollTimerRef.current = null
+    if (opponentTimerRef.current) {
+      clearTimeout(opponentTimerRef.current)
+      opponentTimerRef.current = null
     }
     waitTimersRef.current.forEach((timerId) => clearTimeout(timerId))
     waitTimersRef.current.clear()
@@ -156,26 +153,30 @@ function SnakeLadderGamePage() {
     return map
   }, [preset])
 
-  const resetGame = (nextDifficulty = difficulty) => {
+  const activeFriendName = friendName.trim() || 'Friend'
+
+  const getPlayerLabel = (playerKey) => {
+    if (playerKey === 'you') return flow.username || 'You'
+    return mode === 'cpu' ? 'Computer' : activeFriendName
+  }
+
+  const resetGame = (nextDifficulty = difficulty, nextMode = mode) => {
     animationVersionRef.current += 1
-    if (cpuTimerRef.current) {
-      clearTimeout(cpuTimerRef.current)
-      cpuTimerRef.current = null
-    }
-    if (rollTimerRef.current) {
-      clearTimeout(rollTimerRef.current)
-      rollTimerRef.current = null
+    if (opponentTimerRef.current) {
+      clearTimeout(opponentTimerRef.current)
+      opponentTimerRef.current = null
     }
     waitTimersRef.current.forEach((timerId) => clearTimeout(timerId))
     waitTimersRef.current.clear()
     setDifficulty(nextDifficulty)
-    setPositions({ you: 1, cpu: 1 })
-    positionsRef.current = { you: 1, cpu: 1 }
+    setMode(nextMode)
+    setPositions({ you: 1, opponent: 1 })
+    positionsRef.current = { you: 1, opponent: 1 }
     setTurn('you')
     setDiceValue(null)
     setWinner('')
     setIsRolling(false)
-    setStatus(`Difficulty: ${DIFFICULTY_PRESETS[nextDifficulty].label}. Your turn, roll the dice.`)
+    setStatus(`Difficulty: ${DIFFICULTY_PRESETS[nextDifficulty].label}. ${flow.username || 'You'} turn, roll the dice.`)
   }
 
   const unlock = () => {
@@ -212,6 +213,7 @@ function SnakeLadderGamePage() {
   const runTurn = async (playerKey) => {
     if (winner) return
     const animationVersion = animationVersionRef.current
+    const actor = getPlayerLabel(playerKey)
     setIsRolling(true)
     const roll = randomDice()
     setDiceValue(roll)
@@ -223,9 +225,9 @@ function SnakeLadderGamePage() {
     const landing = moved > 100 ? current : moved
 
     if (moved > 100) {
-      setStatus(`${playerKey === 'you' ? 'You' : 'Computer'} rolled ${roll}. Need exact number for 100.`)
+      setStatus(`${actor} rolled ${roll}. Need exact number for 100.`)
     } else {
-      setStatus(`${playerKey === 'you' ? 'You' : 'Computer'} rolled ${roll}. Moving...`)
+      setStatus(`${actor} rolled ${roll}. Moving...`)
       await animateMoveTo(playerKey, landing, 380)
       if (animationVersion !== animationVersionRef.current) return
     }
@@ -234,44 +236,44 @@ function SnakeLadderGamePage() {
     if (jumpMap[landing]) {
       const target = jumpMap[landing]
       const isLadder = target > landing
-      setStatus(`${isLadder ? 'Ladder up!' : 'Snake bite!'} ${landing} to ${target}.`)
+      setStatus(`${actor}: ${isLadder ? 'Ladder up' : 'Snake bite'} ${landing} to ${target}.`)
       await waitFor(250)
       if (animationVersion !== animationVersionRef.current) return
       await animateMoveTo(playerKey, target, 340)
       if (animationVersion !== animationVersionRef.current) return
       finalCell = target
     } else if (moved <= 100) {
-      setStatus(`${playerKey === 'you' ? 'You' : 'Computer'} moved to ${landing}.`)
+      setStatus(`${actor} moved to ${landing}.`)
     }
 
     setIsRolling(false)
     if (finalCell === 100) {
-      const who = playerKey === 'you' ? 'You' : 'Computer'
       setWinner(playerKey)
-      setStatus(`${who} won the game.`)
+      setStatus(`${actor} won the game.`)
       if (playerKey === 'you') unlock()
       return
     }
-    setTurn(playerKey === 'you' ? 'cpu' : 'you')
+    setTurn(playerKey === 'you' ? 'opponent' : 'you')
   }
 
   useEffect(() => {
-    if (winner || turn !== 'cpu') return
-    cpuTimerRef.current = setTimeout(() => {
-      runTurn('cpu')
-      cpuTimerRef.current = null
+    if (mode !== 'cpu' || winner || turn !== 'opponent') return
+    opponentTimerRef.current = setTimeout(() => {
+      runTurn('opponent')
+      opponentTimerRef.current = null
     }, 900)
     return () => {
-      if (cpuTimerRef.current) {
-        clearTimeout(cpuTimerRef.current)
-        cpuTimerRef.current = null
+      if (opponentTimerRef.current) {
+        clearTimeout(opponentTimerRef.current)
+        opponentTimerRef.current = null
       }
     }
-  }, [turn, winner, positions, difficulty])
+  }, [turn, winner, mode, positions, difficulty])
 
   const onRoll = () => {
-    if (winner || turn !== 'you' || isRolling) return
-    runTurn('you')
+    if (winner || isRolling) return
+    if (mode === 'cpu' && turn !== 'you') return
+    runTurn(turn)
   }
 
   return (
@@ -284,6 +286,23 @@ function SnakeLadderGamePage() {
 
       <div className="snake-card">
         <div className="snake-toolbar">
+          <div className="snake-mode-switch" role="group" aria-label="Match mode">
+            <button
+              type="button"
+              className={`snake-mode-btn ${mode === 'cpu' ? 'active' : ''}`}
+              onClick={() => resetGame(difficulty, 'cpu')}
+            >
+              Vs CPU
+            </button>
+            <button
+              type="button"
+              className={`snake-mode-btn ${mode === 'friend' ? 'active' : ''}`}
+              onClick={() => resetGame(difficulty, 'friend')}
+            >
+              Play with Friend
+            </button>
+          </div>
+
           <div className="snake-difficulty-bar" ref={difficultyMenuRef}>
             <button
               type="button"
@@ -294,9 +313,9 @@ function SnakeLadderGamePage() {
               aria-label="Open difficulty menu"
             >
               Difficulty: {DIFFICULTY_PRESETS[difficulty].label}
-              <span className="snake-difficulty-caret">▼</span>
+              <span className="snake-difficulty-caret">v</span>
             </button>
-            <button type="button" className="snake-difficulty-chip" onClick={() => resetGame(difficulty)}>
+            <button type="button" className="snake-difficulty-chip" onClick={() => resetGame(difficulty, mode)}>
               {DIFFICULTY_PRESETS[difficulty].label}
             </button>
             {isDifficultyMenuOpen && (
@@ -309,7 +328,7 @@ function SnakeLadderGamePage() {
                     aria-checked={difficulty === key}
                     className={`snake-difficulty-option ${difficulty === key ? 'active' : ''}`}
                     onClick={() => {
-                      resetGame(key)
+                      resetGame(key, mode)
                       setIsDifficultyMenuOpen(false)
                     }}
                   >
@@ -320,10 +339,24 @@ function SnakeLadderGamePage() {
             )}
           </div>
 
-          <button type="button" className="snake-reset-btn" onClick={() => resetGame()}>
+          <button type="button" className="snake-reset-btn" onClick={() => resetGame(difficulty, mode)}>
             Restart
           </button>
         </div>
+
+        {mode === 'friend' && (
+          <label className="snake-friend-input-wrap" htmlFor="snake-friend-name">
+            Friend name:
+            <input
+              id="snake-friend-name"
+              className="snake-friend-input"
+              maxLength={24}
+              value={friendName}
+              onChange={(event) => setFriendName(event.target.value)}
+              placeholder="Friend"
+            />
+          </label>
+        )}
 
         <div className="snake-board-wrap">
           <div className="snake-board">
@@ -402,7 +435,7 @@ function SnakeLadderGamePage() {
                 <div key={cell} className="snake-cell">
                   <span className="snake-cell-number">{cell}</span>
                   {positions.you === cell && <span className="snake-token snake-token-you">Y</span>}
-                  {positions.cpu === cell && <span className="snake-token snake-token-cpu">C</span>}
+                  {positions.opponent === cell && <span className="snake-token snake-token-cpu">{mode === 'cpu' ? 'C' : 'F'}</span>}
                 </div>
               ))}
             </div>
@@ -411,14 +444,14 @@ function SnakeLadderGamePage() {
 
         <div className="snake-controls">
           <div className="snake-dice-face">{diceValue || '?'}</div>
-          <button className="snake-roll-btn" onClick={onRoll} disabled={turn !== 'you' || !!winner || isRolling}>
-            {isRolling ? 'Rolling...' : 'Roll'}
+          <button className="snake-roll-btn" onClick={onRoll} disabled={(mode === 'cpu' && turn !== 'you') || !!winner || isRolling}>
+            {isRolling ? 'Rolling...' : `Roll: ${getPlayerLabel(turn)}`}
           </button>
         </div>
 
         <div className="snake-status" role="status" aria-live="polite">
-          <p>{winner ? `${winner === 'you' ? 'You' : 'Computer'} reached 100.` : status}</p>
-          <p className="snake-turn">{winner ? 'Game over' : turn === 'you' ? 'Your Turn' : 'Computer Turn'}</p>
+          <p>{winner ? `${getPlayerLabel(winner)} reached 100.` : status}</p>
+          <p className="snake-turn">{winner ? 'Game over' : `${getPlayerLabel(turn)} Turn`}</p>
         </div>
       </div>
     </section>
