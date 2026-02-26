@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Client } from '@stomp/stompjs'
+import SockJS from 'sockjs-client'
 import { useFlowState } from '../hooks/useFlowState'
 import BackIcon from '../components/BackIcon'
+import { WS_CHAT_URL } from '../config/apiConfig'
 import './TttGamePage.css'
 
 const PLAYER = 'X'
@@ -125,6 +128,10 @@ function getEasyCpuMove(board) {
   return pickRandom(getFreeCells(board))
 }
 
+function normalizeUsername(value) {
+  return (value || '').trim().toLowerCase()
+}
+
 function TttGamePage() {
   const navigate = useNavigate()
   const [flow, setFlow] = useFlowState()
@@ -138,8 +145,19 @@ function TttGamePage() {
   const [friendTurn, setFriendTurn] = useState(PLAYER)
   const [isLayoutMenuOpen, setIsLayoutMenuOpen] = useState(false)
   const [isDifficultyMenuOpen, setIsDifficultyMenuOpen] = useState(false)
+  const [onlineRoomInput, setOnlineRoomInput] = useState('')
+  const [onlineRoomId, setOnlineRoomId] = useState('')
+  const [onlineMark, setOnlineMark] = useState('')
+  const [onlineXPlayer, setOnlineXPlayer] = useState('')
+  const [onlineOPlayer, setOnlineOPlayer] = useState('')
+  const [isOnlineConnected, setIsOnlineConnected] = useState(false)
   const layoutMenuRef = useRef(null)
   const difficultyMenuRef = useRef(null)
+  const onlineClientRef = useRef(null)
+  const onlineRoomSubRef = useRef(null)
+  const onlineQueueSubRef = useRef(null)
+  const onlineRoomIdRef = useRef('')
+  const awardedWinRef = useRef('')
 
   useEffect(() => {
     if (!flow.username || !flow.token) navigate('/auth')
@@ -187,10 +205,229 @@ function TttGamePage() {
       setText(`${flow.username || 'You'} (X) turn`)
       return
     }
+    if (nextMode === 'online') {
+      setText('Online mode ready. Create or join a room.')
+      return
+    }
     setText(`Mode: ${nextDifficulty[0].toUpperCase()}${nextDifficulty.slice(1)}`)
   }
 
+  const publishOnline = (destination, body) => {
+    const client = onlineClientRef.current
+    if (!client || !client.connected) return false
+    client.publish({
+      destination,
+      body: JSON.stringify(body),
+    })
+    return true
+  }
+
+  const awardOnlineWinIfNeeded = (winner, roomId, updatedAt, mark) => {
+    if (!winner || winner === 'draw' || !mark || winner !== mark) return
+    const key = `${roomId}:${updatedAt}:${winner}`
+    if (awardedWinRef.current === key) return
+    awardedWinRef.current = key
+    setFlow((prev) => ({
+      ...prev,
+      wins: {
+        rps: prev.wins?.rps || 0,
+        coin: prev.wins?.coin || 0,
+        ttt: (prev.wins?.ttt || 0) + 1,
+      },
+    }))
+    unlock()
+  }
+
+  const applyOnlineState = (event) => {
+    const size = Number(event?.size || 0)
+    if (size >= 3 && size <= 5) {
+      setBoardSize(size)
+    }
+
+    const nextBoard = Array.isArray(event?.board) ? event.board : []
+    if (nextBoard.length) {
+      setBoard(nextBoard.map((cell) => (cell || '')))
+    }
+
+    setLastMoveIndex(Number.isInteger(event?.lastMoveIndex) ? event.lastMoveIndex : null)
+    setOnlineRoomId(event?.roomId || '')
+    onlineRoomIdRef.current = event?.roomId || ''
+
+    const xPlayer = normalizeUsername(event?.xPlayer)
+    const oPlayer = normalizeUsername(event?.oPlayer)
+    setOnlineXPlayer(xPlayer)
+    setOnlineOPlayer(oPlayer)
+
+    const me = normalizeUsername(flow.username)
+    const myMark = me && me === xPlayer ? 'X' : me && me === oPlayer ? 'O' : ''
+    if (myMark) {
+      setOnlineMark(myMark)
+      awardOnlineWinIfNeeded(event?.winner, event?.roomId || '', event?.updatedAt || Date.now(), myMark)
+    }
+
+    if (event?.winner === 'draw') {
+      setText('Online: draw match.')
+      return
+    }
+    if (event?.winner === 'X' || event?.winner === 'O') {
+      const winnerName = event.winner === 'X' ? (xPlayer || 'X') : (oPlayer || 'O')
+      setText(`Online: ${winnerName} won.`)
+      return
+    }
+
+    if (!xPlayer || !oPlayer) {
+      setText('Online: waiting for both players.')
+      return
+    }
+
+    const turn = event?.turn === 'O' ? 'O' : 'X'
+    const turnName = turn === 'X' ? xPlayer : oPlayer
+    setText(`Online: ${turnName} turn (${turn}).`)
+  }
+
+  const subscribeToRoom = (roomId) => {
+    const client = onlineClientRef.current
+    if (!client || !client.connected || !roomId) return
+
+    onlineRoomSubRef.current?.unsubscribe?.()
+    onlineRoomSubRef.current = client.subscribe(`/topic/ttt.room.${roomId}`, (frame) => {
+      try {
+        const event = JSON.parse(frame.body || '{}')
+        applyOnlineState(event)
+      } catch {
+        setText('Online: invalid room update.')
+      }
+    })
+  }
+
+  const teardownOnline = (sendLeave = true) => {
+    try {
+      if (sendLeave && onlineRoomIdRef.current) {
+        publishOnline('/app/ttt.leave', { roomId: onlineRoomIdRef.current })
+      }
+    } catch {
+      // Ignore leave errors.
+    }
+
+    onlineRoomSubRef.current?.unsubscribe?.()
+    onlineRoomSubRef.current = null
+    onlineQueueSubRef.current?.unsubscribe?.()
+    onlineQueueSubRef.current = null
+
+    const client = onlineClientRef.current
+    if (client) {
+      client.deactivate()
+      onlineClientRef.current = null
+    }
+
+    onlineRoomIdRef.current = ''
+    setIsOnlineConnected(false)
+    setOnlineRoomId('')
+    setOnlineMark('')
+    setOnlineXPlayer('')
+    setOnlineOPlayer('')
+    setOnlineRoomInput('')
+  }
+
+  useEffect(() => {
+    if (mode !== 'online') {
+      teardownOnline(true)
+      return undefined
+    }
+
+    const authToken = (flow.token || '').trim()
+    const authUsername = (flow.username || '').trim()
+    if (!authToken || !authUsername) return undefined
+
+    if (onlineClientRef.current?.connected) return undefined
+
+    const client = new Client({
+      webSocketFactory: () => new SockJS(WS_CHAT_URL, null, {
+        transports: ['websocket', 'xhr-streaming', 'xhr-polling'],
+      }),
+      connectHeaders: {
+        username: authUsername,
+        Authorization: `Bearer ${authToken}`,
+      },
+      reconnectDelay: 1200,
+      heartbeatIncoming: 10000,
+      heartbeatOutgoing: 10000,
+      onConnect: () => {
+        setIsOnlineConnected(true)
+        setText('Online connected. Create or join a room.')
+        onlineQueueSubRef.current = client.subscribe('/user/queue/ttt.events', (frame) => {
+          try {
+            const event = JSON.parse(frame.body || '{}')
+            if (event?.type === 'error') {
+              setText(`Online: ${event?.message || 'Request failed.'}`)
+              return
+            }
+
+            const roomId = (event?.roomId || '').trim()
+            if (roomId) {
+              setOnlineRoomId(roomId)
+              onlineRoomIdRef.current = roomId
+              subscribeToRoom(roomId)
+            }
+
+            const size = Number(event?.size || 0)
+            if (size >= 3 && size <= 5) {
+              setBoardSize(size)
+              setBoard(Array(size * size).fill(''))
+            }
+            if (Array.isArray(event?.board) && event.board.length) {
+              setBoard(event.board.map((cell) => (cell || '')))
+            }
+            if (event?.yourMark === 'X' || event?.yourMark === 'O') {
+              setOnlineMark(event.yourMark)
+            }
+            if (event?.message) {
+              setText(`Online: ${event.message}`)
+            }
+          } catch {
+            setText('Online: invalid server event.')
+          }
+        })
+      },
+      onWebSocketClose: () => {
+        setIsOnlineConnected(false)
+      },
+      onWebSocketError: () => {
+        setText('Online: connection error.')
+      },
+      onStompError: () => {
+        setText('Online: STOMP error.')
+      },
+    })
+
+    onlineClientRef.current = client
+    client.activate()
+
+    return () => {
+      teardownOnline(false)
+    }
+  }, [mode, flow.username, flow.token])
+
+  useEffect(() => () => {
+    teardownOnline(false)
+  }, [])
+
   const play = (index) => {
+    if (mode === 'online') {
+      if (!onlineRoomIdRef.current) {
+        setText('Online: create or join a room first.')
+        return
+      }
+      const ok = publishOnline('/app/ttt.move', {
+        roomId: onlineRoomIdRef.current,
+        index,
+      })
+      if (!ok) {
+        setText('Online: not connected yet.')
+      }
+      return
+    }
+
     if (board[index]) return
 
     if (mode === 'friend') {
@@ -275,6 +512,48 @@ function TttGamePage() {
     setText(`Mode: ${difficulty[0].toUpperCase()}${difficulty.slice(1)}`)
   }
 
+  const onCreateRoom = () => {
+    if (!isOnlineConnected) {
+      setText('Online: waiting for connection.')
+      return
+    }
+    const roomCode = onlineRoomInput.trim().toUpperCase()
+    const ok = publishOnline('/app/ttt.create', {
+      roomId: roomCode || null,
+      size: boardSize,
+    })
+    if (!ok) setText('Online: unable to create room.')
+  }
+
+  const onJoinRoom = () => {
+    if (!isOnlineConnected) {
+      setText('Online: waiting for connection.')
+      return
+    }
+    const roomCode = onlineRoomInput.trim().toUpperCase()
+    if (!roomCode) {
+      setText('Online: enter a room code to join.')
+      return
+    }
+    const ok = publishOnline('/app/ttt.join', { roomId: roomCode })
+    if (!ok) setText('Online: unable to join room.')
+  }
+
+  const onLeaveRoom = () => {
+    if (!onlineRoomIdRef.current) return
+    publishOnline('/app/ttt.leave', { roomId: onlineRoomIdRef.current })
+    setBoard(Array(boardSize * boardSize).fill(''))
+    setLastMoveIndex(null)
+    setOnlineRoomId('')
+    onlineRoomIdRef.current = ''
+    setOnlineMark('')
+    setOnlineXPlayer('')
+    setOnlineOPlayer('')
+    setText('Online: left room.')
+    onlineRoomSubRef.current?.unsubscribe?.()
+    onlineRoomSubRef.current = null
+  }
+
   return (
     <section className="single-game-page ttt-theme">
       <header className="single-game-top">
@@ -306,6 +585,16 @@ function TttGamePage() {
           >
             Play with Friend
           </button>
+          <button
+            type="button"
+            className={`ttt-mode-btn ${mode === 'online' ? 'active' : ''}`}
+            onClick={() => {
+              setMode('online')
+              resetRound(difficulty, 'online', boardSize)
+            }}
+          >
+            Online Multiplayer
+          </button>
         </div>
 
         <div className="ttt-dropdown-wrap" ref={layoutMenuRef}>
@@ -313,6 +602,7 @@ function TttGamePage() {
             type="button"
             className={`ttt-dropdown-trigger ${isLayoutMenuOpen ? 'open' : ''}`}
             onClick={() => {
+              if (mode === 'online' && onlineRoomId) return
               setIsLayoutMenuOpen((prev) => !prev)
               setIsDifficultyMenuOpen(false)
             }}
@@ -332,6 +622,11 @@ function TttGamePage() {
                   aria-checked={boardSize === size}
                   className={`ttt-dropdown-option ${boardSize === size ? 'active' : ''}`}
                   onClick={() => {
+                    if (mode === 'online' && onlineRoomId) {
+                      setText('Online: leave room before changing layout.')
+                      setIsLayoutMenuOpen(false)
+                      return
+                    }
                     setBoardSize(size)
                     resetRound(difficulty, mode, size)
                     setIsLayoutMenuOpen(false)
@@ -356,6 +651,29 @@ function TttGamePage() {
               placeholder="Friend"
             />
           </label>
+        ) : mode === 'online' ? (
+          <div className="ttt-online-wrap">
+            <div className="ttt-online-controls">
+              <input
+                type="text"
+                className="ttt-online-input"
+                placeholder="Room code"
+                value={onlineRoomInput}
+                onChange={(event) => setOnlineRoomInput(event.target.value.toUpperCase())}
+                maxLength={10}
+              />
+              <button type="button" className="ttt-online-btn" onClick={onCreateRoom}>Create</button>
+              <button type="button" className="ttt-online-btn" onClick={onJoinRoom}>Join</button>
+              <button type="button" className="ttt-online-btn" onClick={onLeaveRoom} disabled={!onlineRoomId}>Leave</button>
+            </div>
+            <p className="ttt-online-meta">
+              {isOnlineConnected ? 'Connected' : 'Connecting...'}
+              {onlineRoomId ? ` | Room: ${onlineRoomId}` : ''}
+              {onlineMark ? ` | You: ${onlineMark}` : ''}
+              {onlineXPlayer ? ` | X: ${onlineXPlayer}` : ''}
+              {onlineOPlayer ? ` | O: ${onlineOPlayer}` : ''}
+            </p>
+          </div>
         ) : (
           <div className="ttt-dropdown-wrap" ref={difficultyMenuRef}>
             <button
