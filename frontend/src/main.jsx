@@ -32,6 +32,17 @@ if ('serviceWorker' in navigator) {
     }).catch(() => {
       // Ignore service worker cleanup failures in native runtime.
     })
+    if (typeof window !== 'undefined' && 'caches' in window) {
+      window.caches.keys().then((keys) => {
+        keys.forEach((key) => {
+          window.caches.delete(key).catch(() => {
+            // Ignore cache delete failures.
+          })
+        })
+      }).catch(() => {
+        // Ignore cache access failures.
+      })
+    }
   } else {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('/sw.js').catch(() => {

@@ -50,6 +50,11 @@ function ChatInfoPage() {
   })
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [activeMediaPreview, setActiveMediaPreview] = useState(null)
+  const cap = typeof window !== 'undefined' ? window.Capacitor : null
+  const nativePlatform = typeof cap?.getPlatform === 'function' ? cap.getPlatform() : null
+  const isNativeAndroid = typeof cap?.isNativePlatform === 'function'
+    ? cap.isNativePlatform() && nativePlatform === 'android'
+    : nativePlatform === 'android'
   useEffect(() => {
     if (selectedUser?.username) return
     navigate('/chat', { replace: true })
@@ -338,7 +343,7 @@ function ChatInfoPage() {
   }
 
   return (
-    <div className="chat-info-page">
+    <div className={`chat-info-page ${isNativeAndroid ? 'native-android' : ''}`}>
       <div className="chat-info-header">
         <button type="button" className="chat-info-back" onClick={goBackToChat} aria-label="Back to chat"><BackIcon /></button>
         <h2>User Details</h2>

@@ -1,4 +1,5 @@
 .chat-info-page {
+  --chat-info-safe-top: env(safe-area-inset-top);
   position: fixed;
   inset: 0;
   width: 100vw;
@@ -15,11 +16,15 @@
   z-index: 320;
 }
 
+.chat-info-page.native-android {
+  --chat-info-safe-top: 26px;
+}
+
 .chat-info-header {
   display: flex;
   align-items: center;
   gap: 0.7rem;
-  padding: 0.85rem 0.9rem;
+  padding: calc(0.85rem + var(--chat-info-safe-top, 0px)) 0.9rem 0.85rem;
   border-bottom: 2px solid #b79361;
   background: linear-gradient(180deg, #f5deb6 0%, #ebd0a2 100%);
 }
