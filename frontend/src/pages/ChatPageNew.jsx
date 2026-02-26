@@ -2747,7 +2747,7 @@ function ChatPageNew() {
 
   return (
     <div
-      className={`chat-container ${selectedUser ? 'user-selected' : ''} ${showMobileUsers ? 'mobile-users-open' : ''} ${isKeyboardOpen ? 'keyboard-open' : ''}`}
+      className={`chat-container ${selectedUser ? 'user-selected' : ''} ${showMobileUsers ? 'mobile-users-open' : ''} ${isKeyboardOpen ? 'keyboard-open' : ''} ${(replyingTo || editingMessage) ? 'has-reply-preview' : ''}`}
       data-ios={isIosPlatform ? 'true' : 'false'}
       data-android={isAndroidPlatform ? 'true' : 'false'}
       data-native={isNativeRuntime ? 'true' : 'false'}

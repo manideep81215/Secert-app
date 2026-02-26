@@ -2430,6 +2430,19 @@
   .chat-container[data-native="true"][data-android="true"].keyboard-open:not(.mobile-users-open) .messages-area {
     padding-bottom: 4.9rem !important;
   }
+
+  .chat-container[data-native="true"][data-android="true"].keyboard-open.has-reply-preview:not(.mobile-users-open) .messages-area {
+    padding-bottom: 8.8rem !important;
+  }
+
+  .chat-container[data-native="true"][data-android="true"].keyboard-open:not(.mobile-users-open) .reply-preview {
+    position: fixed !important;
+    left: 0.65rem !important;
+    right: 0.65rem !important;
+    bottom: calc(5.05rem + env(safe-area-inset-bottom)) !important;
+    margin: 0 !important;
+    z-index: 300 !important;
+  }
 }
 
 /* Universal mobile keyboard-open fix (Web + PWA + Capacitor):
