@@ -24,6 +24,32 @@ const isNativeCapacitorRuntime = () => {
   return platform === 'android' || platform === 'ios'
 }
 
+const configureNativeKeyboardBehavior = async () => {
+  if (!isNativeCapacitorRuntime()) return
+  const cap = window?.Capacitor
+  const platform = cap?.getPlatform?.()
+  if (platform !== 'android') return
+
+  try {
+    const mod = await import('@capacitor/keyboard')
+    const Keyboard = mod?.Keyboard
+    const KeyboardResize = mod?.KeyboardResize
+    if (!Keyboard) return
+
+    // Match web-like keyboard resizing to reduce native resize jitter in Android WebView.
+    if (KeyboardResize?.Body && Keyboard?.setResizeMode) {
+      await Keyboard.setResizeMode({ mode: KeyboardResize.Body })
+    }
+    if (Keyboard?.setScroll) {
+      await Keyboard.setScroll({ isDisabled: false })
+    }
+  } catch {
+    // Ignore keyboard plugin setup failures in non-native/web contexts.
+  }
+}
+
+configureNativeKeyboardBehavior()
+
 if ('serviceWorker' in navigator) {
   if (isNativeCapacitorRuntime()) {
     // Avoid stale cached bundles in Capacitor WebView.
