@@ -665,9 +665,11 @@ function SnakeLadderGamePage() {
                 onChange={(event) => setOnlineRoomInput(event.target.value.toUpperCase())}
                 maxLength={10}
               />
-              <button type="button" className="snake-online-btn" onClick={onCreateOnlineRoom}>Create</button>
-              <button type="button" className="snake-online-btn" onClick={onJoinOnlineRoom}>Join</button>
-              <button type="button" className="snake-online-btn" onClick={onLeaveOnlineRoom} disabled={!onlineRoomId}>Leave</button>
+              <div className="snake-online-actions">
+                <button type="button" className="snake-online-btn" onClick={onCreateOnlineRoom}>Create</button>
+                <button type="button" className="snake-online-btn" onClick={onJoinOnlineRoom}>Join</button>
+                <button type="button" className="snake-online-btn" onClick={onLeaveOnlineRoom} disabled={!onlineRoomId}>Leave</button>
+              </div>
             </div>
             <p className="snake-online-meta">
               {isOnlineConnected ? 'Connected' : 'Connecting...'}

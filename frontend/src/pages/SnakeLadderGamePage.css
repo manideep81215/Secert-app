@@ -65,6 +65,7 @@
 }
 
 .snake-mode-trigger {
+  width: 100%;
   border: 2px solid #6a3a1b;
   border-radius: 0.65rem;
   background: linear-gradient(180deg, #9a6a3b, #7c4f28);
@@ -74,8 +75,12 @@
   padding: 0.45rem 0.68rem;
   display: inline-flex;
   align-items: center;
+  justify-content: space-between;
   gap: 0.35rem;
   min-height: 44px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .snake-mode-trigger.open {
@@ -131,6 +136,7 @@
 }
 
 .snake-difficulty-trigger {
+  width: 100%;
   border: 2px solid #6a3a1b;
   border-radius: 0.65rem;
   background: linear-gradient(180deg, #9a6a3b, #7c4f28);
@@ -140,8 +146,12 @@
   padding: 0.45rem 0.68rem;
   display: inline-flex;
   align-items: center;
+  justify-content: space-between;
   gap: 0.35rem;
   min-height: 44px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .snake-difficulty-trigger.open {
@@ -203,12 +213,13 @@
 
 .snake-online-controls {
   display: grid;
-  grid-template-columns: minmax(140px, 1fr) repeat(3, auto);
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.4rem;
   align-items: center;
 }
 
 .snake-online-input {
+  width: 100%;
   min-height: 42px;
   border: 2px solid #6a3a1b;
   border-radius: 0.55rem;
@@ -217,6 +228,12 @@
   font-weight: 800;
   padding: 0.38rem 0.6rem;
   outline: none;
+}
+
+.snake-online-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.4rem;
 }
 
 .snake-online-btn {
@@ -498,6 +515,29 @@
     font-size: 1.35rem;
   }
 
+  .snake-toolbar {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.45rem;
+  }
+
+  .snake-mode-bar,
+  .snake-difficulty-bar {
+    width: 100%;
+  }
+
+  .snake-reset-btn {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .snake-mode-trigger,
+  .snake-difficulty-trigger {
+    min-height: 42px;
+    font-size: 0.94rem;
+    padding: 0.38rem 0.58rem;
+  }
+
   .snake-cell-number {
     font-size: 0.54rem;
   }
@@ -510,6 +550,10 @@
   }
 
   .snake-online-controls {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
+  }
+
+  .snake-online-actions {
+    grid-template-columns: 1fr;
   }
 }

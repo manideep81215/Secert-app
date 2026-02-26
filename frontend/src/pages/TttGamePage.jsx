@@ -690,9 +690,11 @@ function TttGamePage() {
                 onChange={(event) => setOnlineRoomInput(event.target.value.toUpperCase())}
                 maxLength={10}
               />
-              <button type="button" className="ttt-online-btn" onClick={onCreateRoom}>Create</button>
-              <button type="button" className="ttt-online-btn" onClick={onJoinRoom}>Join</button>
-              <button type="button" className="ttt-online-btn" onClick={onLeaveRoom} disabled={!onlineRoomId}>Leave</button>
+              <div className="ttt-online-actions">
+                <button type="button" className="ttt-online-btn" onClick={onCreateRoom}>Create</button>
+                <button type="button" className="ttt-online-btn" onClick={onJoinRoom}>Join</button>
+                <button type="button" className="ttt-online-btn" onClick={onLeaveRoom} disabled={!onlineRoomId}>Leave</button>
+              </div>
             </div>
             <p className="ttt-online-meta">
               {isOnlineConnected ? 'Connected' : 'Connecting...'}

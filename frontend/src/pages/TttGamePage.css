@@ -123,12 +123,13 @@
 
 .ttt-online-controls {
   display: grid;
-  grid-template-columns: minmax(140px, 1fr) repeat(3, auto);
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.4rem;
   align-items: center;
 }
 
 .ttt-online-input {
+  width: 100%;
   min-height: 42px;
   border: 2px solid #6a391b;
   border-radius: 0.55rem;
@@ -137,6 +138,12 @@
   font-weight: 800;
   padding: 0.38rem 0.6rem;
   outline: none;
+}
+
+.ttt-online-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.4rem;
 }
 
 .ttt-online-btn {
@@ -181,6 +188,9 @@
   justify-content: space-between;
   gap: 0.6rem;
   box-shadow: inset 0 2px 0 rgba(255, 244, 220, 0.25);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ttt-dropdown-trigger.open {
@@ -270,7 +280,27 @@
 }
 
 @media (max-width: 560px) {
+  .ttt-dropdown-wrap {
+    width: min(320px, 100%);
+  }
+
+  .ttt-dropdown-trigger {
+    min-height: 48px;
+    font-size: 1rem;
+    padding: 0.42rem 0.72rem;
+  }
+
+  .ttt-mode-btn {
+    min-height: 40px;
+    padding: 0.36rem 0.56rem;
+    font-size: 0.92rem;
+  }
+
   .ttt-online-controls {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
+  }
+
+  .ttt-online-actions {
+    grid-template-columns: 1fr;
   }
 }
