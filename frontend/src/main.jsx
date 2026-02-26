@@ -13,12 +13,32 @@ if (typeof globalThis.global === 'undefined') {
 
 installToastGuard()
 
+const isNativeCapacitorRuntime = () => {
+  if (typeof window === 'undefined') return false
+  const cap = window.Capacitor
+  if (!cap) return false
+  if (typeof cap.isNativePlatform === 'function') {
+    return Boolean(cap.isNativePlatform())
+  }
+  const platform = cap.getPlatform?.()
+  return platform === 'android' || platform === 'ios'
+}
+
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {
-      // Ignore service worker registration failures in local dev.
+  if (isNativeCapacitorRuntime()) {
+    // Avoid stale cached bundles in Capacitor WebView.
+    navigator.serviceWorker.getRegistrations().then((registrations) => {
+      registrations.forEach((registration) => registration.unregister())
+    }).catch(() => {
+      // Ignore service worker cleanup failures in native runtime.
     })
-  })
+  } else {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js').catch(() => {
+        // Ignore service worker registration failures in local dev.
+      })
+    })
+  }
 }
 
 const rootEl = document.getElementById('root')

@@ -3,6 +3,7 @@
 .chat-container {
   --chat-keyboard-offset: 0px;
   --chat-safe-bottom: env(safe-area-inset-bottom);
+  --chat-safe-top: env(safe-area-inset-top);
   --chat-vv-top: 0px;
   --chat-vv-bottom: 0px;
   display: grid;
@@ -1668,7 +1669,7 @@
   }
 
   .chat-header {
-    padding: 0.8rem 1rem;
+    padding: calc(0.8rem + var(--chat-safe-top, 0px)) 1rem 0.8rem;
   }
 
   .messages-area {
@@ -1841,7 +1842,7 @@
 .chat-container .chat-header {
   background: linear-gradient(180deg, #f5deb6 0%, #ebd0a2 100%);
   border-bottom: 2px solid #b79361;
-  padding: 0.45rem 0.8rem;
+  padding: calc(0.45rem + var(--chat-safe-top, 0px)) 0.8rem 0.45rem;
 }
 
 .chat-container .chat-user-name {
@@ -2292,7 +2293,7 @@
     width: 100vw !important;
     height: 100dvh !important;
     min-height: 100dvh !important;
-    padding-top: max(12px, env(safe-area-inset-top));
+    padding-top: max(12px, var(--chat-safe-top, 0px));
     padding-bottom: env(safe-area-inset-bottom);
   }
 

@@ -2755,6 +2755,7 @@ function ChatPageNew() {
         '--chat-keyboard-offset': '0px',
         '--chat-viewport-height': `${Math.max(0, viewportHeight || fallbackViewportHeight)}px`,
         '--chat-safe-bottom': (isIosPlatform && !isKeyboardOpen) ? 'env(safe-area-inset-bottom)' : '0px',
+        '--chat-safe-top': (isNativeRuntime && isAndroidPlatform) ? '26px' : 'env(safe-area-inset-top)',
         '--chat-vv-top': `${Math.max(0, visualViewportTop)}px`,
         '--chat-vv-bottom': isNativeRuntime ? '0px' : `${Math.max(0, visualViewportBottomGap)}px`,
       }}
