@@ -74,15 +74,14 @@ function ChatInfoPage() {
   }
 
   const toLongLastSeen = (lastSeenAt) => {
-    if (!lastSeenAt) return 'last seen unavailable'
-    const diffSeconds = Math.max(0, Math.floor((Date.now() - Number(lastSeenAt)) / 1000))
-    if (diffSeconds < 60) return 'last seen 1 min ago'
-    const minutes = Math.floor(diffSeconds / 60)
-    if (minutes < 60) return `last seen ${minutes} min ago`
-    const hours = Math.floor(minutes / 60)
-    if (hours < 24) return `last seen ${hours} hr ago`
-    const days = Math.floor(hours / 24)
-    return `last seen ${days} day ago`
+    const timestamp = Number(lastSeenAt || 0)
+    if (!timestamp) return 'last online unavailable'
+    const formatted = new Date(timestamp).toLocaleTimeString([], {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    }).toLowerCase()
+    return `last online at ${formatted}`
   }
 
   const statusLabel = selectedTyping

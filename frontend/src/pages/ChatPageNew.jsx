@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react'
+﻿import { useState, useRef, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Client } from '@stomp/stompjs'
 import SockJS from 'sockjs-client'
@@ -27,12 +27,12 @@ const EDIT_WINDOW_MS = 15 * 60 * 1000
 const MESSAGE_ACTION_LONG_PRESS_MS = 1000
 const TYPING_STALE_MS = 1400
 const QUICK_REACTIONS = [
-  { code: 'heart', emoji: '❤️' },
-  { code: 'laugh', emoji: '😂' },
-  { code: 'wow', emoji: '😮' },
-  { code: 'sad', emoji: '😢' },
-  { code: 'angry', emoji: '😡' },
-  { code: 'like', emoji: '👍' },
+  { code: 'heart', emoji: 'â¤ï¸' },
+  { code: 'laugh', emoji: 'ðŸ˜‚' },
+  { code: 'wow', emoji: 'ðŸ˜®' },
+  { code: 'sad', emoji: 'ðŸ˜¢' },
+  { code: 'angry', emoji: 'ðŸ˜¡' },
+  { code: 'like', emoji: 'ðŸ‘' },
 ]
 const REACTION_CODE_TO_EMOJI = QUICK_REACTIONS.reduce((acc, item) => ({ ...acc, [item.code]: item.emoji }), {})
 const REACTION_EMOJI_TO_CODE = QUICK_REACTIONS.reduce((acc, item) => ({ ...acc, [item.emoji]: item.code }), {})
@@ -129,6 +129,7 @@ function ChatPageNew() {
   })
   const swipeTapSuppressUntilRef = useRef(0)
   const mediaRecorderRef = useRef(null)
+  const discardRecordingRef = useRef(false)
   const recordingStreamRef = useRef(null)
   const recordingChunksRef = useRef([])
   const recordingTimerRef = useRef(null)
@@ -423,9 +424,9 @@ function ChatPageNew() {
     return (Date.now() - createdAt) <= EDIT_WINDOW_MS
   }
   const getMessageFooterLabel = (message) => {
-    if (isMessageFailed(message)) return `Not sent · ${message.timestamp}`
-    if (message?.deliveryStatus === 'uploading') return `Sending... · ${message.timestamp}`
-    if (message?.edited) return `edited · ${message.timestamp}`
+    if (isMessageFailed(message)) return `Not sent Â· ${message.timestamp}`
+    if (message?.deliveryStatus === 'uploading') return `Sending... Â· ${message.timestamp}`
+    if (message?.edited) return `edited Â· ${message.timestamp}`
     return message?.timestamp || getTimeLabel()
   }
   const createTempId = () => (window.crypto?.randomUUID?.() || `${Date.now()}_${Math.random().toString(16).slice(2)}`)
@@ -566,27 +567,22 @@ function ChatPageNew() {
     }
     return null
   }
+  const formatLastOnlineTime = (lastSeenAt) => {
+    const timestamp = Number(lastSeenAt || 0)
+    if (!timestamp) return null
+    return new Date(timestamp).toLocaleTimeString([], {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    }).toLowerCase()
+  }
   const toShortLastSeen = (lastSeenAt) => {
-    if (!lastSeenAt) return '-'
-    const diffSeconds = Math.max(0, Math.floor((Date.now() - lastSeenAt) / 1000))
-    if (diffSeconds < 60) return '1m ago'
-    const minutes = Math.floor(diffSeconds / 60)
-    if (minutes < 60) return `${minutes}m ago`
-    const hours = Math.floor(minutes / 60)
-    if (hours < 24) return `${hours}h ago`
-    const days = Math.floor(hours / 24)
-    return `${days}d ago`
+    const formatted = formatLastOnlineTime(lastSeenAt)
+    return formatted || '-'
   }
   const toLongLastSeen = (lastSeenAt) => {
-    if (!lastSeenAt) return 'offline'
-    const diffSeconds = Math.max(0, Math.floor((Date.now() - lastSeenAt) / 1000))
-    if (diffSeconds < 60) return 'last seen 1 min ago'
-    const minutes = Math.floor(diffSeconds / 60)
-    if (minutes < 60) return `last seen ${minutes} min ago`
-    const hours = Math.floor(minutes / 60)
-    if (hours < 24) return `last seen ${hours} hr ago`
-    const days = Math.floor(hours / 24)
-    return `last seen ${days} day ago`
+    const formatted = formatLastOnlineTime(lastSeenAt)
+    return formatted ? `last online at ${formatted}` : 'offline'
   }
   const getPresence = (username, fallback = 'offline') => {
     const userKey = toUserKey(username)
@@ -1378,6 +1374,7 @@ function ChatPageNew() {
             }
             incoming.timestamp = formatTimestamp(incoming.createdAt)
             const incomingPreview = getMessagePreview(incoming.type, incoming.text, incoming.fileName)
+            setStatusMap((prev) => ({ ...prev, [toUserKey(fromUsername)]: { status: 'online', lastSeenAt: null } }))
             updatePresenceLastSeen(fromUsername, incomingCreatedAt || Date.now())
             if (!shouldSuppressChatNotification(fromUsername)) {
               await pushNotify(`@${formatUsername(fromUsername)}`, incomingPreview)
@@ -1425,6 +1422,7 @@ function ChatPageNew() {
             if (!fromUsername) return
             setTypingMap((prev) => ({ ...prev, [fromUsername]: typing }))
             if (typing) {
+              setStatusMap((prev) => ({ ...prev, [toUserKey(fromUsername)]: { status: 'online', lastSeenAt: null } }))
               updatePresenceLastSeen(fromUsername, Date.now())
               if (incomingTypingTimeoutsRef.current[fromUsername]) {
                 clearTimeout(incomingTypingTimeoutsRef.current[fromUsername])
@@ -2307,17 +2305,23 @@ function ChatPageNew() {
     await sendMediaFile(file, 'photo')
   }
 
-  const stopVoiceRecording = () => {
+  const stopVoiceRecording = (discard = false) => {
+    discardRecordingRef.current = Boolean(discard)
     const recorder = mediaRecorderRef.current
     if (recorder && recorder.state !== 'inactive') {
       recorder.stop()
     } else {
+      discardRecordingRef.current = false
       setIsRecordingVoice(false)
       setRecordingSeconds(0)
       stopRecordingTimer()
       stopRecordingStream()
       mediaRecorderRef.current = null
     }
+  }
+
+  const cancelVoiceRecording = () => {
+    stopVoiceRecording(true)
   }
 
   const startVoiceRecording = async () => {
@@ -2332,17 +2336,31 @@ function ChatPageNew() {
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const supportedMimeType = [
-        'audio/webm;codecs=opus',
-        'audio/webm',
-        'audio/mp4',
-      ].find((mime) => MediaRecorder.isTypeSupported?.(mime))
+      const preferredMimeTypes = isIosPlatform
+        ? [
+            'audio/mp4;codecs=mp4a.40.2',
+            'audio/mp4',
+            'audio/aac',
+            'audio/mpeg',
+            'audio/webm;codecs=opus',
+            'audio/webm',
+          ]
+        : [
+            'audio/webm;codecs=opus',
+            'audio/webm',
+            'audio/mp4;codecs=mp4a.40.2',
+            'audio/mp4',
+            'audio/aac',
+            'audio/mpeg',
+          ]
+      const supportedMimeType = preferredMimeTypes.find((mime) => MediaRecorder.isTypeSupported?.(mime))
 
       const recorder = supportedMimeType
         ? new MediaRecorder(stream, { mimeType: supportedMimeType })
         : new MediaRecorder(stream)
 
       recordingChunksRef.current = []
+      discardRecordingRef.current = false
       recordingStreamRef.current = stream
       mediaRecorderRef.current = recorder
 
@@ -2369,10 +2387,14 @@ function ChatPageNew() {
         setRecordingSeconds(0)
         mediaRecorderRef.current = null
 
+        const discardRecording = Boolean(discardRecordingRef.current)
+        discardRecordingRef.current = false
+        if (discardRecording) return
         if (!chunks.length) return
-        const blobType = recorder.mimeType || 'audio/webm'
+        const recordedChunkType = chunks.find((chunk) => chunk?.type)?.type || ''
+        const blobType = recorder.mimeType || recordedChunkType || 'audio/mp4'
         const blob = new Blob(chunks, { type: blobType })
-        const extension = blobType.includes('mp4') ? 'm4a' : 'webm'
+        const extension = blobType.includes('webm') ? 'webm' : 'm4a'
         const voiceFile = new File([blob], `voice-${Date.now()}.${extension}`, { type: blobType })
         await sendMediaFile(voiceFile, 'voice')
       }
@@ -3145,8 +3167,18 @@ function ChatPageNew() {
                 title={isRecordingVoice ? `Stop recording (${recordingSeconds}s)` : 'Record voice message'}
                 aria-label={isRecordingVoice ? 'Stop recording' : 'Record voice message'}
               >
-                {isRecordingVoice ? '■' : icons.voice}
+                {isRecordingVoice ? 'Stop' : icons.voice}
               </button>
+              {isRecordingVoice && (
+                <button
+                  className="btn-voice-cancel"
+                  onClick={cancelVoiceRecording}
+                  title="Cancel recording"
+                  aria-label="Cancel recording"
+                >
+                  Cancel
+                </button>
+              )}
             </div>
             <button className="btn-send" onClick={handleSendMessage} aria-label="Send">{icons.send}</button>
           </div>
@@ -3234,5 +3266,6 @@ function ChatPageNew() {
 }
 
 export default ChatPageNew
+
 
 

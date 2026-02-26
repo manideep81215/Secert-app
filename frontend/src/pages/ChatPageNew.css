@@ -485,6 +485,7 @@
   padding: 0.8rem 1.2rem;
   border-radius: 1.2rem;
   word-wrap: break-word;
+  min-width: 0;
   position: relative;
   transform-origin: bottom;
   animation: bubblePop 0.28s ease;
@@ -657,6 +658,8 @@
 
 .message-file-preview {
   display: inline-block;
+  width: min(320px, 100%);
+  max-width: 100%;
   padding: 0.55rem 0.7rem;
   border-radius: 0.6rem;
   text-decoration: none;
@@ -666,6 +669,9 @@
   border: 1px solid rgba(255, 255, 255, 0.3);
   cursor: pointer;
   text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .message.other .message-file-preview {
@@ -678,6 +684,10 @@
   margin-top: 0.45rem;
   font-size: 0.78rem;
   opacity: 0.8;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .message-media-fallback {
@@ -1100,6 +1110,24 @@
   color: #fff;
   border-color: #8b1d16;
   animation: voice-pulse 1s ease-in-out infinite;
+}
+
+.btn-voice-cancel {
+  border: 1px solid #d4b07a;
+  background: #fff6e8;
+  color: #5a3d24;
+  border-radius: 999px;
+  height: 1.9rem;
+  padding: 0 0.65rem;
+  font-size: 0.76rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-left: 0.25rem;
+  flex-shrink: 0;
+}
+
+.btn-voice-cancel:hover {
+  background: #f7e8cf;
 }
 
 @keyframes voice-pulse {

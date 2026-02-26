@@ -10,6 +10,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.messaging.simp.user.SimpSession;
 import org.springframework.messaging.simp.user.SimpUser;
 import org.springframework.messaging.simp.user.SimpUserRegistry;
 import org.springframework.stereotype.Controller;
@@ -268,10 +269,12 @@ public class ChatWebSocketController {
       return;
     }
     String normalized = normalizeUsername(username);
-    onlineUsers.remove(normalized);
-    long lastSeenAt = Instant.now().toEpochMilli();
-    lastSeenMap.put(normalized, lastSeenAt);
-    broadcastUserStatus(normalized, "offline", lastSeenAt);
+    if (!isUserConnected(normalized)) {
+      onlineUsers.remove(normalized);
+      long lastSeenAt = Instant.now().toEpochMilli();
+      lastSeenMap.put(normalized, lastSeenAt);
+      broadcastUserStatus(normalized, "offline", lastSeenAt);
+    }
   }
 
   @MessageMapping("/chat.typing")
@@ -301,7 +304,11 @@ public class ChatWebSocketController {
 
     String username = principal.getName();
     String normalized = normalizeUsername(username);
-    if (!normalized.isBlank() && onlineUsers.remove(normalized)) {
+    String disconnectingSessionId = event.getSessionId();
+    if (!normalized.isBlank()
+        && onlineUsers.contains(normalized)
+        && !hasOtherActiveSessions(normalized, disconnectingSessionId)) {
+      onlineUsers.remove(normalized);
       long lastSeenAt = Instant.now().toEpochMilli();
       lastSeenMap.put(normalized, lastSeenAt);
       broadcastUserStatus(normalized, "offline", lastSeenAt);
@@ -316,6 +323,20 @@ public class ChatWebSocketController {
       onlineUsers.remove(normalizedUsername);
     }
     return connected;
+  }
+
+  private boolean hasOtherActiveSessions(String normalizedUsername, String disconnectedSessionId) {
+    if (normalizedUsername == null || normalizedUsername.isBlank()) return false;
+    SimpUser user = simpUserRegistry.getUser(normalizedUsername);
+    if (user == null) return false;
+    for (SimpSession session : user.getSessions()) {
+      String sessionId = session.getId();
+      if (sessionId == null || sessionId.isBlank()) continue;
+      if (!sessionId.equals(disconnectedSessionId)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private void broadcastUserStatus(String username, String status, Long lastSeenAt) {
