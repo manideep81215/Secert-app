@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useFlowState } from '../hooks/useFlowState'
 import BackIcon from '../components/BackIcon'
@@ -136,10 +136,35 @@ function TttGamePage() {
   const [mode, setMode] = useState('cpu')
   const [friendName, setFriendName] = useState('Friend')
   const [friendTurn, setFriendTurn] = useState(PLAYER)
+  const [isLayoutMenuOpen, setIsLayoutMenuOpen] = useState(false)
+  const [isDifficultyMenuOpen, setIsDifficultyMenuOpen] = useState(false)
+  const layoutMenuRef = useRef(null)
+  const difficultyMenuRef = useRef(null)
 
   useEffect(() => {
     if (!flow.username || !flow.token) navigate('/auth')
   }, [flow.username, flow.token, navigate])
+
+  useEffect(() => {
+    const handleOutsidePress = (event) => {
+      if (!layoutMenuRef.current?.contains(event.target)) setIsLayoutMenuOpen(false)
+      if (!difficultyMenuRef.current?.contains(event.target)) setIsDifficultyMenuOpen(false)
+    }
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        setIsLayoutMenuOpen(false)
+        setIsDifficultyMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleOutsidePress)
+    document.addEventListener('touchstart', handleOutsidePress, { passive: true })
+    document.addEventListener('keydown', handleEscape)
+    return () => {
+      document.removeEventListener('mousedown', handleOutsidePress)
+      document.removeEventListener('touchstart', handleOutsidePress)
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }, [])
 
   const unlock = () => {
     if (flow.unlocked) return
@@ -147,6 +172,7 @@ function TttGamePage() {
   }
 
   const activeFriendName = friendName.trim() || 'Friend'
+  const selectedDifficultyLabel = `${difficulty[0].toUpperCase()}${difficulty.slice(1)}`
 
   const boardStyle = useMemo(() => ({
     '--ttt-size': String(boardSize),
@@ -282,26 +308,40 @@ function TttGamePage() {
           </button>
         </div>
 
-        <div className="ttt-difficulty-bar">
-          <label className="ttt-difficulty-select-wrap" htmlFor="ttt-layout-select">
-            Layout:
-            <select
-              id="ttt-layout-select"
-              className="ttt-difficulty-select"
-              value={boardSize}
-              onChange={(event) => {
-                const size = Number(event.target.value)
-                setBoardSize(size)
-                resetRound(difficulty, mode, size)
-              }}
-            >
+        <div className="ttt-dropdown-wrap" ref={layoutMenuRef}>
+          <button
+            type="button"
+            className={`ttt-dropdown-trigger ${isLayoutMenuOpen ? 'open' : ''}`}
+            onClick={() => {
+              setIsLayoutMenuOpen((prev) => !prev)
+              setIsDifficultyMenuOpen(false)
+            }}
+            aria-haspopup="menu"
+            aria-expanded={isLayoutMenuOpen}
+          >
+            Layout: {boardSize}x{boardSize}
+            <span className="ttt-dropdown-caret">v</span>
+          </button>
+          {isLayoutMenuOpen && (
+            <div className="ttt-dropdown-popover" role="menu" aria-label="Board layout">
               {BOARD_LAYOUTS.map((size) => (
-                <option key={size} value={size}>
+                <button
+                  key={size}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={boardSize === size}
+                  className={`ttt-dropdown-option ${boardSize === size ? 'active' : ''}`}
+                  onClick={() => {
+                    setBoardSize(size)
+                    resetRound(difficulty, mode, size)
+                    setIsLayoutMenuOpen(false)
+                  }}
+                >
                   {size}x{size}
-                </option>
+                </button>
               ))}
-            </select>
-          </label>
+            </div>
+          )}
         </div>
 
         {mode === 'friend' ? (
@@ -317,26 +357,40 @@ function TttGamePage() {
             />
           </label>
         ) : (
-          <div className="ttt-difficulty-bar">
-            <label className="ttt-difficulty-select-wrap" htmlFor="ttt-difficulty-select">
-              Difficulty:
-              <select
-                id="ttt-difficulty-select"
-                className="ttt-difficulty-select"
-                value={difficulty}
-                onChange={(event) => {
-                  const nextDifficulty = event.target.value
-                  setDifficulty(nextDifficulty)
-                  resetRound(nextDifficulty, mode, boardSize)
-                }}
-              >
+          <div className="ttt-dropdown-wrap" ref={difficultyMenuRef}>
+            <button
+              type="button"
+              className={`ttt-dropdown-trigger ${isDifficultyMenuOpen ? 'open' : ''}`}
+              onClick={() => {
+                setIsDifficultyMenuOpen((prev) => !prev)
+                setIsLayoutMenuOpen(false)
+              }}
+              aria-haspopup="menu"
+              aria-expanded={isDifficultyMenuOpen}
+            >
+              Difficulty: {selectedDifficultyLabel}
+              <span className="ttt-dropdown-caret">v</span>
+            </button>
+            {isDifficultyMenuOpen && (
+              <div className="ttt-dropdown-popover" role="menu" aria-label="Difficulty">
                 {TTT_DIFFICULTIES.map((currentDifficulty) => (
-                  <option key={currentDifficulty} value={currentDifficulty}>
+                  <button
+                    key={currentDifficulty}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={difficulty === currentDifficulty}
+                    className={`ttt-dropdown-option ${difficulty === currentDifficulty ? 'active' : ''}`}
+                    onClick={() => {
+                      setDifficulty(currentDifficulty)
+                      resetRound(currentDifficulty, mode, boardSize)
+                      setIsDifficultyMenuOpen(false)
+                    }}
+                  >
                     {currentDifficulty[0].toUpperCase() + currentDifficulty.slice(1)}
-                  </option>
+                  </button>
                 ))}
-              </select>
-            </label>
+              </div>
+            )}
           </div>
         )}
 

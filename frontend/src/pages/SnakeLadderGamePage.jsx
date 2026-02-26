@@ -315,9 +315,6 @@ function SnakeLadderGamePage() {
               Difficulty: {DIFFICULTY_PRESETS[difficulty].label}
               <span className="snake-difficulty-caret">v</span>
             </button>
-            <button type="button" className="snake-difficulty-chip" onClick={() => resetGame(difficulty, mode)}>
-              {DIFFICULTY_PRESETS[difficulty].label}
-            </button>
             {isDifficultyMenuOpen && (
               <div className="snake-difficulty-popover" role="menu" aria-label="Difficulty">
                 {DIFFICULTY_KEYS.map((key) => (

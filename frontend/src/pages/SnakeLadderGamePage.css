@@ -112,17 +112,6 @@
   line-height: 1;
 }
 
-.snake-difficulty-chip {
-  border: 2px solid #6a3a1b;
-  border-radius: 0.65rem;
-  background: #f9ebc8;
-  color: #52301a;
-  font-weight: 900;
-  font-size: 1rem;
-  padding: 0.45rem 0.62rem;
-  min-height: 44px;
-}
-
 .snake-difficulty-popover {
   position: absolute;
   top: calc(100% + 0.35rem);
