@@ -313,6 +313,7 @@ function ChatPageNew() {
     copy: '\u2398',
     resend: '\u21BB',
     send: '\u27A4',
+    cancel: '\u2716',
     game: '\uD83C\uDFAE',
   }
   const getTypeIcon = (type) => {
@@ -3167,7 +3168,7 @@ function ChatPageNew() {
                 title={isRecordingVoice ? `Stop recording (${recordingSeconds}s)` : 'Record voice message'}
                 aria-label={isRecordingVoice ? 'Stop recording' : 'Record voice message'}
               >
-                {isRecordingVoice ? 'Stop' : icons.voice}
+                {isRecordingVoice ? icons.send : icons.voice}
               </button>
               {isRecordingVoice && (
                 <button
@@ -3176,7 +3177,7 @@ function ChatPageNew() {
                   title="Cancel recording"
                   aria-label="Cancel recording"
                 >
-                  Cancel
+                  {icons.cancel}
                 </button>
               )}
             </div>
