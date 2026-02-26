@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Client } from '@stomp/stompjs'
+import SockJS from 'sockjs-client'
 import { useFlowState } from '../hooks/useFlowState'
 import BackIcon from '../components/BackIcon'
+import { WS_CHAT_URL } from '../config/apiConfig'
 import './SnakeLadderGamePage.css'
 
 const DIFFICULTY_PRESETS = {
@@ -84,6 +87,10 @@ function randomDice() {
   return Math.floor(Math.random() * 6) + 1
 }
 
+function normalizeUsername(value) {
+  return (value || '').trim().toLowerCase()
+}
+
 function toCellPoint(cell) {
   const index = cell - 1
   const rowFromBottom = Math.floor(index / 10)
@@ -108,12 +115,22 @@ function SnakeLadderGamePage() {
   const [isRolling, setIsRolling] = useState(false)
   const [isModeMenuOpen, setIsModeMenuOpen] = useState(false)
   const [isDifficultyMenuOpen, setIsDifficultyMenuOpen] = useState(false)
+  const [onlineRoomInput, setOnlineRoomInput] = useState('')
+  const [onlineRoomId, setOnlineRoomId] = useState('')
+  const [onlineRole, setOnlineRole] = useState('')
+  const [onlineHostUsername, setOnlineHostUsername] = useState('')
+  const [onlineGuestUsername, setOnlineGuestUsername] = useState('')
+  const [isOnlineConnected, setIsOnlineConnected] = useState(false)
   const opponentTimerRef = useRef(null)
   const positionsRef = useRef({ you: 1, opponent: 1 })
   const waitTimersRef = useRef(new Set())
   const animationVersionRef = useRef(0)
   const modeMenuRef = useRef(null)
   const difficultyMenuRef = useRef(null)
+  const onlineClientRef = useRef(null)
+  const onlineQueueSubRef = useRef(null)
+  const onlineRoomSubRef = useRef(null)
+  const onlineRoomIdRef = useRef('')
 
   useEffect(() => {
     if (!flow.username || !flow.token) navigate('/auth')
@@ -169,10 +186,20 @@ function SnakeLadderGamePage() {
   const activeFriendName = friendName.trim() || 'Friend'
   const selectedModeLabel = MODE_OPTIONS.find((item) => item.value === mode)?.label || 'Vs CPU'
 
+  const getOnlineOpponentName = () => {
+    const me = normalizeUsername(flow.username)
+    const host = normalizeUsername(onlineHostUsername)
+    const guest = normalizeUsername(onlineGuestUsername)
+    if (!host && !guest) return 'Opponent'
+    if (me === host) return guest || 'Opponent'
+    if (me === guest) return host || 'Opponent'
+    return onlineGuestUsername || onlineHostUsername || 'Opponent'
+  }
+
   const getPlayerLabel = (playerKey) => {
     if (playerKey === 'you') return flow.username || 'You'
     if (mode === 'cpu') return 'Computer'
-    if (mode === 'online') return 'Opponent'
+    if (mode === 'online') return getOnlineOpponentName()
     return activeFriendName
   }
 
@@ -195,7 +222,7 @@ function SnakeLadderGamePage() {
     setIsModeMenuOpen(false)
     setIsDifficultyMenuOpen(false)
     if (nextMode === 'online') {
-      setStatus('Online multiplayer for Snake & Ladders will be added next.')
+      setStatus('Online mode ready. Create or join a room.')
       return
     }
     setStatus(`Difficulty: ${DIFFICULTY_PRESETS[nextDifficulty].label}. ${flow.username || 'You'} turn, roll the dice.`)
@@ -278,6 +305,177 @@ function SnakeLadderGamePage() {
     setTurn(playerKey === 'you' ? 'opponent' : 'you')
   }
 
+  const publishOnline = (destination, body) => {
+    const client = onlineClientRef.current
+    if (!client || !client.connected) return false
+    client.publish({ destination, body: JSON.stringify(body) })
+    return true
+  }
+
+  const applyOnlineState = (event) => {
+    const host = normalizeUsername(event?.hostUsername)
+    const guest = normalizeUsername(event?.guestUsername)
+    const me = normalizeUsername(flow.username)
+
+    setOnlineHostUsername(host)
+    setOnlineGuestUsername(guest)
+
+    const inferredRole = me && me === host ? 'host' : me && me === guest ? 'guest' : onlineRole
+    if (inferredRole) setOnlineRole(inferredRole)
+
+    const hostPos = Number(event?.hostPosition || 1)
+    const guestPos = Number(event?.guestPosition || 1)
+    if (inferredRole === 'guest') {
+      setPositions({ you: guestPos, opponent: hostPos })
+      positionsRef.current = { you: guestPos, opponent: hostPos }
+    } else {
+      setPositions({ you: hostPos, opponent: guestPos })
+      positionsRef.current = { you: hostPos, opponent: guestPos }
+    }
+
+    setDiceValue(Number.isInteger(event?.lastRoll) ? event.lastRoll : null)
+
+    const winnerName = normalizeUsername(event?.winnerUsername)
+    if (!winnerName) {
+      setWinner('')
+    } else {
+      const iWon = winnerName === me
+      setWinner(iWon ? 'you' : 'opponent')
+      if (iWon) unlock()
+    }
+
+    const turnName = normalizeUsername(event?.turnUsername)
+    if (!turnName) {
+      setTurn('you')
+    } else {
+      setTurn(turnName === me ? 'you' : 'opponent')
+    }
+
+    if (event?.message) {
+      setStatus(event.message)
+    }
+  }
+
+  const subscribeOnlineRoom = (roomId) => {
+    const client = onlineClientRef.current
+    if (!client || !client.connected || !roomId) return
+
+    onlineRoomSubRef.current?.unsubscribe?.()
+    onlineRoomSubRef.current = client.subscribe(`/topic/snl.room.${roomId}`, (frame) => {
+      try {
+        const event = JSON.parse(frame.body || '{}')
+        applyOnlineState(event)
+      } catch {
+        setStatus('Online: invalid room update.')
+      }
+    })
+  }
+
+  const teardownOnline = (sendLeave = true) => {
+    try {
+      if (sendLeave && onlineRoomIdRef.current) {
+        publishOnline('/app/snl.leave', { roomId: onlineRoomIdRef.current })
+      }
+    } catch {
+      // Ignore leave errors.
+    }
+
+    onlineRoomSubRef.current?.unsubscribe?.()
+    onlineRoomSubRef.current = null
+    onlineQueueSubRef.current?.unsubscribe?.()
+    onlineQueueSubRef.current = null
+
+    const client = onlineClientRef.current
+    if (client) {
+      client.deactivate()
+      onlineClientRef.current = null
+    }
+
+    onlineRoomIdRef.current = ''
+    setOnlineRoomId('')
+    setOnlineRole('')
+    setOnlineHostUsername('')
+    setOnlineGuestUsername('')
+    setOnlineRoomInput('')
+    setIsOnlineConnected(false)
+  }
+
+  useEffect(() => {
+    if (mode !== 'online') {
+      teardownOnline(true)
+      return undefined
+    }
+
+    const authToken = (flow.token || '').trim()
+    const authUsername = (flow.username || '').trim()
+    if (!authToken || !authUsername) return undefined
+    if (onlineClientRef.current?.connected) return undefined
+
+    const client = new Client({
+      webSocketFactory: () => new SockJS(WS_CHAT_URL, null, {
+        transports: ['websocket', 'xhr-streaming', 'xhr-polling'],
+      }),
+      connectHeaders: {
+        username: authUsername,
+        Authorization: `Bearer ${authToken}`,
+      },
+      reconnectDelay: 1200,
+      heartbeatIncoming: 10000,
+      heartbeatOutgoing: 10000,
+      onConnect: () => {
+        setIsOnlineConnected(true)
+        setStatus('Online connected. Create or join a room.')
+        onlineQueueSubRef.current = client.subscribe('/user/queue/snl.events', (frame) => {
+          try {
+            const event = JSON.parse(frame.body || '{}')
+            if (event?.type === 'error') {
+              setStatus(`Online: ${event?.message || 'Request failed.'}`)
+              return
+            }
+
+            const roomId = (event?.roomId || '').trim()
+            if (roomId) {
+              setOnlineRoomId(roomId)
+              onlineRoomIdRef.current = roomId
+              subscribeOnlineRoom(roomId)
+            }
+            if (event?.difficulty && DIFFICULTY_PRESETS[event.difficulty]) {
+              setDifficulty(event.difficulty)
+            }
+            if (event?.role === 'host' || event?.role === 'guest') {
+              setOnlineRole(event.role)
+            }
+            if (event?.message) {
+              setStatus(`Online: ${event.message}`)
+            }
+          } catch {
+            setStatus('Online: invalid server event.')
+          }
+        })
+      },
+      onWebSocketClose: () => {
+        setIsOnlineConnected(false)
+      },
+      onWebSocketError: () => {
+        setStatus('Online: connection error.')
+      },
+      onStompError: () => {
+        setStatus('Online: STOMP error.')
+      },
+    })
+
+    onlineClientRef.current = client
+    client.activate()
+
+    return () => {
+      teardownOnline(false)
+    }
+  }, [mode, flow.username, flow.token])
+
+  useEffect(() => () => {
+    teardownOnline(false)
+  }, [])
+
   useEffect(() => {
     if (mode !== 'cpu' || winner || turn !== 'opponent') return
     opponentTimerRef.current = setTimeout(() => {
@@ -292,10 +490,60 @@ function SnakeLadderGamePage() {
     }
   }, [turn, winner, mode, positions, difficulty])
 
+  const onCreateOnlineRoom = () => {
+    if (!isOnlineConnected) {
+      setStatus('Online: waiting for connection.')
+      return
+    }
+    const roomCode = onlineRoomInput.trim().toUpperCase()
+    const ok = publishOnline('/app/snl.create', {
+      roomId: roomCode || null,
+      difficulty,
+    })
+    if (!ok) setStatus('Online: unable to create room.')
+  }
+
+  const onJoinOnlineRoom = () => {
+    if (!isOnlineConnected) {
+      setStatus('Online: waiting for connection.')
+      return
+    }
+    const roomCode = onlineRoomInput.trim().toUpperCase()
+    if (!roomCode) {
+      setStatus('Online: enter a room code to join.')
+      return
+    }
+    const ok = publishOnline('/app/snl.join', { roomId: roomCode })
+    if (!ok) setStatus('Online: unable to join room.')
+  }
+
+  const onLeaveOnlineRoom = () => {
+    if (!onlineRoomIdRef.current) return
+    publishOnline('/app/snl.leave', { roomId: onlineRoomIdRef.current })
+    setOnlineRoomId('')
+    onlineRoomIdRef.current = ''
+    setOnlineRole('')
+    setOnlineHostUsername('')
+    setOnlineGuestUsername('')
+    setPositions({ you: 1, opponent: 1 })
+    positionsRef.current = { you: 1, opponent: 1 }
+    setTurn('you')
+    setWinner('')
+    setDiceValue(null)
+    setStatus('Online: left room.')
+    onlineRoomSubRef.current?.unsubscribe?.()
+    onlineRoomSubRef.current = null
+  }
+
   const onRoll = () => {
     if (winner || isRolling) return
     if (mode === 'online') {
-      setStatus('Online multiplayer for Snake & Ladders is not active yet.')
+      if (!onlineRoomIdRef.current) {
+        setStatus('Online: create or join a room first.')
+        return
+      }
+      const ok = publishOnline('/app/snl.roll', { roomId: onlineRoomIdRef.current })
+      if (!ok) setStatus('Online: not connected yet.')
       return
     }
     if (mode === 'cpu' && turn !== 'you') return
@@ -352,7 +600,13 @@ function SnakeLadderGamePage() {
             <button
               type="button"
               className={`snake-difficulty-trigger ${isDifficultyMenuOpen ? 'open' : ''}`}
-              onClick={() => setIsDifficultyMenuOpen((prev) => !prev)}
+              onClick={() => {
+                if (mode === 'online' && onlineRoomId) {
+                  setStatus('Online: leave room before changing difficulty.')
+                  return
+                }
+                setIsDifficultyMenuOpen((prev) => !prev)
+              }}
               aria-haspopup="menu"
               aria-expanded={isDifficultyMenuOpen}
               aria-label="Open difficulty menu"
@@ -398,6 +652,31 @@ function SnakeLadderGamePage() {
               placeholder="Friend"
             />
           </label>
+        )}
+
+        {mode === 'online' && (
+          <div className="snake-online-wrap">
+            <div className="snake-online-controls">
+              <input
+                type="text"
+                className="snake-online-input"
+                placeholder="Room code"
+                value={onlineRoomInput}
+                onChange={(event) => setOnlineRoomInput(event.target.value.toUpperCase())}
+                maxLength={10}
+              />
+              <button type="button" className="snake-online-btn" onClick={onCreateOnlineRoom}>Create</button>
+              <button type="button" className="snake-online-btn" onClick={onJoinOnlineRoom}>Join</button>
+              <button type="button" className="snake-online-btn" onClick={onLeaveOnlineRoom} disabled={!onlineRoomId}>Leave</button>
+            </div>
+            <p className="snake-online-meta">
+              {isOnlineConnected ? 'Connected' : 'Connecting...'}
+              {onlineRoomId ? ` | Room: ${onlineRoomId}` : ''}
+              {onlineRole ? ` | Role: ${onlineRole}` : ''}
+              {onlineHostUsername ? ` | Host: ${onlineHostUsername}` : ''}
+              {onlineGuestUsername ? ` | Guest: ${onlineGuestUsername}` : ''}
+            </p>
+          </div>
         )}
 
         <div className="snake-board-wrap">
@@ -486,7 +765,7 @@ function SnakeLadderGamePage() {
 
         <div className="snake-controls">
           <div className="snake-dice-face">{diceValue || '?'}</div>
-          <button className="snake-roll-btn" onClick={onRoll} disabled={mode === 'online' || (mode === 'cpu' && turn !== 'you') || !!winner || isRolling}>
+          <button className="snake-roll-btn" onClick={onRoll} disabled={(mode === 'cpu' && turn !== 'you') || !!winner || isRolling || (mode === 'online' && !onlineRoomId)}>
             {isRolling ? 'Rolling...' : `Roll: ${getPlayerLabel(turn)}`}
           </button>
         </div>

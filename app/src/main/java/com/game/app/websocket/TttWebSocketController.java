@@ -117,6 +117,10 @@ public class TttWebSocketController {
     }
 
     synchronized (state) {
+      if (state.oPlayer() == null || state.oPlayer().isBlank()) {
+        sendUserError(username, roomId, "Waiting for opponent to join.");
+        return;
+      }
       String mark = markForUser(state, username);
       if (mark == null) {
         sendUserError(username, roomId, "You are not a player in this room.");

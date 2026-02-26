@@ -154,6 +154,7 @@ function TttGamePage() {
   const [onlineRoomInput, setOnlineRoomInput] = useState('')
   const [onlineRoomId, setOnlineRoomId] = useState('')
   const [onlineMark, setOnlineMark] = useState('')
+  const [onlineTurnMark, setOnlineTurnMark] = useState('X')
   const [onlineXPlayer, setOnlineXPlayer] = useState('')
   const [onlineOPlayer, setOnlineOPlayer] = useState('')
   const [isOnlineConnected, setIsOnlineConnected] = useState(false)
@@ -201,6 +202,8 @@ function TttGamePage() {
   const activeFriendName = friendName.trim() || 'Friend'
   const selectedModeLabel = MODE_OPTIONS.find((item) => item.value === mode)?.label || 'Vs CPU'
   const selectedDifficultyLabel = `${difficulty[0].toUpperCase()}${difficulty.slice(1)}`
+  const hasOnlinePair = Boolean(onlineXPlayer && onlineOPlayer)
+  const isOnlineMyTurn = Boolean(onlineMark && onlineTurnMark && onlineMark === onlineTurnMark)
 
   const boardStyle = useMemo(() => ({
     '--ttt-size': String(boardSize),
@@ -267,6 +270,8 @@ function TttGamePage() {
     const oPlayer = normalizeUsername(event?.oPlayer)
     setOnlineXPlayer(xPlayer)
     setOnlineOPlayer(oPlayer)
+    const turn = event?.turn === 'O' ? 'O' : 'X'
+    setOnlineTurnMark(turn)
 
     const me = normalizeUsername(flow.username)
     const myMark = me && me === xPlayer ? 'X' : me && me === oPlayer ? 'O' : ''
@@ -290,7 +295,6 @@ function TttGamePage() {
       return
     }
 
-    const turn = event?.turn === 'O' ? 'O' : 'X'
     const turnName = turn === 'X' ? xPlayer : oPlayer
     setText(`Online: ${turnName} turn (${turn}).`)
   }
@@ -334,6 +338,7 @@ function TttGamePage() {
     setIsOnlineConnected(false)
     setOnlineRoomId('')
     setOnlineMark('')
+    setOnlineTurnMark('X')
     setOnlineXPlayer('')
     setOnlineOPlayer('')
     setOnlineRoomInput('')
@@ -426,6 +431,14 @@ function TttGamePage() {
     if (mode === 'online') {
       if (!onlineRoomIdRef.current) {
         setText('Online: create or join a room first.')
+        return
+      }
+      if (!hasOnlinePair) {
+        setText('Online: waiting for opponent to join.')
+        return
+      }
+      if (!isOnlineMyTurn) {
+        setText('Online: not your turn yet.')
         return
       }
       const ok = publishOnline('/app/ttt.move', {
@@ -557,6 +570,7 @@ function TttGamePage() {
     setOnlineRoomId('')
     onlineRoomIdRef.current = ''
     setOnlineMark('')
+    setOnlineTurnMark('X')
     setOnlineXPlayer('')
     setOnlineOPlayer('')
     setText('Online: left room.')
@@ -731,6 +745,15 @@ function TttGamePage() {
             <button
               key={index}
               onClick={() => play(index)}
+              disabled={
+                mode === 'online'
+                && (
+                  !onlineRoomId
+                  || !hasOnlinePair
+                  || !isOnlineMyTurn
+                  || Boolean(cell)
+                )
+              }
               className={`ttt-board-cell ${lastMoveIndex === index && cell ? 'ttt-board-cell-last' : ''}`}
             >
               {cell || '-'}

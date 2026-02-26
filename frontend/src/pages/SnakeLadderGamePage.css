@@ -191,6 +191,55 @@
   outline: none;
 }
 
+.snake-online-wrap {
+  margin-top: 0.65rem;
+  border: 2px solid #6a3a1b;
+  border-radius: 0.8rem;
+  background: #f9ebc8;
+  padding: 0.55rem;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.snake-online-controls {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) repeat(3, auto);
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.snake-online-input {
+  min-height: 42px;
+  border: 2px solid #6a3a1b;
+  border-radius: 0.55rem;
+  background: #fff8e3;
+  color: #4f2d17;
+  font-weight: 800;
+  padding: 0.38rem 0.6rem;
+  outline: none;
+}
+
+.snake-online-btn {
+  min-height: 42px;
+  border: 2px solid #6a3a1b;
+  border-radius: 0.55rem;
+  background: linear-gradient(180deg, #9a6a3b, #7c4f28);
+  color: #fff3dd;
+  font-weight: 900;
+  padding: 0.36rem 0.72rem;
+}
+
+.snake-online-btn:disabled {
+  opacity: 0.65;
+}
+
+.snake-online-meta {
+  margin: 0;
+  color: #5d3a22;
+  font-weight: 700;
+  font-size: 0.92rem;
+}
+
 .snake-difficulty-option {
   border: 0;
   border-radius: 0.55rem;
@@ -458,5 +507,9 @@
     height: 16px;
     font-size: 0.55rem;
     border-width: 1px;
+  }
+
+  .snake-online-controls {
+    grid-template-columns: 1fr 1fr;
   }
 }
