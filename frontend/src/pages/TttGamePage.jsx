@@ -143,6 +143,7 @@ function TttGamePage() {
   const [boardSize, setBoardSize] = useState(3)
   const [board, setBoard] = useState(Array(9).fill(''))
   const [text, setText] = useState('Play as X')
+  const [matchEnded, setMatchEnded] = useState(false)
   const [lastMoveIndex, setLastMoveIndex] = useState(null)
   const [difficulty, setDifficulty] = useState('medium')
   const [mode, setMode] = useState('cpu')
@@ -213,6 +214,7 @@ function TttGamePage() {
   const resetRound = (nextDifficulty = difficulty, nextMode = mode, nextSize = boardSize) => {
     setBoard(Array(nextSize * nextSize).fill(''))
     setLastMoveIndex(null)
+    setMatchEnded(false)
     setFriendTurn(PLAYER)
     if (nextMode === 'friend') {
       setText(`${flow.username || 'You'} (X) turn`)
@@ -281,14 +283,17 @@ function TttGamePage() {
     }
 
     if (event?.winner === 'draw') {
+      setMatchEnded(true)
       setText('Online: draw match.')
       return
     }
     if (event?.winner === 'X' || event?.winner === 'O') {
+      setMatchEnded(true)
       const winnerName = event.winner === 'X' ? (xPlayer || 'X') : (oPlayer || 'O')
       setText(`Online: ${winnerName} won.`)
       return
     }
+    setMatchEnded(false)
 
     if (!xPlayer || !oPlayer) {
       setText('Online: waiting for both players.')
@@ -461,6 +466,7 @@ function TttGamePage() {
       setLastMoveIndex(index)
 
       if (result === 'X') {
+        setMatchEnded(true)
         setText(`${flow.username || 'You'} won this round`)
         setFlow((prev) => ({
           ...prev,
@@ -474,10 +480,12 @@ function TttGamePage() {
         return
       }
       if (result === 'O') {
+        setMatchEnded(true)
         setText(`${activeFriendName} won this round`)
         return
       }
       if (result === 'draw') {
+        setMatchEnded(true)
         setText('Draw, reset and retry')
         return
       }
@@ -511,6 +519,7 @@ function TttGamePage() {
     setLastMoveIndex(latestMove)
 
     if (result === 'X') {
+      setMatchEnded(true)
       setText('You won this round')
       setFlow((prev) => ({
         ...prev,
@@ -524,10 +533,12 @@ function TttGamePage() {
       return
     }
     if (result === 'O') {
+      setMatchEnded(true)
       setText('CPU won, reset and retry')
       return
     }
     if (result === 'draw') {
+      setMatchEnded(true)
       setText('Draw, reset and retry')
       return
     }
@@ -691,8 +702,8 @@ function TttGamePage() {
                 maxLength={10}
               />
               <div className="ttt-online-actions">
-                <button type="button" className="ttt-online-btn" onClick={onCreateRoom}>Create</button>
-                <button type="button" className="ttt-online-btn" onClick={onJoinRoom}>Join</button>
+                {!onlineRoomId && <button type="button" className="ttt-online-btn" onClick={onCreateRoom}>Create</button>}
+                {!onlineRoomId && <button type="button" className="ttt-online-btn" onClick={onJoinRoom}>Join</button>}
                 <button type="button" className="ttt-online-btn" onClick={onLeaveRoom} disabled={!onlineRoomId}>Leave</button>
               </div>
             </div>
@@ -764,7 +775,7 @@ function TttGamePage() {
         </div>
         <div className="ttt-bottom">
           <p>{text}</p>
-          <button onClick={() => resetRound()}>Reset</button>
+          <button onClick={() => resetRound()}>{matchEnded ? 'Replay' : 'Reset'}</button>
         </div>
       </div>
     </section>

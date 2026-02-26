@@ -277,7 +277,7 @@ function SnakeLadderGamePage() {
       setStatus(`${actor} rolled ${roll}. Need exact number for 100.`)
     } else {
       setStatus(`${actor} rolled ${roll}. Moving...`)
-      await animateMoveTo(playerKey, landing, 380)
+      await animateMoveTo(playerKey, landing, 500)
       if (animationVersion !== animationVersionRef.current) return
     }
 
@@ -288,7 +288,7 @@ function SnakeLadderGamePage() {
       setStatus(`${actor}: ${isLadder ? 'Ladder up' : 'Snake bite'} ${landing} to ${target}.`)
       await waitFor(250)
       if (animationVersion !== animationVersionRef.current) return
-      await animateMoveTo(playerKey, target, 340)
+      await animateMoveTo(playerKey, target, 500)
       if (animationVersion !== animationVersionRef.current) return
       finalCell = target
     } else if (moved <= 100) {
@@ -635,9 +635,6 @@ function SnakeLadderGamePage() {
             )}
           </div>
 
-          <button type="button" className="snake-reset-btn" onClick={() => resetGame(difficulty, mode)}>
-            Restart
-          </button>
         </div>
 
         {mode === 'friend' && (
@@ -666,8 +663,8 @@ function SnakeLadderGamePage() {
                 maxLength={10}
               />
               <div className="snake-online-actions">
-                <button type="button" className="snake-online-btn" onClick={onCreateOnlineRoom}>Create</button>
-                <button type="button" className="snake-online-btn" onClick={onJoinOnlineRoom}>Join</button>
+                {!onlineRoomId && <button type="button" className="snake-online-btn" onClick={onCreateOnlineRoom}>Create</button>}
+                {!onlineRoomId && <button type="button" className="snake-online-btn" onClick={onJoinOnlineRoom}>Join</button>}
                 <button type="button" className="snake-online-btn" onClick={onLeaveOnlineRoom} disabled={!onlineRoomId}>Leave</button>
               </div>
             </div>
@@ -767,7 +764,16 @@ function SnakeLadderGamePage() {
 
         <div className="snake-controls">
           <div className="snake-dice-face">{diceValue || '?'}</div>
-          <button className="snake-roll-btn" onClick={onRoll} disabled={(mode === 'cpu' && turn !== 'you') || !!winner || isRolling || (mode === 'online' && !onlineRoomId)}>
+          <button
+            className="snake-roll-btn"
+            onClick={onRoll}
+            disabled={
+              !!winner
+              || isRolling
+              || (mode === 'cpu' && turn !== 'you')
+              || (mode === 'online' && (!onlineRoomId || turn !== 'you' || !onlineHostUsername || !onlineGuestUsername))
+            }
+          >
             {isRolling ? 'Rolling...' : `Roll: ${getPlayerLabel(turn)}`}
           </button>
         </div>
@@ -775,6 +781,11 @@ function SnakeLadderGamePage() {
         <div className="snake-status" role="status" aria-live="polite">
           <p>{winner ? `${getPlayerLabel(winner)} reached 100.` : status}</p>
           <p className="snake-turn">{winner ? 'Game over' : `${getPlayerLabel(turn)} Turn`}</p>
+        </div>
+        <div className="snake-controls">
+          <button className="snake-reset-btn" onClick={() => resetGame(difficulty, mode)}>
+            {winner ? 'Replay' : 'Restart'}
+          </button>
         </div>
       </div>
     </section>
