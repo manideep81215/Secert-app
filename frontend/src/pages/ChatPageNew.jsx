@@ -2779,7 +2779,9 @@ function ChatPageNew() {
       data-native={isNativeRuntime ? 'true' : 'false'}
       style={{
         '--chat-keyboard-offset': `${Math.max(0, keyboardOffset || 0)}px`,
-        '--chat-viewport-height': `${Math.max(0, viewportHeight || fallbackViewportHeight)}px`,
+        '--chat-viewport-height': (isNativeRuntime && isAndroidPlatform)
+          ? '100%'
+          : `${Math.max(0, viewportHeight || fallbackViewportHeight)}px`,
         '--chat-safe-bottom': (isIosPlatform && !isKeyboardOpen) ? 'env(safe-area-inset-bottom)' : '0px',
         '--chat-safe-top': isIosPlatform ? 'env(safe-area-inset-top)' : '0px',
         '--chat-vv-top': `${Math.max(0, visualViewportTop)}px`,

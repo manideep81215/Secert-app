@@ -36,9 +36,9 @@ const configureNativeKeyboardBehavior = async () => {
     const KeyboardResize = mod?.KeyboardResize
     if (!Keyboard) return
 
-    // Match web-like keyboard resizing to reduce native resize jitter in Android WebView.
-    if (KeyboardResize?.Body && Keyboard?.setResizeMode) {
-      await Keyboard.setResizeMode({ mode: KeyboardResize.Body })
+    // Keep WebView resize fully native on Android to avoid keyboard inset/gap stacking.
+    if (KeyboardResize?.Native && Keyboard?.setResizeMode) {
+      await Keyboard.setResizeMode({ mode: KeyboardResize.Native })
     }
     if (Keyboard?.setScroll) {
       await Keyboard.setScroll({ isDisabled: false })
