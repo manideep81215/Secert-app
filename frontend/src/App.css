@@ -107,7 +107,7 @@ html.privacy-mask-active .app-privacy-screen {
 
 @media only screen and (max-width: 480px) {
   .app-toast-container.Toastify__toast-container {
-    --app-toast-width: min(92vw, 420px);
+    --app-toast-width: clamp(300px, 78vw, 400px);
     width: var(--app-toast-width) !important;
     left: 50% !important;
     transform: translateX(-50%) !important;
