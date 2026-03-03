@@ -30,6 +30,7 @@ const TYPING_STALE_MS = 1400
 const AUTO_REFRESH_DEBOUNCE_MS = 1200
 const TEXT_SEND_WAIT_MS = 8000
 const CONVERSATION_FETCH_RETRY_LIMIT = 4
+const OFFLINE_DASHBOARD_REDIRECT_MS = 60 * 1000
 const QUICK_REACTIONS = [
   { code: 'heart', emoji: '❤️' },
   { code: 'laugh', emoji: '😂' },
@@ -1368,6 +1369,39 @@ function ChatPageNew() {
       document.removeEventListener('visibilitychange', onVisibilityChange)
     }
   }, [flow.token, flow.username])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined
+
+    let offlineRedirectTimer = null
+    const clearOfflineTimer = () => {
+      if (!offlineRedirectTimer) return
+      window.clearTimeout(offlineRedirectTimer)
+      offlineRedirectTimer = null
+    }
+    const startOfflineTimer = () => {
+      if (offlineRedirectTimer) return
+      offlineRedirectTimer = window.setTimeout(() => {
+        notify.info('You were offline for 1 minute. Redirecting to dashboard.')
+        navigate('/games', { replace: true })
+      }, OFFLINE_DASHBOARD_REDIRECT_MS)
+    }
+
+    const onOffline = () => startOfflineTimer()
+    const onOnline = () => clearOfflineTimer()
+
+    if (navigator.onLine === false) {
+      startOfflineTimer()
+    }
+
+    window.addEventListener('offline', onOffline)
+    window.addEventListener('online', onOnline)
+    return () => {
+      clearOfflineTimer()
+      window.removeEventListener('offline', onOffline)
+      window.removeEventListener('online', onOnline)
+    }
+  }, [navigate])
 
   useEffect(() => {
     scrollMessagesToBottom('auto')
