@@ -42,7 +42,6 @@ function App() {
   const [installPromptEvent, setInstallPromptEvent] = useState(null)
   const [isAppInstalled, setIsAppInstalled] = useState(false)
   const [showIosInstallHelp, setShowIosInstallHelp] = useState(false)
-  const [isPrivacyMaskActive, setIsPrivacyMaskActive] = useState(false)
   const refreshTimerRef = useRef(null)
   const isFullBleedRoute =
     location.pathname === '/auth' ||
@@ -366,17 +365,20 @@ function App() {
   useEffect(() => {
     if (typeof window === 'undefined' || typeof document === 'undefined') return undefined
 
+    const setMaskClass = (enabled) => {
+      document.documentElement.classList.toggle('privacy-mask-active', Boolean(enabled))
+    }
     const isSensitiveRoute = () => (
-      location.pathname === '/chat' || location.pathname === '/chat/info'
+      currentPathRef.current === '/chat' || currentPathRef.current === '/chat/info'
     )
     const activatePrivacyMask = () => {
       if (isSensitiveRoute()) {
-        setIsPrivacyMaskActive(true)
+        setMaskClass(true)
       } else {
-        setIsPrivacyMaskActive(false)
+        setMaskClass(false)
       }
     }
-    const deactivatePrivacyMask = () => setIsPrivacyMaskActive(false)
+    const deactivatePrivacyMask = () => setMaskClass(false)
     const onVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
         activatePrivacyMask()
@@ -409,7 +411,10 @@ function App() {
     }
 
     document.addEventListener('visibilitychange', onVisibilityChange)
+    document.addEventListener('webkitvisibilitychange', onVisibilityChange)
     window.addEventListener('pagehide', activatePrivacyMask)
+    window.addEventListener('freeze', activatePrivacyMask)
+    window.addEventListener('beforeunload', activatePrivacyMask)
     window.addEventListener('blur', activatePrivacyMask)
     window.addEventListener('pageshow', deactivatePrivacyMask)
     window.addEventListener('focus', deactivatePrivacyMask)
@@ -423,12 +428,23 @@ function App() {
       disposed = true
       appStateListener?.remove?.()
       document.removeEventListener('visibilitychange', onVisibilityChange)
+      document.removeEventListener('webkitvisibilitychange', onVisibilityChange)
       window.removeEventListener('pagehide', activatePrivacyMask)
+      window.removeEventListener('freeze', activatePrivacyMask)
+      window.removeEventListener('beforeunload', activatePrivacyMask)
       window.removeEventListener('blur', activatePrivacyMask)
       window.removeEventListener('pageshow', deactivatePrivacyMask)
       window.removeEventListener('focus', deactivatePrivacyMask)
+      setMaskClass(false)
     }
-  }, [location.pathname])
+  }, [])
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    if (!isPrivacySensitiveRoute) {
+      document.documentElement.classList.remove('privacy-mask-active')
+    }
+  }, [isPrivacySensitiveRoute])
 
   useEffect(() => {
     if (!flow?.token) return undefined
@@ -541,7 +557,7 @@ function App() {
         pauseOnFocusLoss={false}
       />
 
-      {isPrivacyMaskActive && isPrivacySensitiveRoute && (
+      {isPrivacySensitiveRoute && (
         <div className="app-privacy-screen" aria-hidden="true">
           <div className="app-privacy-badge">Simp Games Quest</div>
         </div>
