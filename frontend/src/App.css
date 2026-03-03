@@ -44,48 +44,18 @@
   background: linear-gradient(90deg, var(--accent-dark), #f59517);
 }
 
-html.blur-app #root {
-  filter: blur(20px);
-  transform: translateZ(0);
-}
-
 .app-privacy-screen {
   position: fixed;
   inset: 0;
   z-index: 2147483647;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background:
-    radial-gradient(circle at 30% 25%, rgba(255, 208, 132, 0.2), rgba(255, 208, 132, 0) 42%),
-    linear-gradient(145deg, rgba(43, 35, 28, 0.95), rgba(27, 21, 17, 0.97));
-  backdrop-filter: blur(8px);
+  background: #000;
   pointer-events: none;
   opacity: 0;
   visibility: hidden;
-  will-change: opacity;
-  transform: translateZ(0);
+  transition: opacity 0.1s ease;
 }
 
 html.privacy-mask-active .app-privacy-screen {
   opacity: 1;
   visibility: visible;
-}
-
-/* iOS standalone needs a more opaque cover for app-switcher snapshots. */
-html.ios-standalone-pwa.privacy-mask-active .app-privacy-screen {
-  background: linear-gradient(145deg, #231b14, #19140f);
-  backdrop-filter: none;
-}
-
-.app-privacy-badge {
-  padding: 0.85rem 1.2rem;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 218, 161, 0.45);
-  color: #f7e5c6;
-  background: rgba(44, 33, 24, 0.7);
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.28);
 }
