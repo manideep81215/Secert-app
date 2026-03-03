@@ -38,6 +38,7 @@ function App() {
   const routeHistoryRef = useRef([])
   const isAuthenticatedRef = useRef(isAuthenticated)
   const currentPathRef = useRef(location.pathname)
+  const backgroundedFromSensitiveRouteRef = useRef(false)
   const previousTokenRef = useRef((flow?.token || '').trim())
   const [installPromptEvent, setInstallPromptEvent] = useState(null)
   const [isAppInstalled, setIsAppInstalled] = useState(false)
@@ -136,6 +137,43 @@ function App() {
       stack.splice(0, stack.length - 40)
     }
   }, [location.pathname])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return undefined
+
+    const isSensitiveRoute = (pathname) => pathname === '/chat' || pathname === '/chat/info'
+    const markBackgrounded = () => {
+      if (!isAuthenticatedRef.current) {
+        backgroundedFromSensitiveRouteRef.current = false
+        return
+      }
+      backgroundedFromSensitiveRouteRef.current = isSensitiveRoute(currentPathRef.current || '')
+    }
+    const handleReturn = () => {
+      if (!backgroundedFromSensitiveRouteRef.current) return
+      backgroundedFromSensitiveRouteRef.current = false
+      if (!isAuthenticatedRef.current) return
+      if ((currentPathRef.current || '') !== '/profile') {
+        navigate('/profile', { replace: true })
+      }
+    }
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        markBackgrounded()
+      } else if (document.visibilityState === 'visible') {
+        handleReturn()
+      }
+    }
+
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    window.addEventListener('pagehide', markBackgrounded)
+    window.addEventListener('pageshow', handleReturn)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      window.removeEventListener('pagehide', markBackgrounded)
+      window.removeEventListener('pageshow', handleReturn)
+    }
+  }, [navigate])
 
   useEffect(() => {
     const authToken = (flow?.token || '').trim()
@@ -614,7 +652,18 @@ function App() {
         )}
       />
 
-      <div className="app-privacy-screen" aria-hidden="true" />
+      <div className="app-privacy-screen" aria-hidden="true">
+        <div className="app-privacy-brand">
+          <img
+            className="app-privacy-logo"
+            src="/theme/simp-games-quest-logo.png"
+            alt=""
+            loading="eager"
+            decoding="sync"
+          />
+          <span className="app-privacy-title">Simp Games Quest</span>
+        </div>
+      </div>
     </div>
   )
 }

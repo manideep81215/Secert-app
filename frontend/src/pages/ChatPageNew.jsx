@@ -27,6 +27,8 @@ const ACTIVE_CHAT_PEER_KEY_PREFIX = 'active_chat_peer_v1:'
 const EDIT_WINDOW_MS = 15 * 60 * 1000
 const MESSAGE_ACTION_LONG_PRESS_MS = 1000
 const TYPING_STALE_MS = 1400
+const ONLINE_HEARTBEAT_MS = 30 * 1000
+const PRESENCE_ONLINE_STALE_MS = 90 * 1000
 const AUTO_REFRESH_DEBOUNCE_MS = 1200
 const TEXT_SEND_WAIT_MS = 8000
 const CONVERSATION_FETCH_RETRY_LIMIT = 4
@@ -634,8 +636,10 @@ function ChatPageNew() {
     const cachedLastSeenAt = Number(presenceLastSeenMap[userKey] || 0) || null
     const current = statusMap[userKey]
     if (current) {
+      const normalizedStatus = String(current.status || '').trim().toLowerCase() || fallback
       return {
         ...current,
+        status: normalizedStatus,
         lastSeenAt: current.lastSeenAt || cachedLastSeenAt,
       }
     }
@@ -643,17 +647,25 @@ function ChatPageNew() {
   }
   const getResolvedPresence = (username, fallback = 'offline') => {
     const presence = getPresence(username, fallback)
-    if (presence.status === 'online') {
+    const normalizedUsername = toUserKey(username)
+    const lastSeenAt = Number(presence.lastSeenAt || 0) || null
+    const onlineIsFresh = Boolean(lastSeenAt) && (Date.now() - lastSeenAt) <= PRESENCE_ONLINE_STALE_MS
+    if (presence.status === 'online' && onlineIsFresh) {
       delete offlineSinceRef.current[username]
       return presence
     }
-    if (presence.lastSeenAt) {
-      offlineSinceRef.current[username] = presence.lastSeenAt
-      return presence
+    if (presence.status === 'online' && !onlineIsFresh) {
+      const fallbackLastSeen = lastSeenAt || Number(presenceLastSeenMap[normalizedUsername] || 0) || null
+      offlineSinceRef.current[username] = fallbackLastSeen
+      return { status: 'offline', lastSeenAt: fallbackLastSeen }
+    }
+    if (lastSeenAt) {
+      offlineSinceRef.current[username] = lastSeenAt
+      return { status: presence.status, lastSeenAt }
     }
     return presence
   }
-  const selectedPresence = selectedUser ? getResolvedPresence(selectedUser.username, selectedUser.status) : { status: 'offline', lastSeenAt: null }
+  const selectedPresence = selectedUser ? getResolvedPresence(selectedUser.username, 'offline') : { status: 'offline', lastSeenAt: null }
   const selectedTyping = selectedUser ? Boolean(typingMap[toUserKey(selectedUser.username)]) : false
   const getLastOutgoingAt = (peerUsername) => {
     if (!peerUsername) return 0
@@ -1460,6 +1472,21 @@ function ChatPageNew() {
     const authUsername = (flow.username || '').trim()
     if (!authToken || !authUsername) return
 
+    let onlineHeartbeatTimer = null
+    const publishOnlinePresence = () => {
+      if (!client.connected) return
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) return
+      client.publish({
+        destination: '/app/user.online',
+        body: JSON.stringify({ username: authUsername }),
+      })
+    }
+    const onAppVisible = () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
+      publishOnlinePresence()
+    }
+
     const client = new Client({
       webSocketFactory: () => new SockJS(WS_CHAT_URL, null, {
         transports: ['websocket', 'xhr-streaming', 'xhr-polling'],
@@ -1477,10 +1504,13 @@ function ChatPageNew() {
           clearTimeout(wsErrorTimerRef.current)
           wsErrorTimerRef.current = null
         }
-        client.publish({
-          destination: '/app/user.online',
-          body: JSON.stringify({ username: authUsername }),
-        })
+        publishOnlinePresence()
+        if (onlineHeartbeatTimer) {
+          clearInterval(onlineHeartbeatTimer)
+        }
+        onlineHeartbeatTimer = setInterval(() => {
+          publishOnlinePresence()
+        }, ONLINE_HEARTBEAT_MS)
         if (selectedUserRef.current?.username) {
           setConversationReloadTick(Date.now())
         }
@@ -1489,16 +1519,18 @@ function ChatPageNew() {
           try {
             const payload = JSON.parse(frame.body)
             const username = payload?.username
-            const status = payload?.status
-            const lastSeenAt = payload?.lastSeenAt || null
+            const status = String(payload?.status || '').trim().toLowerCase()
+            const lastSeenAt = Number(payload?.lastSeenAt || 0) || null
             if (!username || !status) return
+            if (status !== 'online' && status !== 'offline') return
             const userKey = toUserKey(username)
             if (!userKey) return
             setStatusMap((prev) => ({ ...prev, [userKey]: { status, lastSeenAt } }))
             if (status === 'online') {
               updatePresenceLastSeen(username, Date.now())
-            } else if (Number(lastSeenAt) > 0) {
-              updatePresenceLastSeen(username, Number(lastSeenAt))
+            } else if (lastSeenAt) {
+              setTypingMap((prev) => ({ ...prev, [userKey]: false }))
+              updatePresenceLastSeen(username, lastSeenAt)
             }
           } catch (error) {
             console.error('Failed parsing user status payload', error)
@@ -1738,8 +1770,18 @@ function ChatPageNew() {
     client.activate()
     setSocket(client)
     socketRef.current = client
+    window.addEventListener('focus', onAppVisible)
+    window.addEventListener('pageshow', onAppVisible)
+    document.addEventListener('visibilitychange', onAppVisible)
 
     return () => {
+      window.removeEventListener('focus', onAppVisible)
+      window.removeEventListener('pageshow', onAppVisible)
+      document.removeEventListener('visibilitychange', onAppVisible)
+      if (onlineHeartbeatTimer) {
+        clearInterval(onlineHeartbeatTimer)
+        onlineHeartbeatTimer = null
+      }
       if (wsErrorTimerRef.current) {
         clearTimeout(wsErrorTimerRef.current)
         wsErrorTimerRef.current = null
@@ -2106,7 +2148,7 @@ function ChatPageNew() {
         return hasConversation
       })
       .map((user) => {
-        const presence = getResolvedPresence(user.username, user.status)
+        const presence = getResolvedPresence(user.username, 'offline')
         const isTyping = Boolean(typingMap[toUserKey(user.username)])
         const presenceTime = presence.status === 'online' ? 'online' : toShortLastSeen(presence.lastSeenAt)
         const hasUnread = Boolean(unreadMap[toUserKey(user.username)])
