@@ -47,16 +47,14 @@
 .app-privacy-screen {
   position: fixed;
   inset: 0;
-  z-index: 99999;
+  z-index: 999999;
   background: #000;
   pointer-events: none;
-  opacity: 0;
-  visibility: hidden;
+  display: none;
 }
 
 html.privacy-mask-active .app-privacy-screen {
-  opacity: 1;
-  visibility: visible;
+  display: block;
 }
 
 .app-toast-container.Toastify__toast-container {

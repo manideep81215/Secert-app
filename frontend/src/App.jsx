@@ -368,18 +368,27 @@ function App() {
     const setMaskClass = (enabled) => {
       document.documentElement.classList.toggle('privacy-mask-active', Boolean(enabled))
     }
+    const setSensitiveContentHidden = (hidden) => {
+      const nodes = document.querySelectorAll('[data-privacy-sensitive="true"]')
+      nodes.forEach((node) => {
+        node.hidden = Boolean(hidden)
+      })
+    }
     const isSensitiveRoute = () => (
       currentPathRef.current === '/chat' || currentPathRef.current === '/chat/info'
     )
     const activatePrivacyMask = () => {
       if (!isSensitiveRoute()) {
         setMaskClass(false)
+        setSensitiveContentHidden(false)
         return
       }
+      setSensitiveContentHidden(true)
       setMaskClass(true)
     }
     const deactivatePrivacyMask = () => {
       setMaskClass(false)
+      setSensitiveContentHidden(false)
     }
     const onVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
@@ -466,6 +475,7 @@ function App() {
         window.clearTimeout(edgeGestureTimer)
       }
       setMaskClass(false)
+      setSensitiveContentHidden(false)
     }
   }, [])
 
@@ -474,6 +484,10 @@ function App() {
     document.documentElement.classList.toggle('privacy-sensitive-route', isPrivacySensitiveRoute)
     if (!isPrivacySensitiveRoute) {
       document.documentElement.classList.remove('privacy-mask-active')
+      const nodes = document.querySelectorAll('[data-privacy-sensitive="true"]')
+      nodes.forEach((node) => {
+        node.hidden = false
+      })
     }
     return () => {
       document.documentElement.classList.remove('privacy-sensitive-route')
