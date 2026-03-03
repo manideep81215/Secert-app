@@ -365,6 +365,14 @@ function App() {
   useEffect(() => {
     if (typeof window === 'undefined' || typeof document === 'undefined') return undefined
 
+    const ua = window.navigator?.userAgent || ''
+    const isIos = /iPad|iPhone|iPod/.test(ua)
+    const isStandalone = Boolean(
+      window.matchMedia?.('(display-mode: standalone)').matches || window.navigator?.standalone === true
+    )
+    const isIosStandalonePwa = isIos && isStandalone
+    document.documentElement.classList.toggle('ios-standalone-pwa', isIosStandalonePwa)
+
     const setMaskClass = (enabled) => {
       document.documentElement.classList.toggle('privacy-mask-active', Boolean(enabled))
     }
@@ -372,13 +380,27 @@ function App() {
       currentPathRef.current === '/chat' || currentPathRef.current === '/chat/info'
     )
     const activatePrivacyMask = () => {
+      if (deferRevealTimer) {
+        window.clearTimeout(deferRevealTimer)
+        deferRevealTimer = null
+      }
       if (isSensitiveRoute()) {
         setMaskClass(true)
       } else {
         setMaskClass(false)
       }
     }
-    const deactivatePrivacyMask = () => setMaskClass(false)
+    let deferRevealTimer = null
+    const deactivatePrivacyMask = () => {
+      if (deferRevealTimer) {
+        window.clearTimeout(deferRevealTimer)
+      }
+      const delay = isIosStandalonePwa ? 140 : 0
+      deferRevealTimer = window.setTimeout(() => {
+        setMaskClass(false)
+        deferRevealTimer = null
+      }, delay)
+    }
     const onVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
         activatePrivacyMask()
@@ -388,6 +410,7 @@ function App() {
     }
     let disposed = false
     let appStateListener = null
+    let edgeGestureTimer = null
 
     const bindNativeAppState = async () => {
       try {
@@ -418,6 +441,29 @@ function App() {
     window.addEventListener('blur', activatePrivacyMask)
     window.addEventListener('pageshow', deactivatePrivacyMask)
     window.addEventListener('focus', deactivatePrivacyMask)
+
+    const onTouchStartCapture = (event) => {
+      if (!isIosStandalonePwa) return
+      if (!isSensitiveRoute()) return
+      const touch = event.touches?.[0]
+      if (!touch) return
+      const edgeInset = 24
+      const nearBottomEdge = touch.clientY >= (window.innerHeight - edgeInset)
+      if (!nearBottomEdge) return
+      activatePrivacyMask()
+      if (edgeGestureTimer) {
+        window.clearTimeout(edgeGestureTimer)
+      }
+      edgeGestureTimer = window.setTimeout(() => {
+        edgeGestureTimer = null
+        if (document.visibilityState === 'visible') {
+          deactivatePrivacyMask()
+        }
+      }, 280)
+    }
+
+    window.addEventListener('touchstart', onTouchStartCapture, true)
+
     bindNativeAppState()
     if (document.visibilityState === 'hidden') {
       activatePrivacyMask()
@@ -435,14 +481,26 @@ function App() {
       window.removeEventListener('blur', activatePrivacyMask)
       window.removeEventListener('pageshow', deactivatePrivacyMask)
       window.removeEventListener('focus', deactivatePrivacyMask)
+      window.removeEventListener('touchstart', onTouchStartCapture, true)
+      if (edgeGestureTimer) {
+        window.clearTimeout(edgeGestureTimer)
+      }
+      if (deferRevealTimer) {
+        window.clearTimeout(deferRevealTimer)
+      }
       setMaskClass(false)
+      document.documentElement.classList.remove('ios-standalone-pwa')
     }
   }, [])
 
   useEffect(() => {
     if (typeof document === 'undefined') return
+    document.documentElement.classList.toggle('privacy-sensitive-route', isPrivacySensitiveRoute)
     if (!isPrivacySensitiveRoute) {
       document.documentElement.classList.remove('privacy-mask-active')
+    }
+    return () => {
+      document.documentElement.classList.remove('privacy-sensitive-route')
     }
   }, [isPrivacySensitiveRoute])
 

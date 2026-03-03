@@ -58,11 +58,19 @@
   pointer-events: none;
   opacity: 0;
   visibility: hidden;
+  will-change: opacity;
+  transform: translateZ(0);
 }
 
 html.privacy-mask-active .app-privacy-screen {
   opacity: 1;
   visibility: visible;
+}
+
+/* iOS standalone needs a more opaque cover for app-switcher snapshots. */
+html.ios-standalone-pwa.privacy-mask-active .app-privacy-screen {
+  background: linear-gradient(145deg, #231b14, #19140f);
+  backdrop-filter: none;
 }
 
 .app-privacy-badge {
