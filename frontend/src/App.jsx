@@ -376,6 +376,13 @@ function App() {
     const setMaskClass = (enabled) => {
       document.documentElement.classList.toggle('privacy-mask-active', Boolean(enabled))
     }
+    const setBlurClass = (enabled) => {
+      const shouldBlur = Boolean(enabled) && (
+        currentPathRef.current === '/chat' || currentPathRef.current === '/chat/info'
+      )
+      document.documentElement.classList.toggle('blur-app', shouldBlur)
+      document.body.classList.toggle('blur-app', shouldBlur)
+    }
     const isSensitiveRoute = () => (
       currentPathRef.current === '/chat' || currentPathRef.current === '/chat/info'
     )
@@ -386,8 +393,10 @@ function App() {
       }
       if (isSensitiveRoute()) {
         setMaskClass(true)
+        setBlurClass(true)
       } else {
         setMaskClass(false)
+        setBlurClass(false)
       }
     }
     let deferRevealTimer = null
@@ -398,6 +407,7 @@ function App() {
       const delay = isIosStandalonePwa ? 140 : 0
       deferRevealTimer = window.setTimeout(() => {
         setMaskClass(false)
+        setBlurClass(false)
         deferRevealTimer = null
       }, delay)
     }
@@ -489,6 +499,7 @@ function App() {
         window.clearTimeout(deferRevealTimer)
       }
       setMaskClass(false)
+      setBlurClass(false)
       document.documentElement.classList.remove('ios-standalone-pwa')
     }
   }, [])
@@ -498,6 +509,8 @@ function App() {
     document.documentElement.classList.toggle('privacy-sensitive-route', isPrivacySensitiveRoute)
     if (!isPrivacySensitiveRoute) {
       document.documentElement.classList.remove('privacy-mask-active')
+      document.documentElement.classList.remove('blur-app')
+      document.body.classList.remove('blur-app')
     }
     return () => {
       document.documentElement.classList.remove('privacy-sensitive-route')
