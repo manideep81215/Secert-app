@@ -42,6 +42,7 @@ function App() {
   const [installPromptEvent, setInstallPromptEvent] = useState(null)
   const [isAppInstalled, setIsAppInstalled] = useState(false)
   const [showIosInstallHelp, setShowIosInstallHelp] = useState(false)
+  const [isPrivacyMaskActive, setIsPrivacyMaskActive] = useState(false)
   const refreshTimerRef = useRef(null)
   const isFullBleedRoute =
     location.pathname === '/auth' ||
@@ -361,6 +362,40 @@ function App() {
   }, [flow?.token])
 
   useEffect(() => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return undefined
+    const cap = window.Capacitor
+    const isNative = typeof cap?.isNativePlatform === 'function'
+      ? cap.isNativePlatform()
+      : cap?.getPlatform?.() === 'android' || cap?.getPlatform?.() === 'ios'
+
+    // Native Android uses FLAG_SECURE in MainActivity for robust protection.
+    if (isNative) return undefined
+
+    const activatePrivacyMask = () => setIsPrivacyMaskActive(true)
+    const deactivatePrivacyMask = () => setIsPrivacyMaskActive(false)
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        activatePrivacyMask()
+      } else {
+        deactivatePrivacyMask()
+      }
+    }
+
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    window.addEventListener('pagehide', activatePrivacyMask)
+    window.addEventListener('blur', activatePrivacyMask)
+    window.addEventListener('pageshow', deactivatePrivacyMask)
+    window.addEventListener('focus', deactivatePrivacyMask)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      window.removeEventListener('pagehide', activatePrivacyMask)
+      window.removeEventListener('blur', activatePrivacyMask)
+      window.removeEventListener('pageshow', deactivatePrivacyMask)
+      window.removeEventListener('focus', deactivatePrivacyMask)
+    }
+  }, [])
+
+  useEffect(() => {
     if (!flow?.token) return undefined
 
     const clearNow = () => {
@@ -470,6 +505,12 @@ function App() {
         limit={1}
         pauseOnFocusLoss={false}
       />
+
+      {isPrivacyMaskActive && (
+        <div className="app-privacy-screen" aria-hidden="true">
+          <div className="app-privacy-badge">Simp Games Quest</div>
+        </div>
+      )}
     </div>
   )
 }

@@ -43,3 +43,29 @@
   color: #fff;
   background: linear-gradient(90deg, var(--accent-dark), #f59517);
 }
+
+.app-privacy-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(circle at 30% 25%, rgba(255, 208, 132, 0.2), rgba(255, 208, 132, 0) 42%),
+    linear-gradient(145deg, rgba(43, 35, 28, 0.95), rgba(27, 21, 17, 0.97));
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+}
+
+.app-privacy-badge {
+  padding: 0.85rem 1.2rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 218, 161, 0.45);
+  color: #f7e5c6;
+  background: rgba(44, 33, 24, 0.7);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.28);
+}
