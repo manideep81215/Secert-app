@@ -44,27 +44,14 @@
   background: linear-gradient(90deg, var(--accent-dark), #f59517);
 }
 
-html.blur-app #root {
-  filter: blur(20px);
-  transform: translateZ(0);
-}
-
 .app-privacy-screen {
   position: fixed;
   inset: 0;
-  z-index: 2147483647;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background:
-    radial-gradient(circle at 30% 25%, rgba(255, 208, 132, 0.2), rgba(255, 208, 132, 0) 42%),
-    linear-gradient(145deg, rgba(43, 35, 28, 0.95), rgba(27, 21, 17, 0.97));
-  backdrop-filter: blur(8px);
+  z-index: 99999;
+  background: #000;
   pointer-events: none;
   opacity: 0;
   visibility: hidden;
-  will-change: opacity;
-  transform: translateZ(0);
 }
 
 html.privacy-mask-active .app-privacy-screen {
@@ -72,26 +59,9 @@ html.privacy-mask-active .app-privacy-screen {
   visibility: visible;
 }
 
-/* iOS standalone needs a more opaque cover for app-switcher snapshots. */
-html.ios-standalone-pwa.privacy-mask-active .app-privacy-screen {
-  background: linear-gradient(145deg, #231b14, #19140f);
-  backdrop-filter: none;
-}
-
-.app-privacy-badge {
-  padding: 0.85rem 1.2rem;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 218, 161, 0.45);
-  color: #f7e5c6;
-  background: rgba(44, 33, 24, 0.7);
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.28);
-}
-
-.app-toast-container {
-  width: min(92vw, 680px);
+.app-toast-container.Toastify__toast-container {
+  --app-toast-width: min(92vw, 680px);
+  width: var(--app-toast-width);
   padding: 0;
 }
 
@@ -133,4 +103,24 @@ html.ios-standalone-pwa.privacy-mask-active .app-privacy-screen {
   font-size: clamp(1.02rem, 2.8vw, 2rem);
   font-weight: 500;
   line-height: 1.25;
+}
+
+@media only screen and (max-width: 480px) {
+  .app-toast-container.Toastify__toast-container {
+    --app-toast-width: min(92vw, 420px);
+    width: var(--app-toast-width) !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    margin: 0 !important;
+  }
+
+  .app-toast-container.Toastify__toast-container--top-center {
+    top: max(8px, env(safe-area-inset-top)) !important;
+  }
+
+  .app-toast {
+    width: 100% !important;
+    margin: 0 !important;
+    border-radius: 16px !important;
+  }
 }

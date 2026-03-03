@@ -365,51 +365,21 @@ function App() {
   useEffect(() => {
     if (typeof window === 'undefined' || typeof document === 'undefined') return undefined
 
-    const ua = window.navigator?.userAgent || ''
-    const isIos = /iPad|iPhone|iPod/.test(ua)
-    const isStandalone = Boolean(
-      window.matchMedia?.('(display-mode: standalone)').matches || window.navigator?.standalone === true
-    )
-    const isIosStandalonePwa = isIos && isStandalone
-    document.documentElement.classList.toggle('ios-standalone-pwa', isIosStandalonePwa)
-
     const setMaskClass = (enabled) => {
       document.documentElement.classList.toggle('privacy-mask-active', Boolean(enabled))
-    }
-    const setBlurClass = (enabled) => {
-      const shouldBlur = Boolean(enabled) && (
-        currentPathRef.current === '/chat' || currentPathRef.current === '/chat/info'
-      )
-      document.documentElement.classList.toggle('blur-app', shouldBlur)
-      document.body.classList.toggle('blur-app', shouldBlur)
     }
     const isSensitiveRoute = () => (
       currentPathRef.current === '/chat' || currentPathRef.current === '/chat/info'
     )
     const activatePrivacyMask = () => {
-      if (deferRevealTimer) {
-        window.clearTimeout(deferRevealTimer)
-        deferRevealTimer = null
-      }
-      if (isSensitiveRoute()) {
-        setMaskClass(true)
-        setBlurClass(true)
-      } else {
+      if (!isSensitiveRoute()) {
         setMaskClass(false)
-        setBlurClass(false)
+        return
       }
+      setMaskClass(true)
     }
-    let deferRevealTimer = null
     const deactivatePrivacyMask = () => {
-      if (deferRevealTimer) {
-        window.clearTimeout(deferRevealTimer)
-      }
-      const delay = isIosStandalonePwa ? 140 : 0
-      deferRevealTimer = window.setTimeout(() => {
-        setMaskClass(false)
-        setBlurClass(false)
-        deferRevealTimer = null
-      }, delay)
+      setMaskClass(false)
     }
     const onVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
@@ -453,7 +423,6 @@ function App() {
     window.addEventListener('focus', deactivatePrivacyMask)
 
     const onTouchStartCapture = (event) => {
-      if (!isIosStandalonePwa) return
       if (!isSensitiveRoute()) return
       const touch = event.touches?.[0]
       if (!touch) return
@@ -496,12 +465,7 @@ function App() {
       if (edgeGestureTimer) {
         window.clearTimeout(edgeGestureTimer)
       }
-      if (deferRevealTimer) {
-        window.clearTimeout(deferRevealTimer)
-      }
       setMaskClass(false)
-      setBlurClass(false)
-      document.documentElement.classList.remove('ios-standalone-pwa')
     }
   }, [])
 
@@ -510,8 +474,6 @@ function App() {
     document.documentElement.classList.toggle('privacy-sensitive-route', isPrivacySensitiveRoute)
     if (!isPrivacySensitiveRoute) {
       document.documentElement.classList.remove('privacy-mask-active')
-      document.documentElement.classList.remove('blur-app')
-      document.body.classList.remove('blur-app')
     }
     return () => {
       document.documentElement.classList.remove('privacy-sensitive-route')
@@ -638,11 +600,7 @@ function App() {
         )}
       />
 
-      {isPrivacySensitiveRoute && (
-        <div className="app-privacy-screen" aria-hidden="true">
-          <div className="app-privacy-badge">Simp Games Quest</div>
-        </div>
-      )}
+      <div className="app-privacy-screen" aria-hidden="true" />
     </div>
   )
 }
