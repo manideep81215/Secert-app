@@ -51,6 +51,8 @@ function App() {
     location.pathname === '/verify' ||
     location.pathname === '/users' ||
     location.pathname.startsWith('/chat')
+  const isPrivacySensitiveRoute =
+    location.pathname === '/chat' || location.pathname === '/chat/info'
 
   useEffect(() => {
     isAuthenticatedRef.current = isAuthenticated
@@ -363,15 +365,17 @@ function App() {
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof document === 'undefined') return undefined
-    const cap = window.Capacitor
-    const isNative = typeof cap?.isNativePlatform === 'function'
-      ? cap.isNativePlatform()
-      : cap?.getPlatform?.() === 'android' || cap?.getPlatform?.() === 'ios'
 
-    // Native Android uses FLAG_SECURE in MainActivity for robust protection.
-    if (isNative) return undefined
-
-    const activatePrivacyMask = () => setIsPrivacyMaskActive(true)
+    const isSensitiveRoute = () => (
+      location.pathname === '/chat' || location.pathname === '/chat/info'
+    )
+    const activatePrivacyMask = () => {
+      if (isSensitiveRoute()) {
+        setIsPrivacyMaskActive(true)
+      } else {
+        setIsPrivacyMaskActive(false)
+      }
+    }
     const deactivatePrivacyMask = () => setIsPrivacyMaskActive(false)
     const onVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
@@ -380,20 +384,51 @@ function App() {
         deactivatePrivacyMask()
       }
     }
+    let disposed = false
+    let appStateListener = null
+
+    const bindNativeAppState = async () => {
+      try {
+        const cap = window.Capacitor
+        const isNative = typeof cap?.isNativePlatform === 'function'
+          ? cap.isNativePlatform()
+          : cap?.getPlatform?.() === 'android' || cap?.getPlatform?.() === 'ios'
+        if (!isNative) return
+        const mod = await import('@capacitor/app')
+        if (disposed) return
+        appStateListener = await mod.App.addListener('appStateChange', ({ isActive }) => {
+          if (isActive) {
+            deactivatePrivacyMask()
+          } else {
+            activatePrivacyMask()
+          }
+        })
+      } catch {
+        // Ignore native app-state listener failures.
+      }
+    }
 
     document.addEventListener('visibilitychange', onVisibilityChange)
     window.addEventListener('pagehide', activatePrivacyMask)
     window.addEventListener('blur', activatePrivacyMask)
     window.addEventListener('pageshow', deactivatePrivacyMask)
     window.addEventListener('focus', deactivatePrivacyMask)
+    bindNativeAppState()
+    if (document.visibilityState === 'hidden') {
+      activatePrivacyMask()
+    } else {
+      deactivatePrivacyMask()
+    }
     return () => {
+      disposed = true
+      appStateListener?.remove?.()
       document.removeEventListener('visibilitychange', onVisibilityChange)
       window.removeEventListener('pagehide', activatePrivacyMask)
       window.removeEventListener('blur', activatePrivacyMask)
       window.removeEventListener('pageshow', deactivatePrivacyMask)
       window.removeEventListener('focus', deactivatePrivacyMask)
     }
-  }, [])
+  }, [location.pathname])
 
   useEffect(() => {
     if (!flow?.token) return undefined
@@ -506,7 +541,7 @@ function App() {
         pauseOnFocusLoss={false}
       />
 
-      {isPrivacyMaskActive && (
+      {isPrivacyMaskActive && isPrivacySensitiveRoute && (
         <div className="app-privacy-screen" aria-hidden="true">
           <div className="app-privacy-badge">Simp Games Quest</div>
         </div>
