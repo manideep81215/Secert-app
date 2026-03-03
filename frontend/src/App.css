@@ -44,18 +44,93 @@
   background: linear-gradient(90deg, var(--accent-dark), #f59517);
 }
 
+html.blur-app #root {
+  filter: blur(20px);
+  transform: translateZ(0);
+}
+
 .app-privacy-screen {
   position: fixed;
   inset: 0;
   z-index: 2147483647;
-  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(circle at 30% 25%, rgba(255, 208, 132, 0.2), rgba(255, 208, 132, 0) 42%),
+    linear-gradient(145deg, rgba(43, 35, 28, 0.95), rgba(27, 21, 17, 0.97));
+  backdrop-filter: blur(8px);
   pointer-events: none;
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.1s ease;
+  will-change: opacity;
+  transform: translateZ(0);
 }
 
 html.privacy-mask-active .app-privacy-screen {
   opacity: 1;
   visibility: visible;
+}
+
+/* iOS standalone needs a more opaque cover for app-switcher snapshots. */
+html.ios-standalone-pwa.privacy-mask-active .app-privacy-screen {
+  background: linear-gradient(145deg, #231b14, #19140f);
+  backdrop-filter: none;
+}
+
+.app-privacy-badge {
+  padding: 0.85rem 1.2rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 218, 161, 0.45);
+  color: #f7e5c6;
+  background: rgba(44, 33, 24, 0.7);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.28);
+}
+
+.app-toast-container {
+  width: min(92vw, 680px);
+  padding: 0;
+}
+
+.app-toast {
+  margin-top: 0.4rem;
+  min-height: 72px;
+  border-radius: 18px !important;
+  border: 1px solid rgba(95, 118, 176, 0.55);
+  background: #1d2540 !important;
+  color: #f7f9ff !important;
+  box-shadow: 0 16px 36px rgba(8, 12, 24, 0.48);
+  padding: 0.95rem 1.1rem !important;
+}
+
+.app-toast .Toastify__toast-icon {
+  margin-inline-end: 0.85rem;
+  width: auto;
+}
+
+.app-toast-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  background: #16c985;
+  color: #ffffff;
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+}
+
+.app-toast-body {
+  margin: 0;
+  padding: 0;
+  color: inherit;
+  font-size: clamp(1.02rem, 2.8vw, 2rem);
+  font-weight: 500;
+  line-height: 1.25;
 }
