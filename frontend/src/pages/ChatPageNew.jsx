@@ -1931,9 +1931,17 @@ function ChatPageNew() {
     })
   }
 
-  const filteredUsers = useMemo(
-    () => users
-      .filter((user) => (user?.username || '').toLowerCase().includes(searchQuery.toLowerCase()))
+  const filteredUsers = useMemo(() => {
+    const normalizedSearch = searchQuery.toLowerCase().trim()
+    const isSearching = normalizedSearch.length > 0
+    return users
+      .filter((user) => {
+        const username = (user?.username || '').toLowerCase()
+        const matchesSearch = username.includes(normalizedSearch)
+        if (isSearching) return matchesSearch
+        const hasConversation = Boolean((user?.lastMessage || '').trim()) || Boolean((user?.timestamp || '').trim())
+        return hasConversation
+      })
       .map((user) => {
         const presence = getResolvedPresence(user.username, user.status)
         const isTyping = Boolean(typingMap[user.username])
@@ -1946,9 +1954,8 @@ function ChatPageNew() {
           _hasUnread: hasUnread,
           _presenceTime: presenceTime,
         }
-      }),
-    [users, searchQuery, statusMap, typingMap, unreadMap, presenceTick]
-  )
+      })
+  }, [users, searchQuery, statusMap, typingMap, unreadMap, presenceTick])
   const detailMediaItems = useMemo(
     () => messages.filter((msg) => msg.type && (msg.type === 'image' || msg.type === 'video') && msg.mediaUrl),
     [messages]
