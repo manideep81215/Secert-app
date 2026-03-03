@@ -27,6 +27,9 @@ const ACTIVE_CHAT_PEER_KEY_PREFIX = 'active_chat_peer_v1:'
 const EDIT_WINDOW_MS = 15 * 60 * 1000
 const MESSAGE_ACTION_LONG_PRESS_MS = 1000
 const TYPING_STALE_MS = 1400
+const AUTO_REFRESH_DEBOUNCE_MS = 1200
+const TEXT_SEND_WAIT_MS = 8000
+const CONVERSATION_FETCH_RETRY_LIMIT = 4
 const QUICK_REACTIONS = [
   { code: 'heart', emoji: '❤️' },
   { code: 'laugh', emoji: '😂' },
@@ -113,6 +116,7 @@ function ChatPageNew() {
   const messagesEndRef = useRef(null)
   const keyboardBottomLockRef = useRef({ rafId: 0, until: 0 })
   const selectedUserRef = useRef(null)
+  const socketRef = useRef(null)
   const attachMenuRef = useRef(null)
   const typingTimeoutRef = useRef(null)
   const typingStateRef = useRef(false)
@@ -139,6 +143,7 @@ function ChatPageNew() {
   const wsResumeSuppressUntilRef = useRef(0)
   const wsLastHiddenAtRef = useRef(typeof Date !== 'undefined' ? Date.now() : 0)
   const wsErrorTimerRef = useRef(null)
+  const lastAutoRefreshAtRef = useRef(0)
   const offlineSinceRef = useRef({})
   const maxViewportHeightRef = useRef(0)
   const keyboardSettleUntilRef = useRef(0)
@@ -219,6 +224,8 @@ function ChatPageNew() {
           status: 'offline',
           lastMessage: String(row.lastMessage || ''),
           timestamp: String(row.timestamp || ''),
+          hasConversation: Boolean(row.hasConversation) || Boolean(String(row.lastMessage || '').trim()) || Boolean(String(row.timestamp || '').trim()),
+          lastCreatedAt: Number(row.lastCreatedAt || 0) || 0,
         }))
         .filter((row) => row.username)
     } catch {
@@ -234,6 +241,8 @@ function ChatPageNew() {
           name: row.name || '',
           lastMessage: row.lastMessage || '',
           timestamp: row.timestamp || '',
+          hasConversation: Boolean(row.hasConversation) || Boolean(String(row.lastMessage || '').trim()) || Boolean(String(row.timestamp || '').trim()),
+          lastCreatedAt: Number(row.lastCreatedAt || 0) || 0,
         }))
       window.localStorage.setItem(getUsersCacheKey(), JSON.stringify(serialized))
     } catch {
@@ -393,6 +402,38 @@ function ChatPageNew() {
     if (messageType === 'voice') return 'Sent a voice message'
     if (messageType === 'file') return fileNameValue ? `Sent file: ${fileNameValue}` : 'Sent a file'
     return textValue || 'New message'
+  }
+  const summarizeConversationForList = (rows) => {
+    if (!Array.isArray(rows) || !rows.length) {
+      return {
+        hasConversation: false,
+        lastMessage: '',
+        timestamp: '',
+        lastCreatedAt: 0,
+      }
+    }
+    let latest = rows[rows.length - 1]
+    let latestCreatedAt = Number(latest?.createdAt || latest?.clientCreatedAt || 0)
+    for (const row of rows) {
+      const createdAt = Number(row?.createdAt || row?.clientCreatedAt || 0)
+      if (createdAt >= latestCreatedAt) {
+        latest = row
+        latestCreatedAt = createdAt
+      }
+    }
+    const preview = getMessagePreview(
+      latest?.type || null,
+      latest?.text || latest?.message || '',
+      latest?.fileName || null
+    )
+    return {
+      hasConversation: true,
+      lastMessage: String(preview || 'Conversation started').trim() || 'Conversation started',
+      timestamp: latestCreatedAt
+        ? formatTimestamp(latestCreatedAt)
+        : String(latest?.timestamp || '').trim(),
+      lastCreatedAt: latestCreatedAt || Date.now(),
+    }
   }
   const decodeReaction = (value) => {
     if (!value) return null
@@ -612,7 +653,7 @@ function ChatPageNew() {
     return presence
   }
   const selectedPresence = selectedUser ? getResolvedPresence(selectedUser.username, selectedUser.status) : { status: 'offline', lastSeenAt: null }
-  const selectedTyping = selectedUser ? Boolean(typingMap[selectedUser.username]) : false
+  const selectedTyping = selectedUser ? Boolean(typingMap[toUserKey(selectedUser.username)]) : false
   const getLastOutgoingAt = (peerUsername) => {
     if (!peerUsername) return 0
     let latest = 0
@@ -1091,27 +1132,95 @@ function ChatPageNew() {
 
   useEffect(() => {
     if (!flow.token || !flow.username) return
+    let cancelled = false
 
     const loadUsersFromDb = async () => {
       try {
         const dbUsers = await getAllUsers(flow.token)
+        if (cancelled) return
         const me = (flow.username || '').toLowerCase()
+        const cachedByKey = readUsersCache().reduce((acc, row) => {
+          acc[toUserKey(row.username)] = row
+          return acc
+        }, {})
         const list = (dbUsers || [])
           .filter((user) => {
             const username = (user?.username || '').trim()
             return username && username.toLowerCase() !== me
           })
-          .map((user) => ({
-            id: user.id,
-            username: (user.username || '').trim(),
-            name: (user.name || '').trim(),
-            status: 'offline',
-            lastMessage: '',
-            timestamp: '',
-          }))
+          .map((user) => {
+            const username = (user.username || '').trim()
+            const cacheRow = cachedByKey[toUserKey(username)] || {}
+            const hasConversation = Boolean(cacheRow.hasConversation)
+              || Boolean(String(cacheRow.lastMessage || '').trim())
+              || Boolean(String(cacheRow.timestamp || '').trim())
+            return {
+              id: user.id,
+              username,
+              name: (user.name || '').trim(),
+              status: 'offline',
+              lastMessage: String(cacheRow.lastMessage || ''),
+              timestamp: String(cacheRow.timestamp || ''),
+              hasConversation,
+              lastCreatedAt: Number(cacheRow.lastCreatedAt || 0) || 0,
+            }
+          })
 
-        setUsers(list)
-        writeUsersCache(list)
+        setUsers((prev) => {
+          const prevByKey = (prev || []).reduce((acc, row) => {
+            acc[toUserKey(row.username)] = row
+            return acc
+          }, {})
+          return list.map((user) => {
+            const prevRow = prevByKey[toUserKey(user.username)]
+            if (!prevRow) return user
+            const prevLastCreatedAt = Number(prevRow.lastCreatedAt || 0) || 0
+            const nextLastCreatedAt = Number(user.lastCreatedAt || 0) || 0
+            const keepPrevPreview = prevLastCreatedAt >= nextLastCreatedAt
+              && (Boolean(prevRow.hasConversation)
+              || Boolean(String(prevRow.lastMessage || '').trim())
+              || Boolean(String(prevRow.timestamp || '').trim()))
+            if (!keepPrevPreview) return user
+            return {
+              ...user,
+              lastMessage: prevRow.lastMessage || user.lastMessage || '',
+              timestamp: prevRow.timestamp || user.timestamp || '',
+              hasConversation: Boolean(prevRow.hasConversation)
+                || Boolean(String(prevRow.lastMessage || '').trim())
+                || Boolean(String(prevRow.timestamp || '').trim())
+                || Boolean(user.hasConversation),
+              lastCreatedAt: Math.max(prevLastCreatedAt, nextLastCreatedAt),
+            }
+          })
+        })
+
+        const usersNeedingHydration = list.filter((user) => !Boolean(user.hasConversation))
+        if (!usersNeedingHydration.length) return
+        const hydratedByKey = {}
+        const hydratedResults = await Promise.allSettled(
+          usersNeedingHydration.map(async (user) => {
+            const rows = await getConversation(flow.token, user.username)
+            return {
+              userKey: toUserKey(user.username),
+              summary: summarizeConversationForList(rows),
+            }
+          })
+        )
+        if (cancelled) return
+        hydratedResults.forEach((result) => {
+          if (result.status !== 'fulfilled') return
+          if (!result.value?.summary?.hasConversation) return
+          hydratedByKey[result.value.userKey] = result.value.summary
+        })
+        if (!Object.keys(hydratedByKey).length) return
+        setUsers((prev) => prev.map((user) => {
+          const hydrated = hydratedByKey[toUserKey(user.username)]
+          if (!hydrated) return user
+          const prevLastCreatedAt = Number(user.lastCreatedAt || 0) || 0
+          const nextLastCreatedAt = Number(hydrated.lastCreatedAt || 0) || 0
+          if (prevLastCreatedAt > nextLastCreatedAt && Boolean(user.hasConversation)) return user
+          return { ...user, ...hydrated }
+        }))
         // Don't auto-select user - let user manually select from list
       } catch (error) {
         console.error('Failed loading users from database', error)
@@ -1120,6 +1229,9 @@ function ChatPageNew() {
     }
 
     loadUsersFromDb()
+    return () => {
+      cancelled = true
+    }
   }, [flow.token, flow.username, isMobileView, usersReloadTick])
 
   useEffect(() => {
@@ -1153,7 +1265,7 @@ function ChatPageNew() {
       setMessages((prev) => {
         const pendingUploads = (prev || []).filter((msg) =>
           msg?.sender === 'user' &&
-          msg?.deliveryStatus === 'uploading' &&
+          (msg?.deliveryStatus === 'uploading' || msg?.deliveryStatus === 'failed') &&
           msg?.tempId
         )
         if (!pendingUploads.length) return cachedRows
@@ -1166,14 +1278,14 @@ function ChatPageNew() {
       getConversation(flow.token, targetUsername)
       .then((rows) => {
         if (cancelled) return
-        if (selectedUserRef.current?.username !== targetUsername) return
+        if (toUserKey(selectedUserRef.current?.username) !== targetKey) return
         const normalized = normalizeConversationRows(rows, clearCutoff)
         conversationCacheRef.current[targetKey] = normalized
         writeConversationCache(targetUsername, normalized)
         setMessages((prev) => {
           const pendingUploads = (prev || []).filter((msg) =>
             msg?.sender === 'user' &&
-            msg?.deliveryStatus === 'uploading' &&
+            (msg?.deliveryStatus === 'uploading' || msg?.deliveryStatus === 'failed') &&
             msg?.tempId
           )
           if (!pendingUploads.length) return normalized
@@ -1182,7 +1294,7 @@ function ChatPageNew() {
         const latestIncoming = normalized
           .filter((msg) => msg.sender === 'other')
           .reduce((max, msg) => Math.max(max, Number(msg.createdAt || msg.clientCreatedAt || 0)), 0)
-        if (latestIncoming && socket?.connected) {
+        if (latestIncoming) {
           publishReadReceipt(targetUsername, latestIncoming)
         }
         setReplyingTo(null)
@@ -1205,9 +1317,9 @@ function ChatPageNew() {
           code === 'ECONNABORTED' ||
           code === 'ETIMEDOUT'
 
-        if (transientFailure && attempt < 2) {
+        if (transientFailure && attempt < CONVERSATION_FETCH_RETRY_LIMIT) {
           attempt += 1
-          const delay = 500 * attempt
+          const delay = Math.min(2500, 450 * (2 ** (attempt - 1)))
           setTimeout(() => {
             if (!cancelled) fetchConversation()
           }, delay)
@@ -1237,8 +1349,11 @@ function ChatPageNew() {
   useEffect(() => {
     if (!flow.token || !flow.username) return
     const triggerRefresh = () => {
-      setUsersReloadTick(Date.now())
-      setConversationReloadTick(Date.now())
+      const now = Date.now()
+      if (now - Number(lastAutoRefreshAtRef.current || 0) < AUTO_REFRESH_DEBOUNCE_MS) return
+      lastAutoRefreshAtRef.current = now
+      setUsersReloadTick(now)
+      setConversationReloadTick(now)
     }
     const onVisibilityChange = () => {
       if (document.visibilityState !== 'visible') return
@@ -1332,6 +1447,9 @@ function ChatPageNew() {
           destination: '/app/user.online',
           body: JSON.stringify({ username: authUsername }),
         })
+        if (selectedUserRef.current?.username) {
+          setConversationReloadTick(Date.now())
+        }
 
         const consumeStatus = (frame) => {
           try {
@@ -1362,13 +1480,14 @@ function ChatPageNew() {
             const fromUsername = data?.fromUsername
             const text = data?.message
             if (!fromUsername || !text) return
+            const fromUserKey = toUserKey(fromUsername)
             const incomingCreatedAt = Number(data?.createdAt || Date.now())
             const clearCutoff = getConversationClearCutoff(fromUsername)
             if (clearCutoff && incomingCreatedAt <= clearCutoff) {
               return
             }
 
-            setTypingMap((prev) => ({ ...prev, [fromUsername]: false }))
+            setTypingMap((prev) => ({ ...prev, [fromUserKey]: false }))
 
             const incoming = {
               sender: 'other',
@@ -1398,13 +1517,13 @@ function ChatPageNew() {
 
             setUsers((prev) =>
               prev.map((user) =>
-                user.username === fromUsername
-                  ? { ...user, lastMessage: text, timestamp: getTimeLabel() }
+                toUserKey(user.username) === fromUserKey
+                  ? { ...user, lastMessage: text, timestamp: getTimeLabel(), hasConversation: true, lastCreatedAt: incomingCreatedAt || Date.now() }
                   : user
               )
             )
 
-            if (selectedUserRef.current?.username === fromUsername) {
+            if (toUserKey(selectedUserRef.current?.username) === fromUserKey) {
               // Update existing message or add new one
               setMessages((prev) => {
                 const existingIndex = prev.findIndex((msg) => isSameIncomingMessage(msg, incoming))
@@ -1435,20 +1554,21 @@ function ChatPageNew() {
             const fromUsername = payload?.fromUsername
             const typing = Boolean(payload?.typing)
             if (!fromUsername) return
-            setTypingMap((prev) => ({ ...prev, [fromUsername]: typing }))
+            const fromUserKey = toUserKey(fromUsername)
+            setTypingMap((prev) => ({ ...prev, [fromUserKey]: typing }))
             if (typing) {
               setStatusMap((prev) => ({ ...prev, [toUserKey(fromUsername)]: { status: 'online', lastSeenAt: null } }))
               updatePresenceLastSeen(fromUsername, Date.now())
-              if (incomingTypingTimeoutsRef.current[fromUsername]) {
-                clearTimeout(incomingTypingTimeoutsRef.current[fromUsername])
+              if (incomingTypingTimeoutsRef.current[fromUserKey]) {
+                clearTimeout(incomingTypingTimeoutsRef.current[fromUserKey])
               }
-              incomingTypingTimeoutsRef.current[fromUsername] = setTimeout(() => {
-                setTypingMap((prev) => ({ ...prev, [fromUsername]: false }))
-                delete incomingTypingTimeoutsRef.current[fromUsername]
+              incomingTypingTimeoutsRef.current[fromUserKey] = setTimeout(() => {
+                setTypingMap((prev) => ({ ...prev, [fromUserKey]: false }))
+                delete incomingTypingTimeoutsRef.current[fromUserKey]
               }, TYPING_STALE_MS)
-            } else if (incomingTypingTimeoutsRef.current[fromUsername]) {
-              clearTimeout(incomingTypingTimeoutsRef.current[fromUsername])
-              delete incomingTypingTimeoutsRef.current[fromUsername]
+            } else if (incomingTypingTimeoutsRef.current[fromUserKey]) {
+              clearTimeout(incomingTypingTimeoutsRef.current[fromUserKey])
+              delete incomingTypingTimeoutsRef.current[fromUserKey]
             }
           } catch (error) {
             console.error('Failed parsing typing payload', error)
@@ -1583,6 +1703,7 @@ function ChatPageNew() {
 
     client.activate()
     setSocket(client)
+    socketRef.current = client
 
     return () => {
       if (wsErrorTimerRef.current) {
@@ -1594,6 +1715,9 @@ function ChatPageNew() {
           destination: '/app/user.offline',
           body: JSON.stringify({ username: authUsername }),
         })
+      }
+      if (socketRef.current === client) {
+        socketRef.current = null
       }
       client.deactivate()
     }
@@ -1847,8 +1971,9 @@ function ChatPageNew() {
 
   const publishTyping = (typing, force = false, targetUsername = null) => {
     const toUsername = (targetUsername || selectedUser?.username || '').trim()
+    const activeSocket = socketRef.current
     if (!toUsername) return
-    if (!socket?.connected) {
+    if (!activeSocket?.connected) {
       if (!typing) {
         typingStateRef.current = false
         if (typingTargetRef.current === toUsername) {
@@ -1860,7 +1985,7 @@ function ChatPageNew() {
     if (!force && typingTargetRef.current === toUsername && typingStateRef.current === typing) return
     typingStateRef.current = typing
     typingTargetRef.current = typing ? toUsername : (typingTargetRef.current === toUsername ? null : typingTargetRef.current)
-    socket.publish({
+    activeSocket.publish({
       destination: '/app/chat.typing',
       body: JSON.stringify({
         toUsername,
@@ -1914,14 +2039,15 @@ function ChatPageNew() {
   }, [socket, selectedUser?.username])
 
   const publishReadReceipt = (peerUsername, readAtMs) => {
-    if (!socket?.connected || !peerUsername) return
+    const activeSocket = socketRef.current
+    if (!activeSocket?.connected || !peerUsername) return
     const nextReadAt = Number(readAtMs || 0)
     if (!nextReadAt) return
     const key = peerUsername.toLowerCase()
     const alreadySent = Number(lastPublishedReadAtRef.current[key] || 0)
     if (nextReadAt <= alreadySent) return
     lastPublishedReadAtRef.current[key] = nextReadAt
-    socket.publish({
+    activeSocket.publish({
       destination: '/app/chat.read',
       body: JSON.stringify({
         peerUsername,
@@ -1939,12 +2065,15 @@ function ChatPageNew() {
         const username = (user?.username || '').toLowerCase()
         const matchesSearch = username.includes(normalizedSearch)
         if (isSearching) return matchesSearch
-        const hasConversation = Boolean((user?.lastMessage || '').trim()) || Boolean((user?.timestamp || '').trim())
+        if (toUserKey(selectedUser?.username) === toUserKey(user?.username)) return true
+        const hasConversation = Boolean(user?.hasConversation)
+          || Boolean((user?.lastMessage || '').trim())
+          || Boolean((user?.timestamp || '').trim())
         return hasConversation
       })
       .map((user) => {
         const presence = getResolvedPresence(user.username, user.status)
-        const isTyping = Boolean(typingMap[user.username])
+        const isTyping = Boolean(typingMap[toUserKey(user.username)])
         const presenceTime = presence.status === 'online' ? 'online' : toShortLastSeen(presence.lastSeenAt)
         const hasUnread = Boolean(unreadMap[toUserKey(user.username)])
         return {
@@ -1955,7 +2084,7 @@ function ChatPageNew() {
           _presenceTime: presenceTime,
         }
       })
-  }, [users, searchQuery, statusMap, typingMap, unreadMap, presenceTick])
+  }, [users, searchQuery, statusMap, typingMap, unreadMap, presenceTick, selectedUser?.username])
   const detailMediaItems = useMemo(
     () => messages.filter((msg) => msg.type && (msg.type === 'image' || msg.type === 'video') && msg.mediaUrl),
     [messages]
@@ -2103,14 +2232,16 @@ function ChatPageNew() {
 
     setUsers((prev) =>
       prev.map((user) =>
-        user.username === selectedUser.username
-          ? { ...user, lastMessage: text, timestamp: getTimeLabel() }
+        toUserKey(user.username) === toUserKey(selectedUser.username)
+          ? { ...user, lastMessage: text, timestamp: getTimeLabel(), hasConversation: true, lastCreatedAt: createdAtNow }
           : user
       )
     )
 
-    if (socket?.connected) {
-      socket.publish({
+    const isRealtimeReady = socketRef.current?.connected || await waitForSocketConnected(TEXT_SEND_WAIT_MS, 250)
+    const activeSocket = socketRef.current
+    if (isRealtimeReady && activeSocket?.connected) {
+      activeSocket.publish({
         destination: '/app/chat.send',
         body: JSON.stringify({
           toUsername: selectedUser.username,
@@ -2129,7 +2260,7 @@ function ChatPageNew() {
       }, 10000)
     } else {
       setMessages((prev) => prev.map((msg) => (msg.tempId === tempId ? { ...msg, deliveryStatus: 'failed' } : msg)))
-      notify.error('Realtime server disconnected. Message saved locally only.')
+      notify.error('Realtime server disconnected. Message queued locally, tap resend when connection returns.')
     }
   }
 
@@ -2171,10 +2302,10 @@ function ChatPageNew() {
   const waitForSocketConnected = async (timeoutMs = 12000, pollIntervalMs = 300) => {
     const startedAt = Date.now()
     while (Date.now() - startedAt < timeoutMs) {
-      if (socket?.connected) return true
+      if (socketRef.current?.connected) return true
       await new Promise((resolve) => setTimeout(resolve, pollIntervalMs))
     }
-    return Boolean(socket?.connected)
+    return Boolean(socketRef.current?.connected)
   }
 
   const sendMediaFile = async (file, type) => {
@@ -2239,8 +2370,8 @@ function ChatPageNew() {
 
     setUsers((prev) =>
       prev.map((user) =>
-        user.username === targetUser.username
-          ? { ...user, lastMessage: previewLabel, timestamp: getTimeLabel() }
+        toUserKey(user.username) === toUserKey(targetUser.username)
+          ? { ...user, lastMessage: previewLabel, timestamp: getTimeLabel(), hasConversation: true, lastCreatedAt: Date.now() }
           : user
       )
     )
@@ -2283,7 +2414,13 @@ function ChatPageNew() {
     }
 
     try {
-      socket.publish({
+      const activeSocket = socketRef.current
+      if (!activeSocket?.connected) {
+        setMessages((prev) => prev.map((msg) => (msg.tempId === tempId ? { ...msg, deliveryStatus: 'failed' } : msg)))
+        notify.error('Media uploaded, but realtime is disconnected. Tap resend when connection returns.')
+        return
+      }
+      activeSocket.publish({
         destination: '/app/chat.send',
         body: JSON.stringify({
           toUsername: targetUser.username,
@@ -2456,7 +2593,8 @@ function ChatPageNew() {
   const handleResendMessage = (message) => {
     if (!selectedUser || !message || message.sender !== 'user') return
     if (!isMessageFailed(message)) return
-    if (!socket?.connected) {
+    const activeSocket = socketRef.current
+    if (!activeSocket?.connected) {
       notify.error('Realtime server disconnected. Message not sent.')
       return
     }
@@ -2476,7 +2614,7 @@ function ChatPageNew() {
         : msg
     )))
 
-    socket.publish({
+    activeSocket.publish({
       destination: '/app/chat.send',
       body: JSON.stringify({
         toUsername: selectedUser.username,
