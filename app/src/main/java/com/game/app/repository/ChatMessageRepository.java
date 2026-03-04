@@ -21,11 +21,11 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessageEntity, 
   List<ChatMessageEntity> findConversation(String userA, String userB);
 
   @Modifying
-  @Query("""
-      DELETE FROM ChatMessageEntity m
-      WHERE m.createdAt < :cutoff
-        AND (m.type IS NULL OR TRIM(m.type) = '' OR LOWER(TRIM(m.type)) = 'text')
-        AND (m.mediaUrl IS NULL OR TRIM(m.mediaUrl) = '')
-      """)
+  @Query(value = """
+      DELETE FROM chat_messages
+      WHERE created_at < :cutoff
+        AND (type IS NULL OR TRIM(type) = '' OR LOWER(TRIM(type)) = 'text')
+        AND (media_url IS NULL OR media_url = '')
+      """, nativeQuery = true)
   int deleteTextOnlyMessagesOlderThan(@Param("cutoff") Instant cutoff);
 }
