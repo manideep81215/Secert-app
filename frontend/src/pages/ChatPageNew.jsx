@@ -76,7 +76,6 @@ function ChatPageNew() {
   const [conversationReloadTick, setConversationReloadTick] = useState(0)
   const [usersReloadTick, setUsersReloadTick] = useState(0)
   const [inputValue, setInputValue] = useState('')
-  const [presenceTick, setPresenceTick] = useState(Date.now())
   const [searchQuery, setSearchQuery] = useState('')
   const [showAttachMenu, setShowAttachMenu] = useState(false)
   const [pendingImagePreview, setPendingImagePreview] = useState(null)
@@ -895,6 +894,17 @@ function ChatPageNew() {
       const viewport = window.visualViewport
       const viewportHeightNow = Math.round(viewport?.height || window.innerHeight || 0)
       const viewportTopNow = Math.max(0, Math.round(viewport?.offsetTop || 0))
+      const nativeRuntime = isNativeCapacitorRuntime()
+      if (nativeRuntime && isAndroidPlatform) {
+        setViewportHeight((prev) => {
+          const next = viewportHeightNow || window.innerHeight
+          return Math.abs((prev || 0) - next) <= 2 ? prev : next
+        })
+        setVisualViewportTop(0)
+        setVisualViewportBottomGap(0)
+        setKeyboardOffset(0)
+        return
+      }
       const inputFocused = isMessageInputFocused()
       const settleWindowActive = Date.now() < Number(keyboardSettleUntilRef.current || 0)
       if (viewportHeightNow > maxViewportHeightRef.current) {
@@ -1028,6 +1038,7 @@ function ChatPageNew() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined
+    const nativeRuntime = isNativeCapacitorRuntime()
     const shouldDeferVideoThumbs = messages.length > 140
     if (shouldDeferVideoThumbs) return undefined
     const videoUrls = [...new Set(
@@ -1036,7 +1047,8 @@ function ChatPageNew() {
         .map((msg) => String(msg.mediaUrl))
     )]
     if (videoUrls.length === 0) return undefined
-    const pendingUrls = videoUrls.filter((url) => videoThumbMap[url] === undefined).slice(-4)
+    const batchSize = nativeRuntime ? 1 : 3
+    const pendingUrls = videoUrls.filter((url) => videoThumbMap[url] === undefined).slice(-batchSize)
     if (pendingUrls.length === 0) return undefined
 
     let cancelled = false
@@ -1064,12 +1076,16 @@ function ChatPageNew() {
           const width = video.videoWidth || 0
           const height = video.videoHeight || 0
           if (!width || !height) return fail()
+          const maxEdge = 360
+          const scale = Math.min(1, maxEdge / Math.max(width, height))
+          const targetWidth = Math.max(1, Math.round(width * scale))
+          const targetHeight = Math.max(1, Math.round(height * scale))
           const canvas = document.createElement('canvas')
-          canvas.width = width
-          canvas.height = height
+          canvas.width = targetWidth
+          canvas.height = targetHeight
           const ctx = canvas.getContext('2d')
           if (!ctx) return fail()
-          ctx.drawImage(video, 0, 0, width, height)
+          ctx.drawImage(video, 0, 0, targetWidth, targetHeight)
           const dataUrl = canvas.toDataURL('image/jpeg', 0.72)
           cleanup()
           resolve(dataUrl || null)
@@ -1105,6 +1121,9 @@ function ChatPageNew() {
           if (prev[url]) return prev
           return { ...prev, [url]: thumb }
         })
+        if (nativeRuntime) {
+          await new Promise((resolve) => setTimeout(resolve, 120))
+        }
       }
     }
 
@@ -1121,13 +1140,6 @@ function ChatPageNew() {
       if (timeoutId !== null) window.clearTimeout(timeoutId)
     }
   }, [messages, videoThumbMap])
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setPresenceTick(Date.now())
-    }, 30000)
-    return () => clearInterval(interval)
-  }, [])
 
   useEffect(() => {
     if (!flow.username || !flow.token) {
@@ -2226,7 +2238,7 @@ function ChatPageNew() {
           _presenceTime: presenceTime,
         }
       })
-  }, [users, searchQuery, statusMap, typingMap, unreadMap, presenceTick, selectedUser?.username])
+  }, [users, searchQuery, statusMap, typingMap, unreadMap, selectedUser?.username])
   const detailMediaItems = useMemo(
     () => messages.filter((msg) => msg.type && (msg.type === 'image' || msg.type === 'video') && msg.mediaUrl),
     [messages]
@@ -3128,13 +3140,11 @@ function ChatPageNew() {
       data-native={isNativeRuntime ? 'true' : 'false'}
       style={{
         '--chat-keyboard-offset': `${Math.max(0, keyboardOffset || 0)}px`,
-        '--chat-viewport-height': (isNativeRuntime && isAndroidPlatform)
-          ? '100%'
-          : `${Math.max(0, viewportHeight || fallbackViewportHeight)}px`,
+        '--chat-viewport-height': `${Math.max(0, viewportHeight || fallbackViewportHeight)}px`,
         '--chat-safe-bottom': (isIosPlatform && !isKeyboardOpen) ? 'env(safe-area-inset-bottom)' : '0px',
         '--chat-safe-top': isIosPlatform ? 'env(safe-area-inset-top)' : '0px',
         '--chat-vv-top': `${Math.max(0, visualViewportTop)}px`,
-        '--chat-vv-bottom': isNativeRuntime ? '0px' : `${Math.max(0, visualViewportBottomGap)}px`,
+        '--chat-vv-bottom': `${Math.max(0, visualViewportBottomGap)}px`,
       }}
     >
       <ChatUsersPanel
@@ -3147,6 +3157,7 @@ function ChatPageNew() {
         onSelectUser={handleSelectUserFromPanel}
         getAvatarLabel={getAvatarLabel}
         getUserDisplayName={getUserDisplayName}
+        reducedMotion={isNativeRuntime || isMobileView || filteredUsers.length > 40}
       />
 
       <div className="chat-area">

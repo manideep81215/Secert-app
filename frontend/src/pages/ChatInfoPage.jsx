@@ -54,6 +54,9 @@ function ChatInfoPage() {
   const [activeMediaPreview, setActiveMediaPreview] = useState(null)
   const cap = typeof window !== 'undefined' ? window.Capacitor : null
   const nativePlatform = typeof cap?.getPlatform === 'function' ? cap.getPlatform() : null
+  const isNativeRuntime = typeof cap?.isNativePlatform === 'function'
+    ? cap.isNativePlatform()
+    : nativePlatform === 'android' || nativePlatform === 'ios'
   const isNativeAndroid = typeof cap?.isNativePlatform === 'function'
     ? cap.isNativePlatform() && nativePlatform === 'android'
     : nativePlatform === 'android'
@@ -287,7 +290,9 @@ function ChatInfoPage() {
         .filter(Boolean)
     )]
     if (!videoUrls.length) return undefined
-    const pendingUrls = videoUrls.filter((url) => videoThumbMap[url] === undefined).slice(0, 6)
+    const candidateUrls = videoUrls.slice(-40)
+    const batchSize = isNativeRuntime ? 1 : 4
+    const pendingUrls = candidateUrls.filter((url) => videoThumbMap[url] === undefined).slice(0, batchSize)
     if (!pendingUrls.length) return undefined
 
     let cancelled = false
@@ -316,12 +321,16 @@ function ChatInfoPage() {
           const width = video.videoWidth || 0
           const height = video.videoHeight || 0
           if (!width || !height) return fail()
+          const maxEdge = 300
+          const scale = Math.min(1, maxEdge / Math.max(width, height))
+          const targetWidth = Math.max(1, Math.round(width * scale))
+          const targetHeight = Math.max(1, Math.round(height * scale))
           const canvas = document.createElement('canvas')
-          canvas.width = width
-          canvas.height = height
+          canvas.width = targetWidth
+          canvas.height = targetHeight
           const ctx = canvas.getContext('2d')
           if (!ctx) return fail()
-          ctx.drawImage(video, 0, 0, width, height)
+          ctx.drawImage(video, 0, 0, targetWidth, targetHeight)
           const dataUrl = canvas.toDataURL('image/jpeg', 0.72)
           cleanup()
           resolve(dataUrl || null)
@@ -356,15 +365,18 @@ function ChatInfoPage() {
           if (prev[url] !== undefined) return prev
           return { ...prev, [url]: thumb }
         })
+        if (isNativeRuntime) {
+          await new Promise((resolve) => setTimeout(resolve, 140))
+        }
       }
     }
 
-    const timeoutId = window.setTimeout(() => { loadThumbs() }, 80)
+    const timeoutId = window.setTimeout(() => { loadThumbs() }, isNativeRuntime ? 220 : 80)
     return () => {
       cancelled = true
       window.clearTimeout(timeoutId)
     }
-  }, [mediaItems, videoThumbMap])
+  }, [mediaItems, videoThumbMap, isNativeRuntime])
 
   useEffect(() => {
     const syncPermission = () => setNotificationPermission(getNotificationPermissionState())

@@ -36,9 +36,9 @@ const configureNativeKeyboardBehavior = async () => {
     const KeyboardResize = mod?.KeyboardResize
     if (!Keyboard) return
 
-    // Keep WebView resize fully native on Android to avoid keyboard inset/gap stacking.
-    if (KeyboardResize?.Native && Keyboard?.setResizeMode) {
-      await Keyboard.setResizeMode({ mode: KeyboardResize.Native })
+    // Use body resize on Android to prevent white gap above keyboard across screens.
+    if (KeyboardResize?.Body && Keyboard?.setResizeMode) {
+      await Keyboard.setResizeMode({ mode: KeyboardResize.Body })
     }
     if (Keyboard?.setScroll) {
       await Keyboard.setScroll({ isDisabled: false })
@@ -48,6 +48,24 @@ const configureNativeKeyboardBehavior = async () => {
   }
 }
 
+const markNativeRuntimeClasses = () => {
+  if (!isNativeCapacitorRuntime()) return
+  const platform = window?.Capacitor?.getPlatform?.()
+  const html = document.documentElement
+  const body = document.body
+  if (!html || !body) return
+  html.classList.add('native-runtime')
+  body.classList.add('native-runtime')
+  if (platform === 'android') {
+    html.classList.add('native-android-runtime')
+    body.classList.add('native-android-runtime')
+  } else if (platform === 'ios') {
+    html.classList.add('native-ios-runtime')
+    body.classList.add('native-ios-runtime')
+  }
+}
+
+markNativeRuntimeClasses()
 configureNativeKeyboardBehavior()
 
 if ('serviceWorker' in navigator) {

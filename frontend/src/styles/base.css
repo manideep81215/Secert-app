@@ -28,3 +28,10 @@ body {
   min-height: 100vh;
   min-height: 100dvh;
 }
+
+html.native-android-runtime,
+body.native-android-runtime,
+body.native-android-runtime #root {
+  height: 100%;
+  min-height: 0 !important;
+}

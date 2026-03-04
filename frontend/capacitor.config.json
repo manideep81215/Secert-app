@@ -15,7 +15,7 @@
       "enabled": true
     },
     "Keyboard": {
-      "resize": "native",
+      "resize": "body",
       "resizeOnFullScreen": true
     },
     "PushNotifications": {
