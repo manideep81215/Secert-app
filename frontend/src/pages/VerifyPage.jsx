@@ -31,7 +31,7 @@ function VerifyPage() {
   }
 
   const triggerBiometricVerify = useCallback(async ({ manual = false, skipAvailabilityCheck = false } = {}) => {
-    if (!isNativePlatform || !flow.username || !flow.token || !flow.unlocked) {
+    if (!isNativePlatform || !flow.username || !flow.token) {
       if (manual) {
         toast.info('Biometric unlock is available only in the mobile app.')
       }
@@ -51,11 +51,12 @@ function VerifyPage() {
       }
 
       await BiometricAuth.authenticate({
-        reason: 'Authenticate to open chat',
+        reason: 'Authenticate to verify access',
         cancelTitle: 'Cancel',
-        allowDeviceCredential: false,
-        androidTitle: 'Biometric unlock',
-        androidSubtitle: 'Use fingerprint or face to continue',
+        allowDeviceCredential: true,
+        iosFallbackTitle: 'Use passcode',
+        androidTitle: 'Verify identity',
+        androidSubtitle: 'Use fingerprint, face, or screen lock to continue',
         androidConfirmationRequired: false,
       })
 
@@ -77,24 +78,19 @@ function VerifyPage() {
     } finally {
       setIsBiometricLoading(false)
     }
-  }, [flow.token, flow.unlocked, flow.username, isBiometricLoading, isLoading, isNativePlatform, navigate, setFlow])
+  }, [flow.token, flow.username, isBiometricLoading, isLoading, isNativePlatform, navigate, setFlow])
 
   useEffect(() => {
     if (!flow.username || !flow.token) {
       navigate('/auth')
-      return
     }
-
-    if (!flow.unlocked) {
-      navigate('/games')
-    }
-  }, [flow.username, flow.token, flow.unlocked, navigate])
+  }, [flow.username, flow.token, navigate])
 
   useEffect(() => {
     let cancelled = false
 
     const runAutoBiometric = async () => {
-      if (!isNativePlatform || !flow.username || !flow.token || !flow.unlocked) {
+      if (!isNativePlatform || !flow.username || !flow.token) {
         if (!cancelled) setIsBiometricAvailable(false)
         return
       }
@@ -116,7 +112,7 @@ function VerifyPage() {
     return () => {
       cancelled = true
     }
-  }, [flow.token, flow.unlocked, flow.username, isNativePlatform, triggerBiometricVerify])
+  }, [flow.token, flow.username, isNativePlatform, triggerBiometricVerify])
 
   const verifyPin = async (event) => {
     event.preventDefault()
@@ -191,7 +187,9 @@ function VerifyPage() {
             >
               {isBiometricLoading
                 ? 'Checking biometric...'
-                : (isBiometricAvailable ? 'Use Fingerprint / Face ID' : 'Check Fingerprint / Face ID')}
+                : (isBiometricAvailable
+                    ? 'Use Fingerprint / Face / Screen Lock'
+                    : 'Check Fingerprint / Face / Screen Lock')}
             </button>
           </>
         ) : null}

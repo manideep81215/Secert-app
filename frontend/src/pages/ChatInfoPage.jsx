@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Client } from '@stomp/stompjs'
 import SockJS from 'sockjs-client'
+import { PushNotifications } from '@capacitor/push-notifications'
 import { useLocation, useNavigate } from 'react-router-dom'
 import BackIcon from '../components/BackIcon'
 import {
@@ -11,6 +12,7 @@ import {
   setNotifyCutoff,
 } from '../lib/notifications'
 import { ensurePushSubscription } from '../lib/pushSubscription'
+import { syncNativePushRegistration } from '../lib/nativePush'
 import { getPushPublicKey, sendTestPush } from '../services/pushApi'
 import { useFlowState } from '../hooks/useFlowState'
 import { WS_CHAT_URL } from '../config/apiConfig'
@@ -22,6 +24,7 @@ const notify = { success: () => {}, error: () => {}, info: () => {}, warn: () =>
 const CLEAR_CUTOFFS_KEY = 'chat_clear_cutoffs_v1'
 const INFO_MEDIA_PAGE_SIZE = 50
 const INFO_MEDIA_PAGE_LIMIT = 120
+const MOBILE_PUSH_TOKEN_KEY = 'mobile_push_token_v1'
 
 function ChatInfoPage() {
   const navigate = useNavigate()
@@ -261,8 +264,17 @@ function ChatInfoPage() {
     const current = granted ? 'granted' : getNotificationPermissionState()
     setNotificationPermission(current)
     if (granted) {
-      notify.success('Notifications enabled.')
-      if (flow?.token) {
+      if (isNativeRuntime && flow?.token) {
+        const nativeRegistered = await syncNativePushRegistration(flow.token)
+        if (!nativeRegistered) {
+          notify.warn('Permission granted, but native push token is not ready yet.')
+        } else {
+          notify.success('Notifications enabled.')
+        }
+      } else {
+        notify.success('Notifications enabled.')
+      }
+      if (!isNativeRuntime && flow?.token) {
         try {
           const keyConfig = await getPushPublicKey()
           const pushEnabled = Boolean(keyConfig?.enabled && keyConfig?.publicKey)
@@ -273,6 +285,7 @@ function ChatInfoPage() {
           // Ignore key-check failures during permission request.
         }
       }
+      refreshPushDebug('permission')
       return
     }
     if (current === 'denied') {
@@ -297,12 +310,91 @@ function ChatInfoPage() {
     }
     setPushDebug(snapshot)
 
+    if (isNativeRuntime) {
+      try {
+        let nativePermission = snapshot.notificationPermission
+        try {
+          const permission = await PushNotifications.checkPermissions()
+          nativePermission = permission?.receive || nativePermission
+        } catch {
+          // Ignore native permission check failures.
+        }
+
+        let registrationError = ''
+        if (flow?.token && nativePermission === 'granted') {
+          const registered = await syncNativePushRegistration(flow.token)
+          if (!registered) {
+            registrationError = 'Native push registration failed.'
+          }
+        }
+
+        let nativeToken = ''
+        try {
+          nativeToken = (window.localStorage.getItem(MOBILE_PUSH_TOKEN_KEY) || '').trim()
+        } catch {
+          nativeToken = ''
+        }
+
+        let pushServerEnabled = false
+        let pushKeyRegistered = false
+        let keyError = ''
+        let keyHint = ''
+        try {
+          const keyConfig = await getPushPublicKey()
+          pushServerEnabled = Boolean(keyConfig?.nativeEnabled ?? keyConfig?.enabled)
+          pushKeyRegistered = pushServerEnabled
+          if (!pushServerEnabled) {
+            keyHint = 'Server-side mobile push is disabled.'
+          }
+        } catch (error) {
+          keyError = error?.message || 'Push server check failed.'
+        }
+
+        if (!keyHint && nativePermission === 'granted' && !nativeToken) {
+          keyHint = 'Device token not ready yet. Tap Notify again after a moment.'
+        }
+
+        const combinedError = [registrationError, keyError].filter(Boolean).join(' ')
+        const next = {
+          loading: false,
+          notificationPermission: nativePermission,
+          serviceWorkerActive: true,
+          subscriptionExists: Boolean(nativeToken),
+          pushKeyRegistered,
+          pushServerEnabled,
+          lastSyncAt: Date.now(),
+          error: combinedError,
+          hint: keyHint,
+        }
+        setPushDebug(next)
+        console.info('[push-debug]', { reason, mode: 'native', ...next })
+      } catch (error) {
+        const next = {
+          loading: false,
+          notificationPermission: snapshot.notificationPermission,
+          serviceWorkerActive: false,
+          subscriptionExists: false,
+          pushKeyRegistered: false,
+          pushServerEnabled: false,
+          lastSyncAt: Date.now(),
+          error: error?.message || 'Native push debug check failed.',
+          hint: '',
+        }
+        setPushDebug(next)
+        console.warn('[push-debug]', { reason, mode: 'native', ...next })
+      }
+      return
+    }
+
     try {
       let registration = null
       if ('serviceWorker' in navigator) {
         registration = await navigator.serviceWorker.getRegistration('/sw.js')
         if (!registration) {
-          registration = await navigator.serviceWorker.ready
+          registration = await Promise.race([
+            navigator.serviceWorker.ready,
+            new Promise((resolve) => window.setTimeout(() => resolve(null), 1800)),
+          ])
         }
       }
 

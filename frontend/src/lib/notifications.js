@@ -7,6 +7,7 @@ const LEGACY_NATIVE_CHAT_CHANNEL_ID = 'chat_messages'
 const NATIVE_CHAT_SOUND = 'tecno_zone_snapchat.mp3'
 const NOTIFY_DEDUP_WINDOW_MS = 1800
 let nativeNotificationSetupDone = false
+let nativeActionListenerAttached = false
 let lastNotifyMeta = { key: '', at: 0 }
 
 function shouldSkipDuplicateNotification(title, body) {
@@ -56,6 +57,24 @@ async function ensureNativeNotificationSetup(localNotifications) {
     })
   } catch {
     // Ignore action registration failures.
+  }
+
+  if (!nativeActionListenerAttached && typeof localNotifications.addListener === 'function') {
+    nativeActionListenerAttached = true
+    localNotifications.addListener('localNotificationActionPerformed', (event) => {
+      const dataUrl = event?.notification?.extra?.url
+      const url = typeof dataUrl === 'string' && dataUrl.trim() ? dataUrl.trim() : '/#/chat'
+      if (typeof window === 'undefined') return
+      if (url.startsWith('/#')) {
+        window.location.hash = url.replace('/#', '#')
+      } else if (url.startsWith('#')) {
+        window.location.hash = url
+      } else {
+        window.location.hash = '#/chat'
+      }
+    }).catch(() => {
+      nativeActionListenerAttached = false
+    })
   }
 
   nativeNotificationSetupDone = true

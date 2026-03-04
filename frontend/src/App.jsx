@@ -322,6 +322,12 @@ function App() {
   useEffect(() => {
     if (!flow?.token) return
 
+    const cap = typeof window !== 'undefined' ? window.Capacitor : null
+    const isNativeRuntime = typeof cap?.isNativePlatform === 'function'
+      ? cap.isNativePlatform()
+      : cap?.getPlatform?.() === 'android' || cap?.getPlatform?.() === 'ios'
+    if (isNativeRuntime) return
+
     let disposed = false
     let inFlight = false
 

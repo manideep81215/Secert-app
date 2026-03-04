@@ -198,35 +198,59 @@ public class PushNotificationService {
   }
 
   public PushSendResult sendTestNow(String username, String title, String body, String url) {
-    if (!isPushEnabled()) {
-      return new PushSendResult(false, 0, 0, "Push key not configured on server.");
+    String normalizedUser = normalizeUsername(username);
+    boolean webPushEnabled = isPushEnabled();
+    FirebaseMessaging messaging = getFirebaseMessaging();
+    boolean nativePushEnabled = messaging != null;
+    if (!webPushEnabled && !nativePushEnabled) {
+      return new PushSendResult(false, 0, 0, "Push is not configured on server.");
     }
 
-    String normalizedUser = normalizeUsername(username);
-    List<PushSubscriptionEntity> subscriptions = pushSubscriptionRepository.findByUsername(normalizedUser);
-    if (subscriptions.isEmpty()) {
-      return new PushSendResult(false, 0, 0, "No active push subscription for this user.");
+    List<PushSubscriptionEntity> subscriptions = webPushEnabled
+        ? pushSubscriptionRepository.findByUsername(normalizedUser)
+        : List.of();
+    List<MobilePushTokenEntity> mobileTokens = nativePushEnabled
+        ? collapseMobileTokens(mobilePushTokenRepository.findByUsername(normalizedUser))
+        : List.of();
+    if (subscriptions.isEmpty() && mobileTokens.isEmpty()) {
+      return new PushSendResult(false, 0, 0, "No active push target for this user.");
     }
 
     String payload = buildPayload(title, body, url);
     int attempted = 0;
     int sent = 0;
-    try {
-      PushService service = new PushService(vapidPublicKey, vapidPrivateKey, vapidSubject);
-      for (PushSubscriptionEntity subscription : subscriptions) {
+
+    if (!mobileTokens.isEmpty() && messaging != null) {
+      for (MobilePushTokenEntity mobileToken : mobileTokens) {
         attempted += 1;
-        if (sendToSubscription(service, subscription, payload)) {
+        if (sendToMobileToken(messaging, mobileToken, title, body, url)) {
           sent += 1;
         }
       }
-    } catch (Exception error) {
-      return new PushSendResult(false, attempted, sent, error.getMessage() != null ? error.getMessage() : "Push service error");
+    }
+
+    if (!subscriptions.isEmpty()) {
+      try {
+        PushService service = new PushService(vapidPublicKey, vapidPrivateKey, vapidSubject);
+        for (PushSubscriptionEntity subscription : subscriptions) {
+          attempted += 1;
+          if (sendToSubscription(service, subscription, payload)) {
+            sent += 1;
+          }
+        }
+      } catch (Exception error) {
+        String message = error.getMessage() != null ? error.getMessage() : "Push service error";
+        if (sent > 0) {
+          return new PushSendResult(true, attempted, sent, "Partially sent: " + message);
+        }
+        return new PushSendResult(false, attempted, sent, message);
+      }
     }
 
     if (sent > 0) {
-      return new PushSendResult(true, attempted, sent, "Test push sent.");
+      return new PushSendResult(true, attempted, sent, "Test push sent (" + sent + "/" + attempted + ").");
     }
-    return new PushSendResult(false, attempted, sent, "Push send failed for all subscriptions.");
+    return new PushSendResult(false, attempted, sent, "Push send failed for all active targets.");
   }
 
   private boolean sendToSubscription(PushService service, PushSubscriptionEntity subscription, String payload) {
@@ -352,7 +376,7 @@ public class PushNotificationService {
     return "";
   }
 
-  private void sendToMobileToken(FirebaseMessaging messaging, MobilePushTokenEntity token, String title, String body, String url) {
+  private boolean sendToMobileToken(FirebaseMessaging messaging, MobilePushTokenEntity token, String title, String body, String url) {
     try {
       Message message = Message.builder()
           .setToken(token.getToken())
@@ -371,13 +395,16 @@ public class PushNotificationService {
               .build())
           .build();
       messaging.send(message);
+      return true;
     } catch (FirebaseMessagingException error) {
       if (isInvalidTokenError(error)) {
         mobilePushTokenRepository.deleteById(token.getId());
       }
       log.warn("FCM send failed for user {}: {}", token.getUsername(), error.getMessage());
+      return false;
     } catch (Exception error) {
       log.warn("Unexpected FCM send error for user {}: {}", token.getUsername(), error.getMessage());
+      return false;
     }
   }
 
