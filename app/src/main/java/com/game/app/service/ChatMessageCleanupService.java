@@ -28,14 +28,14 @@ public class ChatMessageCleanupService {
 
   @Scheduled(cron = "${app.chat.cleanup.cron:0 0 * * * *}")
   @Transactional
-  public void deleteOldTextOnlyMessages() {
+  public void deleteOldTextAndVoiceMessages() {
     if (retentionDays <= 0) {
       return;
     }
     Instant cutoff = Instant.now().minus(retentionDays, ChronoUnit.DAYS);
-    int deleted = chatMessageRepository.deleteTextOnlyMessagesOlderThan(cutoff);
+    int deleted = chatMessageRepository.deleteTextAndVoiceMessagesOlderThan(cutoff);
     if (deleted > 0) {
-      logger.info("Deleted {} text-only chat messages older than {} days", deleted, retentionDays);
+      logger.info("Deleted {} text/voice chat messages older than {} days", deleted, retentionDays);
     }
   }
 }

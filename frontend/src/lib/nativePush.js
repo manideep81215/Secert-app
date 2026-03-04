@@ -4,6 +4,7 @@ import { subscribeMobilePush, unsubscribeMobilePush } from '../services/pushApi'
 
 const MOBILE_PUSH_TOKEN_KEY = 'mobile_push_token_v1'
 const NATIVE_PUSH_CHANNEL_ID = 'chat_messages_v5'
+const LEGACY_NATIVE_PUSH_CHANNEL_ID = 'chat_messages'
 const NATIVE_PUSH_SOUND = 'tecno_zone_snapchat.mp3'
 
 let listenersAttached = false
@@ -106,17 +107,20 @@ function attachListeners() {
 async function ensureNativePushChannel() {
   if (!isNativeMobile()) return
   if (typeof PushNotifications.createChannel !== 'function') return
-  try {
-    await PushNotifications.createChannel({
-      id: NATIVE_PUSH_CHANNEL_ID,
-      name: 'Chat messages',
-      description: 'Incoming chat message alerts',
-      importance: 5,
-      visibility: 1,
-      sound: NATIVE_PUSH_SOUND,
-    })
-  } catch {
-    // Ignore channel creation failures on unsupported devices.
+  const channelIds = [NATIVE_PUSH_CHANNEL_ID, LEGACY_NATIVE_PUSH_CHANNEL_ID]
+  for (const channelId of channelIds) {
+    try {
+      await PushNotifications.createChannel({
+        id: channelId,
+        name: 'Chat messages',
+        description: 'Incoming chat message alerts',
+        importance: 5,
+        visibility: 1,
+        sound: NATIVE_PUSH_SOUND,
+      })
+    } catch {
+      // Ignore channel creation failures on unsupported devices.
+    }
   }
 }
 

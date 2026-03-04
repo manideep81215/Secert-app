@@ -14,11 +14,14 @@ import { ensurePushSubscription } from '../lib/pushSubscription'
 import { getPushPublicKey, sendTestPush } from '../services/pushApi'
 import { useFlowState } from '../hooks/useFlowState'
 import { WS_CHAT_URL } from '../config/apiConfig'
+import { getConversation } from '../services/messagesApi'
 import './ChatInfoPage.css'
 
 const notify = { success: () => {}, error: () => {}, info: () => {}, warn: () => {} }
 
 const CLEAR_CUTOFFS_KEY = 'chat_clear_cutoffs_v1'
+const INFO_MEDIA_PAGE_SIZE = 50
+const INFO_MEDIA_PAGE_LIMIT = 120
 
 function ChatInfoPage() {
   const navigate = useNavigate()
@@ -29,10 +32,18 @@ function ChatInfoPage() {
   const selectedPresence = location.state?.selectedPresence || { status: 'offline', lastSeenAt: null }
   const selectedTyping = Boolean(location.state?.selectedTyping)
   const selectedSeen = Boolean(location.state?.selectedSeen)
-  const mediaItems = useMemo(() => {
+  const seededMediaItems = useMemo(() => {
     const rows = location.state?.mediaItems
     return Array.isArray(rows) ? rows.filter((row) => row?.mediaUrl) : []
   }, [location.state?.mediaItems])
+  const seededFileItems = useMemo(() => {
+    const rows = location.state?.fileItems
+    return Array.isArray(rows) ? rows.filter((row) => row?.mediaUrl) : []
+  }, [location.state?.fileItems])
+  const [mediaItems, setMediaItems] = useState(seededMediaItems)
+  const [fileItems, setFileItems] = useState(seededFileItems)
+  const [isMediaLoading, setIsMediaLoading] = useState(false)
+  const [mediaLoadError, setMediaLoadError] = useState('')
 
   const [notificationPermission, setNotificationPermission] = useState(
     () => location.state?.notificationPermission || getNotificationPermissionState()
@@ -68,6 +79,137 @@ function ChatInfoPage() {
     if (selectedUser?.username) return
     navigate('/chat', { replace: true })
   }, [flow?.role, navigate, selectedUser?.username])
+
+  useEffect(() => {
+    setMediaItems(seededMediaItems)
+  }, [seededMediaItems])
+
+  useEffect(() => {
+    setFileItems(seededFileItems)
+  }, [seededFileItems])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const normalizeMediaItem = (row) => {
+      const type = String(row?.type || '').toLowerCase()
+      if (type !== 'image' && type !== 'video') return null
+      const mediaUrl = String(row?.mediaUrl || '').trim()
+      if (!mediaUrl) return null
+      const createdAtRaw = row?.createdAt || row?.clientCreatedAt || row?.timestamp || null
+      const parsedCreatedAt = Number(createdAtRaw)
+      const createdAt = Number.isFinite(parsedCreatedAt) && parsedCreatedAt > 0
+        ? parsedCreatedAt
+        : Date.parse(createdAtRaw || '') || 0
+      return {
+        messageId: row?.messageId || row?.id || null,
+        type,
+        mediaUrl,
+        fileName: row?.fileName || null,
+        createdAt,
+      }
+    }
+
+    const normalizeFileItem = (row) => {
+      const type = String(row?.type || '').toLowerCase()
+      if (type !== 'file') return null
+      const mediaUrl = String(row?.mediaUrl || '').trim()
+      if (!mediaUrl) return null
+      const createdAtRaw = row?.createdAt || row?.clientCreatedAt || row?.timestamp || null
+      const parsedCreatedAt = Number(createdAtRaw)
+      const createdAt = Number.isFinite(parsedCreatedAt) && parsedCreatedAt > 0
+        ? parsedCreatedAt
+        : Date.parse(createdAtRaw || '') || 0
+      return {
+        messageId: row?.messageId || row?.id || null,
+        mediaUrl,
+        fileName: row?.fileName || 'attachment',
+        mimeType: row?.mimeType || null,
+        createdAt,
+      }
+    }
+
+    const buildDedupeKey = (item) => {
+      if (item?.messageId) return `id:${item.messageId}`
+      return `url:${item?.mediaUrl || ''}|type:${item?.type || ''}|name:${item?.fileName || ''}|time:${item?.createdAt || 0}`
+    }
+
+    const loadFullMediaHistory = async () => {
+      if (!selectedUser?.username || !flow?.token) return
+      setIsMediaLoading(true)
+      setMediaLoadError('')
+
+      try {
+        const collectedMedia = new Map()
+        const collectedFiles = new Map()
+        seededMediaItems.forEach((row) => {
+          const normalized = normalizeMediaItem(row)
+          if (!normalized) return
+          collectedMedia.set(buildDedupeKey(normalized), normalized)
+        })
+        seededFileItems.forEach((row) => {
+          const normalized = normalizeFileItem(row)
+          if (!normalized) return
+          collectedFiles.set(buildDedupeKey(normalized), normalized)
+        })
+
+        for (let page = 0; page < INFO_MEDIA_PAGE_LIMIT; page += 1) {
+          if (cancelled) return
+          const result = await getConversation(flow.token, selectedUser.username, {
+            page,
+            size: INFO_MEDIA_PAGE_SIZE,
+          })
+          const rows = Array.isArray(result?.messages) ? result.messages : []
+          rows.forEach((row) => {
+            const normalizedMedia = normalizeMediaItem(row)
+            if (normalizedMedia) {
+              collectedMedia.set(buildDedupeKey(normalizedMedia), normalizedMedia)
+            }
+            const normalizedFile = normalizeFileItem(row)
+            if (normalizedFile) {
+              collectedFiles.set(buildDedupeKey(normalizedFile), normalizedFile)
+            }
+          })
+
+          const hasMore = Boolean(result?.hasMore)
+          if (!hasMore || rows.length < INFO_MEDIA_PAGE_SIZE) break
+        }
+
+        if (cancelled) return
+        const mergedMedia = [...collectedMedia.values()]
+        mergedMedia.sort((left, right) => Number(right.createdAt || 0) - Number(left.createdAt || 0))
+        setMediaItems(mergedMedia)
+        const mergedFiles = [...collectedFiles.values()]
+        mergedFiles.sort((left, right) => Number(right.createdAt || 0) - Number(left.createdAt || 0))
+        setFileItems(mergedFiles)
+      } catch {
+        if (!cancelled) {
+          setMediaLoadError('Could not load complete chat assets. Showing available data only.')
+        }
+      } finally {
+        if (!cancelled) setIsMediaLoading(false)
+      }
+    }
+
+    void loadFullMediaHistory()
+
+    return () => {
+      cancelled = true
+    }
+  }, [flow?.token, seededFileItems, seededMediaItems, selectedUser?.username])
+
+  const triggerFileDownload = (url, fileName) => {
+    const downloadUrl = String(url || '').trim()
+    if (!downloadUrl) return
+    const anchor = document.createElement('a')
+    anchor.href = downloadUrl
+    anchor.download = fileName || 'attachment'
+    anchor.target = '_blank'
+    anchor.rel = 'noopener'
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+  }
 
   const formatUsername = (name) => {
     const raw = (name || '').trim().replace(/^@+/, '')
@@ -514,6 +656,12 @@ function ChatInfoPage() {
 
         <div className="chat-info-section">
           <h4>Media</h4>
+          {isMediaLoading && (
+            <p className="chat-info-empty">Loading media/files history...</p>
+          )}
+          {mediaLoadError && (
+            <p className="chat-info-empty">{mediaLoadError}</p>
+          )}
           <div className="chat-info-media-grid">
             {mediaItems.map((msg, idx) => {
               const thumb = msg.type === 'video' ? videoThumbMap[String(msg.mediaUrl || '').trim()] : null
@@ -543,6 +691,27 @@ function ChatInfoPage() {
           </div>
           {mediaItems.length === 0 && (
             <p className="chat-info-empty">No media shared yet.</p>
+          )}
+        </div>
+
+        <div className="chat-info-section">
+          <h4>Files</h4>
+          <div className="chat-info-files-list">
+            {fileItems.map((item, idx) => (
+              <button
+                key={`${item.messageId || item.mediaUrl || idx}-${idx}`}
+                type="button"
+                className="chat-info-file-item"
+                onClick={() => triggerFileDownload(item.mediaUrl, item.fileName || 'attachment')}
+                title={item.fileName || 'Download file'}
+              >
+                <span className="chat-info-file-name">{item.fileName || 'attachment'}</span>
+                <span className="chat-info-file-action">Download</span>
+              </button>
+            ))}
+          </div>
+          {fileItems.length === 0 && (
+            <p className="chat-info-empty">No files shared yet.</p>
           )}
         </div>
       </div>

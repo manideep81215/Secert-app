@@ -60,8 +60,15 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessageEntity, 
   @Query(value = """
       DELETE FROM chat_messages
       WHERE created_at < :cutoff
-        AND (type IS NULL OR TRIM(type) = '' OR LOWER(TRIM(type)) = 'text')
-        AND (media_url IS NULL OR media_url = '')
+        AND (
+          (
+            type IS NULL
+            OR TRIM(type) = ''
+            OR LOWER(TRIM(type)) = 'text'
+          )
+          AND (media_url IS NULL OR media_url = '')
+          OR LOWER(TRIM(type)) = 'voice'
+        )
       """, nativeQuery = true)
-  int deleteTextOnlyMessagesOlderThan(@Param("cutoff") Instant cutoff);
+  int deleteTextAndVoiceMessagesOlderThan(@Param("cutoff") Instant cutoff);
 }

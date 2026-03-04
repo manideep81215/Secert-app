@@ -218,6 +218,46 @@
   font-size: 0.9rem;
 }
 
+.chat-info-files-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.chat-info-file-item {
+  border: 1px solid #d2bc8f;
+  border-radius: 0.6rem;
+  background: #efe5ca;
+  padding: 0.65rem 0.72rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.chat-info-file-item:hover {
+  background: #f4e8cc;
+}
+
+.chat-info-file-name {
+  font-size: 0.87rem;
+  color: #4d2e1a;
+  font-weight: 700;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-info-file-action {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #6a4f22;
+}
+
 .info-push-debug-panel {
   position: relative;
   top: 0;

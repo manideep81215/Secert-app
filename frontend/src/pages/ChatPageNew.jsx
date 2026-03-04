@@ -2408,6 +2408,10 @@ function ChatPageNew() {
     () => messages.filter((msg) => msg.type && (msg.type === 'image' || msg.type === 'video') && msg.mediaUrl),
     [messages]
   )
+  const detailFileItems = useMemo(
+    () => messages.filter((msg) => msg.type === 'file' && msg.mediaUrl),
+    [messages]
+  )
   const openUserInfo = () => {
     if (!selectedUser) return
     navigate('/chat/info', {
@@ -2428,6 +2432,13 @@ function ChatPageNew() {
           type: msg.type,
           mediaUrl: msg.mediaUrl,
           fileName: msg.fileName || null,
+          createdAt: msg.createdAt || msg.clientCreatedAt || null,
+        })),
+        fileItems: detailFileItems.map((msg) => ({
+          type: msg.type,
+          mediaUrl: msg.mediaUrl,
+          fileName: msg.fileName || null,
+          mimeType: msg.mimeType || null,
           createdAt: msg.createdAt || msg.clientCreatedAt || null,
         })),
       },

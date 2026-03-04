@@ -42,14 +42,11 @@ function VerifyPage() {
     setIsBiometricLoading(true)
     try {
       if (!skipAvailabilityCheck) {
-        const availability = await BiometricAuth.checkBiometry()
-        const available = Boolean(availability?.isAvailable)
-        setIsBiometricAvailable(available)
-        if (!available) {
-          if (manual) {
-            toast.error('Fingerprint/Face unlock is not available on this device.')
-          }
-          return false
+        try {
+          const availability = await BiometricAuth.checkBiometry()
+          setIsBiometricAvailable(Boolean(availability?.isAvailable))
+        } catch {
+          // If availability check fails, still attempt authenticate().
         }
       }
 
@@ -62,6 +59,13 @@ function VerifyPage() {
         androidConfirmationRequired: false,
       })
 
+      if (flow.username) {
+        try {
+          await Preferences.set({ key: getBiometricVerifiedKey(flow.username), value: '1' })
+        } catch {
+          // Ignore local persistence failures.
+        }
+      }
       setFlow((prev) => ({ ...prev, verified: true }))
       navigate('/chat')
       return true
@@ -96,15 +100,10 @@ function VerifyPage() {
       }
 
       try {
+        if (autoBiometricTriedRef.current) return
         const availability = await BiometricAuth.checkBiometry()
         if (cancelled) return
-        const available = Boolean(availability?.isAvailable)
-        setIsBiometricAvailable(available)
-        if (!available || autoBiometricTriedRef.current) return
-
-        const stored = await Preferences.get({ key: getBiometricVerifiedKey(flow.username) })
-        if (cancelled || stored.value !== '1') return
-
+        setIsBiometricAvailable(Boolean(availability?.isAvailable))
         autoBiometricTriedRef.current = true
         await triggerBiometricVerify({ skipAvailabilityCheck: true })
       } catch {
