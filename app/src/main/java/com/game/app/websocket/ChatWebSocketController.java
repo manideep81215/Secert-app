@@ -404,11 +404,18 @@ public class ChatWebSocketController {
   }
 
   private void syncOnlineUsersFor(String username) {
-    for (String onlineUsername : onlineUsers) {
-      messagingTemplate.convertAndSendToUser(
-          username,
-          "/queue/user-status",
-          new UserStatusPayload(onlineUsername, "online", null));
+    for (String onlineUsername : Set.copyOf(onlineUsers)) {
+      if (isUserConnected(onlineUsername)) {
+        messagingTemplate.convertAndSendToUser(
+            username,
+            "/queue/user-status",
+            new UserStatusPayload(onlineUsername, "online", null));
+        continue;
+      }
+      onlineUsers.remove(onlineUsername);
+      long lastSeenAt = Instant.now().toEpochMilli();
+      lastSeenMap.put(onlineUsername, lastSeenAt);
+      broadcastUserStatus(onlineUsername, "offline", lastSeenAt);
     }
 
     for (Map.Entry<String, Long> entry : lastSeenMap.entrySet()) {

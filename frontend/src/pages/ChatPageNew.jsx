@@ -28,7 +28,6 @@ const EDIT_WINDOW_MS = 15 * 60 * 1000
 const MESSAGE_ACTION_LONG_PRESS_MS = 1000
 const TYPING_STALE_MS = 1400
 const ONLINE_HEARTBEAT_MS = 30 * 1000
-const PRESENCE_ONLINE_STALE_MS = 60 * 1000
 const AUTO_REFRESH_DEBOUNCE_MS = 1200
 const TEXT_SEND_WAIT_MS = 8000
 const CONVERSATION_FETCH_RETRY_LIMIT = 4
@@ -648,17 +647,10 @@ function ChatPageNew() {
   }
   const getResolvedPresence = (username, fallback = 'offline') => {
     const presence = getPresence(username, fallback)
-    const normalizedUsername = toUserKey(username)
     const lastSeenAt = Number(presence.lastSeenAt || 0) || null
-    const onlineIsFresh = Boolean(lastSeenAt) && (Date.now() - lastSeenAt) <= PRESENCE_ONLINE_STALE_MS
-    if (presence.status === 'online' && onlineIsFresh) {
+    if (presence.status === 'online') {
       delete offlineSinceRef.current[username]
       return presence
-    }
-    if (presence.status === 'online' && !onlineIsFresh) {
-      const fallbackLastSeen = lastSeenAt || Number(presenceLastSeenMap[normalizedUsername] || 0) || null
-      offlineSinceRef.current[username] = fallbackLastSeen
-      return { status: 'offline', lastSeenAt: fallbackLastSeen }
     }
     if (lastSeenAt) {
       offlineSinceRef.current[username] = lastSeenAt
