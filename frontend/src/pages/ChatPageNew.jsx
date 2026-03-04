@@ -34,6 +34,7 @@ const TEXT_SEND_WAIT_MS = 8000
 const CONVERSATION_FETCH_RETRY_LIMIT = 4
 const CONVERSATION_PAGE_SIZE = 50
 const CONVERSATION_SCROLL_TOP_THRESHOLD = 140
+const AUTO_SCROLL_BOTTOM_THRESHOLD = 120
 const MISSED_SCAN_PAGE_LIMIT = 12
 const OFFLINE_DASHBOARD_REDIRECT_MS = 60 * 1000
 const QUICK_REACTIONS = [
@@ -46,6 +47,15 @@ const QUICK_REACTIONS = [
 ]
 const REACTION_CODE_TO_EMOJI = QUICK_REACTIONS.reduce((acc, item) => ({ ...acc, [item.code]: item.emoji }), {})
 const REACTION_EMOJI_TO_CODE = QUICK_REACTIONS.reduce((acc, item) => ({ ...acc, [item.emoji]: item.code }), {})
+
+function getViewportFallbackHeight() {
+  if (typeof window === 'undefined') return 0
+  const innerHeight = Math.round(window.innerHeight || 0)
+  const visualHeight = Math.round(window.visualViewport?.height || 0)
+  const docHeight = Math.round(window.document?.documentElement?.clientHeight || 0)
+  const screenHeight = Math.round(window.screen?.height || 0)
+  return Math.max(0, innerHeight, visualHeight, docHeight, screenHeight)
+}
 
 function ChatPageNew() {
   const navigate = useNavigate()
@@ -106,7 +116,7 @@ function ChatPageNew() {
   const [recordingSeconds, setRecordingSeconds] = useState(0)
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false)
   const [keyboardOffset, setKeyboardOffset] = useState(0)
-  const [viewportHeight, setViewportHeight] = useState(() => (typeof window !== 'undefined' ? window.innerHeight : 0))
+  const [viewportHeight, setViewportHeight] = useState(() => getViewportFallbackHeight())
   const [visualViewportTop, setVisualViewportTop] = useState(0)
   const [visualViewportBottomGap, setVisualViewportBottomGap] = useState(0)
   const [isIosPlatform, setIsIosPlatform] = useState(false)
@@ -126,6 +136,7 @@ function ChatPageNew() {
   const messagesAreaRef = useRef(null)
   const messagesEndRef = useRef(null)
   const keyboardBottomLockRef = useRef({ rafId: 0, until: 0 })
+  const shouldAutoScrollToBottomRef = useRef(true)
   const selectedUserRef = useRef(null)
   const statusMapRef = useRef({})
   const socketRef = useRef(null)
@@ -1026,12 +1037,18 @@ function ChatPageNew() {
 
     const syncKeyboardFromViewport = () => {
       const viewport = window.visualViewport
-      const viewportHeightNow = Math.round(viewport?.height || window.innerHeight || 0)
+      const fallbackHeightNow = getViewportFallbackHeight()
+      const rawViewportHeight = Math.round(viewport?.height || window.innerHeight || 0)
+      let viewportHeightNow = rawViewportHeight > 0 ? rawViewportHeight : fallbackHeightNow
       const viewportTopNow = Math.max(0, Math.round(viewport?.offsetTop || 0))
       const nativeRuntime = isNativeCapacitorRuntime()
+      const inputFocused = isMessageInputFocused()
+      if (!inputFocused && fallbackHeightNow > 0 && viewportHeightNow < Math.round(fallbackHeightNow * 0.72)) {
+        viewportHeightNow = fallbackHeightNow
+      }
       if (nativeRuntime && isAndroidPlatform) {
         setViewportHeight((prev) => {
-          const next = viewportHeightNow || window.innerHeight
+          const next = viewportHeightNow || fallbackHeightNow
           return Math.abs((prev || 0) - next) <= 2 ? prev : next
         })
         setVisualViewportTop(0)
@@ -1039,18 +1056,21 @@ function ChatPageNew() {
         setKeyboardOffset(0)
         return
       }
-      const inputFocused = isMessageInputFocused()
       const settleWindowActive = Date.now() < Number(keyboardSettleUntilRef.current || 0)
       if (viewportHeightNow > maxViewportHeightRef.current) {
         maxViewportHeightRef.current = viewportHeightNow
       }
       const baselineHeight = Math.max(maxViewportHeightRef.current || 0, viewportHeightNow)
-      const layoutHeight = Math.round(window.innerHeight || viewportHeightNow || 0)
+      const layoutHeight = Math.max(
+        Math.round(window.innerHeight || 0),
+        fallbackHeightNow,
+        viewportHeightNow,
+      )
       const viewportBottomGap = Math.max(0, layoutHeight - (viewportTopNow + viewportHeightNow))
       const keyboardDelta = Math.max(0, baselineHeight - viewportHeightNow)
       const keyboardLikelyOpen = keyboardDelta > 120 || viewportBottomGap > 80
       setViewportHeight((prev) => {
-        const next = viewportHeightNow || window.innerHeight
+        const next = viewportHeightNow || fallbackHeightNow
         return Math.abs((prev || 0) - next) <= 2 ? prev : next
       })
       setVisualViewportTop((prev) => (Math.abs((prev || 0) - viewportTopNow) <= 1 ? prev : viewportTopNow))
@@ -1188,9 +1208,19 @@ function ChatPageNew() {
 
     const refreshViewportState = () => {
       const viewport = window.visualViewport
-      const measuredHeight = Math.round(viewport?.height || window.innerHeight || 0)
+      const fallbackHeight = getViewportFallbackHeight()
+      const rawMeasuredHeight = Math.round(viewport?.height || window.innerHeight || 0)
+      let measuredHeight = rawMeasuredHeight > 0 ? rawMeasuredHeight : fallbackHeight
       const measuredTop = Math.max(0, Math.round(viewport?.offsetTop || 0))
-      const layoutHeight = Math.round(window.innerHeight || measuredHeight || 0)
+      const inputFocused = isMessageInputFocused()
+      if (!inputFocused && fallbackHeight > 0 && measuredHeight < Math.round(fallbackHeight * 0.72)) {
+        measuredHeight = fallbackHeight
+      }
+      const layoutHeight = Math.max(
+        Math.round(window.innerHeight || 0),
+        measuredHeight,
+        fallbackHeight,
+      )
       const measuredBottomGap = Math.max(0, layoutHeight - (measuredTop + measuredHeight))
 
       if (measuredHeight > 0) {
@@ -1206,7 +1236,7 @@ function ChatPageNew() {
         setVisualViewportBottomGap((prev) => (Math.abs((prev || 0) - measuredBottomGap) <= 1 ? prev : measuredBottomGap))
       }
 
-      if (!isMessageInputFocused()) {
+      if (!inputFocused) {
         keyboardSettleUntilRef.current = 0
         setKeyboardOffset(0)
         setIsKeyboardOpen(false)
@@ -1508,6 +1538,7 @@ function ChatPageNew() {
 
   useEffect(() => {
     if (!selectedUser) {
+      shouldAutoScrollToBottomRef.current = true
       setMessages([])
       setHasOlderMessages(false)
       setIsLoadingOlderMessages(false)
@@ -1516,6 +1547,7 @@ function ChatPageNew() {
       return
     }
     const targetUsername = selectedUser.username
+    shouldAutoScrollToBottomRef.current = true
     const targetKey = toUserKey(targetUsername)
     const clearCutoff = getConversationClearCutoff(targetUsername)
     const memoryCachedRows = conversationCacheRef.current[targetKey]
@@ -1617,6 +1649,7 @@ function ChatPageNew() {
 
     loadingOlderMessagesRef.current = true
     setIsLoadingOlderMessages(true)
+    shouldAutoScrollToBottomRef.current = false
 
     const listEl = messagesAreaRef.current
     const previousScrollTop = Number(listEl?.scrollTop || 0)
@@ -1712,6 +1745,8 @@ function ChatPageNew() {
   }, [navigate])
 
   useEffect(() => {
+    if (loadingOlderMessagesRef.current) return
+    if (!shouldAutoScrollToBottomRef.current) return
     scrollMessagesToBottom('auto')
   }, [messages])
 
@@ -2347,6 +2382,7 @@ function ChatPageNew() {
   }
 
   const scrollMessagesToBottom = (behavior = 'auto') => {
+    shouldAutoScrollToBottomRef.current = true
     const listEl = messagesAreaRef.current
     if (listEl) {
       try {
@@ -2714,9 +2750,15 @@ function ChatPageNew() {
     setActiveMessageActionsKey(null)
     setReactionTray(null)
 
-    if (!hasOlderMessages || isLoadingOlderMessages) return
     const listEl = messagesAreaRef.current
     if (!listEl) return
+    const top = Number(listEl.scrollTop || 0)
+    const height = Number(listEl.clientHeight || 0)
+    const full = Number(listEl.scrollHeight || 0)
+    const distanceFromBottom = Math.max(0, full - (top + height))
+    shouldAutoScrollToBottomRef.current = distanceFromBottom <= AUTO_SCROLL_BOTTOM_THRESHOLD
+
+    if (!hasOlderMessages || isLoadingOlderMessages) return
     if (Number(listEl.scrollTop || 0) <= CONVERSATION_SCROLL_TOP_THRESHOLD) {
       loadOlderMessages()
     }
@@ -3439,7 +3481,7 @@ function ChatPageNew() {
     setReactionTray(null)
   }
 
-  const fallbackViewportHeight = typeof window !== 'undefined' ? window.innerHeight : 0
+  const fallbackViewportHeight = getViewportFallbackHeight()
   const isNativeRuntime = isNativeCapacitorRuntime()
   const renderReplyInsideComposer = Boolean(
     isNativeRuntime &&
@@ -3464,7 +3506,7 @@ function ChatPageNew() {
       data-native={isNativeRuntime ? 'true' : 'false'}
       style={{
         '--chat-keyboard-offset': `${Math.max(0, keyboardOffset || 0)}px`,
-        '--chat-viewport-height': `${Math.max(0, viewportHeight || fallbackViewportHeight)}px`,
+        '--chat-viewport-height': `${Math.max(0, viewportHeight || 0, fallbackViewportHeight)}px`,
         '--chat-safe-bottom': (isIosPlatform && !isKeyboardOpen) ? 'env(safe-area-inset-bottom)' : '0px',
         '--chat-safe-top': isIosPlatform ? 'env(safe-area-inset-top)' : '0px',
         '--chat-vv-top': `${Math.max(0, visualViewportTop)}px`,

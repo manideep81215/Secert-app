@@ -165,22 +165,26 @@ public class PushNotificationService {
     if (subscriptions.isEmpty() && mobileTokens.isEmpty()) return;
 
     String payload = buildPayload(title, body, url);
+    boolean mobilePushSent = false;
 
     // Send native mobile push immediately for lowest delivery latency.
     if (!mobileTokens.isEmpty()) {
       FirebaseMessaging messaging = getFirebaseMessaging();
       if (messaging != null) {
         for (MobilePushTokenEntity mobileToken : mobileTokens) {
-          sendToMobileToken(messaging, mobileToken, title, body, url);
+          if (sendToMobileToken(messaging, mobileToken, title, body, url)) {
+            mobilePushSent = true;
+          }
         }
       }
     }
 
+    final boolean mobilePushDelivered = mobilePushSent;
     CompletableFuture.runAsync(() -> {
-      // Avoid duplicate lock-screen notifications when a user has both
-      // mobile token(s) and web-push subscriptions for the same account.
-      if (!mobileTokens.isEmpty()) return;
       if (subscriptions.isEmpty()) return;
+      // Avoid duplicate lock-screen notifications when native push already delivered.
+      // If native push failed for all tokens, web push acts as a fallback path.
+      if (mobilePushDelivered) return;
       try {
         PushService service = new PushService(vapidPublicKey, vapidPrivateKey, vapidSubject);
         for (PushSubscriptionEntity subscription : subscriptions) {

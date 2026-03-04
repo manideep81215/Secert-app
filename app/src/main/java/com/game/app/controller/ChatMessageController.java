@@ -149,7 +149,6 @@ public class ChatMessageController {
 
       String mediaUrl = ServletUriComponentsBuilder.fromCurrentContextPath()
           .path("/api/app/messages/media/{id}")
-          .queryParam("v", System.currentTimeMillis())
           .buildAndExpand(media.getId())
           .toUriString();
       return new MediaUploadResponse(mediaUrl, media.getFileName(), media.getMimeType());
@@ -159,7 +158,9 @@ public class ChatMessageController {
   }
 
   @GetMapping("/media/{id}")
-  public ResponseEntity<byte[]> getMedia(@PathVariable Long id) {
+  public ResponseEntity<byte[]> getMedia(
+      @PathVariable Long id,
+      @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String ifNoneMatch) {
     ChatMediaEntity media = chatMediaRepository.findById(id)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Media not found"));
     String mimeType = media.getMimeType() != null && !media.getMimeType().isBlank()
@@ -167,12 +168,21 @@ public class ChatMessageController {
         : MediaType.APPLICATION_OCTET_STREAM_VALUE;
     MediaType contentType = MediaType.parseMediaType(mimeType);
     boolean inline = mimeType.startsWith("image/") || mimeType.startsWith("video/") || mimeType.startsWith("audio/");
+    byte[] data = media.getData() != null ? media.getData() : new byte[0];
+    String etag = "\"chat-media-" + id + "-" + data.length + "\"";
+    String cacheControl = "private, max-age=2592000, immutable";
+
+    if (ifNoneMatch != null && ifNoneMatch.contains(etag)) {
+      return ResponseEntity.status(HttpStatus.NOT_MODIFIED)
+          .header(HttpHeaders.CACHE_CONTROL, cacheControl)
+          .header(HttpHeaders.ETAG, etag)
+          .build();
+    }
 
     ResponseEntity.BodyBuilder response = ResponseEntity.ok()
         .contentType(contentType)
-        .header(HttpHeaders.CACHE_CONTROL, "no-store, no-cache, must-revalidate, max-age=0")
-        .header(HttpHeaders.PRAGMA, "no-cache")
-        .header(HttpHeaders.EXPIRES, "0");
+        .header(HttpHeaders.CACHE_CONTROL, cacheControl)
+        .header(HttpHeaders.ETAG, etag);
 
     if (!inline) {
       String fileName = media.getFileName() != null && !media.getFileName().isBlank()
@@ -183,7 +193,7 @@ public class ChatMessageController {
           ContentDisposition.attachment().filename(fileName, StandardCharsets.UTF_8).build().toString());
     }
 
-    return response.body(media.getData());
+    return response.body(data);
   }
 
   private ConversationMessageDto toDto(ChatMessageEntity row, String meUsername) {

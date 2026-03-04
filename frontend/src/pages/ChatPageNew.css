@@ -1666,7 +1666,7 @@
     display: flex;
     position: relative;
     width: 100%;
-    height: 100dvh;
+    height: var(--chat-viewport-height, 100dvh);
     z-index: 5;
   }
 
@@ -1695,7 +1695,7 @@
     inset: 0;
     top: var(--chat-safe-top, 0px);
     width: 100%;
-    height: calc(100dvh - var(--chat-safe-top, 0px));
+    height: calc(var(--chat-viewport-height, 100dvh) - var(--chat-safe-top, 0px));
     z-index: 120;
   }
 
@@ -1712,7 +1712,7 @@
     top: var(--chat-safe-top, 0px);
     width: 100%;
     max-width: 100%;
-    height: calc(100dvh - var(--chat-safe-top, 0px));
+    height: calc(var(--chat-viewport-height, 100dvh) - var(--chat-safe-top, 0px));
     z-index: 110;
     overflow: hidden;
   }
@@ -2382,8 +2382,8 @@
     bottom: 0 !important;
     top: var(--chat-safe-top, 0px) !important;
     width: 100vw !important;
-    height: calc(100dvh - var(--chat-safe-top, 0px)) !important;
-    min-height: calc(100dvh - var(--chat-safe-top, 0px)) !important;
+    height: calc(var(--chat-viewport-height, 100dvh) - var(--chat-safe-top, 0px)) !important;
+    min-height: calc(var(--chat-viewport-height, 100dvh) - var(--chat-safe-top, 0px)) !important;
     padding-top: max(0px, var(--chat-safe-top, 0px));
     padding-bottom: env(safe-area-inset-bottom);
   }

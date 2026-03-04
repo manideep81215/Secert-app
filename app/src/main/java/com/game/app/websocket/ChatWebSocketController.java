@@ -139,14 +139,12 @@ public class ChatWebSocketController {
             entity.getId(),
             entity.getCreatedAt() != null ? entity.getCreatedAt().toEpochMilli() : Instant.now().toEpochMilli()));
 
-    if (notifyWhenOnline || !isUserConnected(normalizedTo)) {
-      String preview = messagePreview(payload.message(), payload.type(), payload.fileName());
-      pushNotificationService.notifyUser(
-          normalizedTo,
-          "@" + normalizedFrom,
-          preview,
-          "/#/chat?with=" + normalizedFrom);
-    }
+    String preview = messagePreview(payload.message(), payload.type(), payload.fileName());
+    pushNotificationService.notifyUser(
+        normalizedTo,
+        "@" + normalizedFrom,
+        preview,
+        "/#/chat?with=" + normalizedFrom);
   }
 
   @MessageMapping("/chat.edit")
