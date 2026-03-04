@@ -2,7 +2,13 @@ package com.game.app.controller;
 
 import java.util.List;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -47,9 +53,11 @@ public class ChatMessageController {
   }
 
   @GetMapping("/conversation")
-  public List<ConversationMessageDto> getConversation(
+  public ConversationPageDto getConversation(
       @RequestHeader(value = "Authorization", required = false) String authHeader,
-      @RequestParam("with") String withUsername) {
+      @RequestParam("with") String withUsername,
+      @RequestParam(value = "page", required = false) Integer page,
+      @RequestParam(value = "size", required = false) Integer size) {
     UserEntity me = requireAuthUser(authHeader);
     String meUsername = normalizeUsername(me.getUsername());
     String otherUsername = normalizeUsername(withUsername);
@@ -58,9 +66,62 @@ public class ChatMessageController {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Conversation username is required");
     }
 
-    return chatMessageRepository.findConversation(meUsername, otherUsername).stream()
+    if (page == null && size == null) {
+      List<ConversationMessageDto> allMessages = chatMessageRepository.findConversation(meUsername, otherUsername).stream()
+          .map((row) -> toDto(row, meUsername))
+          .toList();
+      return new ConversationPageDto(
+          allMessages,
+          0,
+          allMessages.size(),
+          false,
+          allMessages.size());
+    }
+
+    int safePage = Math.max(0, page == null ? 0 : page);
+    int safeSize = Math.min(200, Math.max(1, size == null ? 50 : size));
+
+    Page<ChatMessageEntity> conversationPage = chatMessageRepository.findConversationPage(
+        meUsername,
+        otherUsername,
+        PageRequest.of(safePage, safeSize));
+
+    List<ChatMessageEntity> content = new ArrayList<>(conversationPage.getContent());
+    Collections.reverse(content);
+    List<ConversationMessageDto> messages = content.stream()
         .map((row) -> toDto(row, meUsername))
         .toList();
+
+    return new ConversationPageDto(
+        messages,
+        safePage,
+        safeSize,
+        conversationPage.hasNext(),
+        conversationPage.getTotalElements());
+  }
+
+  @GetMapping("/conversation-summaries")
+  public List<ConversationSummaryDto> getConversationSummaries(
+      @RequestHeader(value = "Authorization", required = false) String authHeader) {
+    UserEntity me = requireAuthUser(authHeader);
+    String meUsername = normalizeUsername(me.getUsername());
+
+    List<ChatMessageEntity> latestMessages = chatMessageRepository.findLatestMessagesByPeer(meUsername);
+    Map<String, ConversationSummaryDto> byPeer = new LinkedHashMap<>();
+    for (ChatMessageEntity row : latestMessages) {
+      String peerUsername = meUsername.equalsIgnoreCase(row.getFromUsername())
+          ? normalizeUsername(row.getToUsername())
+          : normalizeUsername(row.getFromUsername());
+      if (peerUsername.isBlank() || byPeer.containsKey(peerUsername)) continue;
+      byPeer.put(peerUsername, new ConversationSummaryDto(
+          peerUsername,
+          row.getMessage(),
+          row.getType(),
+          row.getFileName(),
+          row.getCreatedAt() != null ? row.getCreatedAt().toEpochMilli() : null));
+    }
+
+    return new ArrayList<>(byPeer.values());
   }
 
   @PostMapping(value = "/media", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -196,6 +257,22 @@ public class ChatMessageController {
       Long editedAt,
       String replyText,
       String replySenderName) {
+  }
+
+  public record ConversationPageDto(
+      List<ConversationMessageDto> messages,
+      int page,
+      int size,
+      boolean hasMore,
+      long totalElements) {
+  }
+
+  public record ConversationSummaryDto(
+      String peerUsername,
+      String text,
+      String type,
+      String fileName,
+      Long createdAt) {
   }
 
   public record MediaUploadResponse(String mediaUrl, String fileName, String mimeType) {

@@ -132,3 +132,56 @@
   opacity: 0.75;
   cursor: not-allowed;
 }
+
+.verify-divider {
+  position: relative;
+  margin: 0.1rem 0;
+  text-align: center;
+}
+
+.verify-divider::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  border-top: 1px dashed rgba(93, 64, 55, 0.4);
+  transform: translateY(-50%);
+}
+
+.verify-divider span {
+  position: relative;
+  z-index: 1;
+  padding: 0 0.6rem;
+  background: var(--parchment);
+  color: rgba(62, 39, 35, 0.75);
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.verify-biometric-btn {
+  width: fit-content;
+  margin: 0 auto;
+  border: 2px solid #8d6e63;
+  border-bottom: 4px solid #5d4037;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #cfe6a9 0%, #99bd63 100%);
+  color: #2f221d;
+  font-family: 'Fredoka One', cursive;
+  font-size: 0.97rem;
+  padding: 0.58rem 1.2rem;
+  cursor: pointer;
+  transition: transform 0.1s ease, box-shadow 0.1s ease, opacity 0.1s ease;
+  box-shadow: 0 4px 0 #5d4037;
+}
+
+.verify-biometric-btn:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 #5d4037;
+}
+
+.verify-biometric-btn:disabled {
+  opacity: 0.72;
+  cursor: not-allowed;
+}

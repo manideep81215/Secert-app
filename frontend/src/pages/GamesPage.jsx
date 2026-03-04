@@ -6,11 +6,13 @@ import { toast } from 'react-toastify'
 import { useFlowState, resetFlowState } from '../hooks/useFlowState'
 import { getConversation } from '../services/messagesApi'
 import { getAllUsers } from '../services/usersApi'
-import { getNotifyCutoff, setNotifyCutoff } from '../lib/notifications'
+import { getNotifyCutoff, pushNotify, setNotifyCutoff } from '../lib/notifications'
 import { WS_CHAT_URL } from '../config/apiConfig'
 import './GamesPage.css'
 
 const REALTIME_TOAST_ID = 'realtime-connection'
+const CONVERSATION_PAGE_SIZE = 50
+const MISSED_SCAN_PAGE_LIMIT = 12
 
 const GAME_ITEMS = [
   { id: 'rps', title: 'Rock / Paper / Scissors', icon: '/theme/icon-rock-paper-scissors.png', path: '/games/rps' },
@@ -26,6 +28,40 @@ function GamesPage() {
   const wsResumeSuppressUntilRef = useRef(0)
   const wsLastHiddenAtRef = useRef(Date.now())
   const wsErrorTimerRef = useRef(null)
+
+  const getMissedIncomingSince = async (token, peerUsername, cutoff) => {
+    const cutoffMs = Number(cutoff || 0)
+    let page = 0
+    let hasMore = true
+    let missedCount = 0
+    let latestIncomingAt = 0
+
+    while (hasMore && page < MISSED_SCAN_PAGE_LIMIT) {
+      const pageResult = await getConversation(token, peerUsername, { page, size: CONVERSATION_PAGE_SIZE })
+      const rows = Array.isArray(pageResult?.messages) ? pageResult.messages : []
+      const incomingRows = rows
+        .filter((row) => row?.sender === 'other')
+        .map((row) => Number(row?.createdAt || 0))
+        .filter((value) => value > 0)
+
+      if (incomingRows.length) {
+        const newestInPage = Math.max(...incomingRows)
+        const oldestInPage = Math.min(...incomingRows)
+        if (newestInPage > latestIncomingAt) latestIncomingAt = newestInPage
+        const newerInPage = incomingRows.filter((value) => value > cutoffMs).length
+        missedCount += newerInPage
+        hasMore = Boolean(pageResult?.hasMore)
+        if (!hasMore || oldestInPage <= cutoffMs) break
+      } else {
+        hasMore = Boolean(pageResult?.hasMore)
+        if (!hasMore) break
+      }
+
+      page += 1
+    }
+
+    return { count: missedCount, latestIncomingAt }
+  }
 
   const isAndroidLike = () => {
     if (typeof navigator === 'undefined') return false
@@ -156,18 +192,13 @@ function GamesPage() {
           if (cancelled) return
           const peerUsername = user.username
           const cutoff = getNotifyCutoff(flow.username, peerUsername)
-          const rows = await getConversation(flow.token, peerUsername)
+          const missed = await getMissedIncomingSince(flow.token, peerUsername, cutoff)
           if (cancelled) return
 
-          const missed = (rows || [])
-            .filter((row) => row?.sender === 'other')
-            .filter((row) => Number(row?.createdAt || 0) > cutoff)
+          if (!missed?.count) continue
 
-          if (!missed.length) continue
-
-          const latest = Math.max(...missed.map((row) => Number(row.createdAt || 0)))
-          setNotifyCutoff(flow.username, peerUsername, latest || Date.now())
-          await pushNotify(`@${peerUsername}`, `${missed.length} new message${missed.length > 1 ? 's' : ''}`)
+          setNotifyCutoff(flow.username, peerUsername, missed.latestIncomingAt || Date.now())
+          await pushNotify(`@${peerUsername}`, `${missed.count} new message${missed.count > 1 ? 's' : ''}`)
         }
       } catch (error) {
         if (error?.response?.status === 401) {

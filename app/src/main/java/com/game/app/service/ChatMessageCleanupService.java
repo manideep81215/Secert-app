@@ -21,7 +21,7 @@ public class ChatMessageCleanupService {
 
   public ChatMessageCleanupService(
       ChatMessageRepository chatMessageRepository,
-      @Value("${app.chat.text-retention-days:7}") int retentionDays) {
+      @Value("${app.chat.text-retention-days:3}") int retentionDays) {
     this.chatMessageRepository = chatMessageRepository;
     this.retentionDays = retentionDays;
   }

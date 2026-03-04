@@ -14,11 +14,14 @@
     "cap:ios": "npm run build && npx cap sync ios && npx cap open ios"
   },
   "dependencies": {
+    "@aparajita/capacitor-biometric-auth": "^9.1.2",
     "@capacitor/android": "^7.4.3",
     "@capacitor/app": "^7.0.2",
     "@capacitor/core": "^7.4.3",
+    "@capacitor/haptics": "^7.0.3",
     "@capacitor/keyboard": "^7.0.2",
     "@capacitor/local-notifications": "^7.0.2",
+    "@capacitor/preferences": "^7.0.4",
     "@capacitor/push-notifications": "^7.0.2",
     "@stomp/stompjs": "^7.2.1",
     "@tailwindcss/vite": "^4.1.18",

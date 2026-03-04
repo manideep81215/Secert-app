@@ -487,6 +487,17 @@
   animation: fadeUp 0.45s ease;
 }
 
+.messages-pagination-hint {
+  align-self: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: rgba(77, 46, 26, 0.8);
+  background: rgba(255, 248, 225, 0.9);
+  border: 1px solid rgba(176, 138, 88, 0.45);
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+}
+
 .message {
   display: flex;
   align-items: flex-end;
@@ -1169,6 +1180,12 @@
   color: #fff;
   border-color: #8b1d16;
   animation: voice-pulse 1s ease-in-out infinite;
+}
+
+.voice-action-icon {
+  width: 1rem;
+  height: 1rem;
+  display: block;
 }
 
 .btn-voice-cancel {
@@ -2479,8 +2496,8 @@
 
   /* Capacitor Android: use pure flex flow while keyboard is open to avoid residual gaps. */
   .chat-container[data-native="true"][data-android="true"].keyboard-open:not(.mobile-users-open) .chat-area {
-    height: var(--chat-viewport-height, 100dvh) !important;
-    min-height: var(--chat-viewport-height, 100dvh) !important;
+    height: 100% !important;
+    min-height: 0 !important;
   }
 
   .chat-container[data-native="true"][data-android="true"].keyboard-open:not(.mobile-users-open) .input-area {

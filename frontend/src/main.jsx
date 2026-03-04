@@ -5,6 +5,7 @@ import 'bootstrap/dist/css/bootstrap.min.css'
 import 'react-toastify/dist/ReactToastify.css'
 import './styles/base.css'
 import App from './App.jsx'
+import AppErrorBoundary from './components/AppErrorBoundary.jsx'
 import { installToastGuard } from './lib/toastGuard'
 
 if (typeof globalThis.global === 'undefined') {
@@ -100,7 +101,9 @@ const rootEl = document.getElementById('root')
 createRoot(rootEl).render(
   <StrictMode>
     <HashRouter>
-      <App />
+      <AppErrorBoundary>
+        <App />
+      </AppErrorBoundary>
     </HashRouter>
   </StrictMode>,
 )

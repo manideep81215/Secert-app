@@ -3,8 +3,9 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Client } from '@stomp/stompjs'
 import SockJS from 'sockjs-client'
 import { useLocation, useNavigate } from 'react-router-dom'
+import { Haptics, ImpactStyle } from '@capacitor/haptics'
 import { getMe } from '../services/authApi'
-import { getConversation, uploadMedia } from '../services/messagesApi'
+import { getConversation, getConversationSummaries, uploadMedia } from '../services/messagesApi'
 import { getAllUsers } from '../services/usersApi'
 import BackIcon from '../components/BackIcon'
 import { FileAttachIcon, PhotoAttachIcon } from '../components/AttachmentIcons'
@@ -31,6 +32,9 @@ const ONLINE_HEARTBEAT_MS = 30 * 1000
 const AUTO_REFRESH_DEBOUNCE_MS = 1200
 const TEXT_SEND_WAIT_MS = 8000
 const CONVERSATION_FETCH_RETRY_LIMIT = 4
+const CONVERSATION_PAGE_SIZE = 50
+const CONVERSATION_SCROLL_TOP_THRESHOLD = 140
+const MISSED_SCAN_PAGE_LIMIT = 12
 const OFFLINE_DASHBOARD_REDIRECT_MS = 60 * 1000
 const QUICK_REACTIONS = [
   { code: 'heart', emoji: '❤️' },
@@ -73,6 +77,8 @@ function ChatPageNew() {
   const [selectedUser, setSelectedUser] = useState(null)
   const [conversationClears, setConversationClears] = useState({})
   const [messages, setMessages] = useState([])
+  const [hasOlderMessages, setHasOlderMessages] = useState(false)
+  const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false)
   const [conversationReloadTick, setConversationReloadTick] = useState(0)
   const [usersReloadTick, setUsersReloadTick] = useState(0)
   const [inputValue, setInputValue] = useState('')
@@ -113,6 +119,8 @@ function ChatPageNew() {
     getNotificationPermissionState()
   )
   const lastPublishedReadAtRef = useRef({})
+  const nextConversationPageRef = useRef(1)
+  const loadingOlderMessagesRef = useRef(false)
   const mediaInputRef = useRef(null)
   const fileInputRef = useRef(null)
   const messagesAreaRef = useRef(null)
@@ -344,6 +352,19 @@ function ChatPageNew() {
       <path d="M10.2 11.1c0-0.4-0.3-0.8-0.8-0.8s-0.8 0.3-0.8 0.8v4.1c0 0.4 0.3 0.8 0.8 0.8s0.8-0.3 0.8-0.8v-4.1Zm2.6 0c0-0.4-0.3-0.8-0.8-0.8s-0.8 0.3-0.8 0.8v4.1c0 0.4 0.3 0.8 0.8 0.8s0.8-0.3 0.8-0.8v-4.1Zm2.6 0c0-0.4-0.3-0.8-0.8-0.8s-0.8 0.3-0.8 0.8v4.1c0 0.4 0.3 0.8 0.8 0.8s0.8-0.3 0.8-0.8v-4.1Z" />
     </svg>
   )
+  const VoiceActionIcon = ({ className = '' }) => (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path
+        fill="currentColor"
+        d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Zm5-3a1 1 0 1 1 2 0 7 7 0 0 1-6 6.92V21h3a1 1 0 1 1 0 2H8a1 1 0 1 1 0-2h3v-3.08A7 7 0 0 1 5 11a1 1 0 0 1 2 0 5 5 0 0 0 10 0Z"
+      />
+    </svg>
+  )
   const formatTimestamp = (value) => {
     if (!value) return getTimeLabel()
     return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -445,6 +466,56 @@ function ChatPageNew() {
       lastCreatedAt: latestCreatedAt || Date.now(),
     }
   }
+  const summarizeServerConversationSummary = (row) => {
+    const createdAt = Number(row?.createdAt || 0) || 0
+    if (!createdAt && !String(row?.text || '').trim() && !String(row?.type || '').trim()) {
+      return {
+        hasConversation: false,
+        lastMessage: '',
+        timestamp: '',
+        lastCreatedAt: 0,
+      }
+    }
+    return {
+      hasConversation: true,
+      lastMessage: getMessagePreview(row?.type || null, row?.text || '', row?.fileName || null),
+      timestamp: createdAt ? formatTimestamp(createdAt) : '',
+      lastCreatedAt: createdAt || 0,
+    }
+  }
+  const getMissedIncomingSince = async (token, peerUsername, cutoff) => {
+    const cutoffMs = Number(cutoff || 0)
+    let page = 0
+    let hasMore = true
+    let missedCount = 0
+    let latestIncomingAt = 0
+
+    while (hasMore && page < MISSED_SCAN_PAGE_LIMIT) {
+      const pageResult = await getConversation(token, peerUsername, { page, size: CONVERSATION_PAGE_SIZE })
+      const rows = Array.isArray(pageResult?.messages) ? pageResult.messages : []
+      const incomingRows = rows
+        .filter((row) => row?.sender === 'other')
+        .map((row) => Number(row?.createdAt || 0))
+        .filter((value) => value > 0)
+
+      if (incomingRows.length) {
+        const newestInPage = Math.max(...incomingRows)
+        const oldestInPage = Math.min(...incomingRows)
+        if (newestInPage > latestIncomingAt) latestIncomingAt = newestInPage
+        const newerInPage = incomingRows.filter((value) => value > cutoffMs).length
+        missedCount += newerInPage
+        hasMore = Boolean(pageResult?.hasMore)
+        if (!hasMore || oldestInPage <= cutoffMs) break
+      } else {
+        hasMore = Boolean(pageResult?.hasMore)
+        if (!hasMore) break
+      }
+
+      page += 1
+    }
+
+    return { count: missedCount, latestIncomingAt }
+  }
   const decodeReaction = (value) => {
     if (!value) return null
     const normalized = String(value).trim()
@@ -468,6 +539,35 @@ function ChatPageNew() {
   }
   const isSameMessage = (message, key) => getMessageEditKey(message) === key
   const getMessageUiKey = (message, index) => getMessageEditKey(message) || `${index}-${message?.createdAt || message?.timestamp || 'x'}-${message?.sender || 'u'}`
+  const prependOlderMessages = (olderRows, currentRows) => {
+    if (!Array.isArray(olderRows) || !olderRows.length) return currentRows || []
+    if (!Array.isArray(currentRows) || !currentRows.length) return olderRows
+
+    const seenIds = new Set(
+      currentRows
+        .map((row) => Number(row?.messageId || 0))
+        .filter((id) => id > 0)
+    )
+
+    const filteredOlderRows = olderRows.filter((row) => {
+      const rowId = Number(row?.messageId || 0)
+      if (rowId > 0) return !seenIds.has(rowId)
+      const rowCreatedAt = Number(row?.createdAt || row?.clientCreatedAt || 0)
+      return !currentRows.some((existing) => {
+        const existingId = Number(existing?.messageId || 0)
+        if (existingId > 0) return false
+        return (
+          Number(existing?.createdAt || existing?.clientCreatedAt || 0) === rowCreatedAt &&
+          String(existing?.sender || '') === String(row?.sender || '') &&
+          String(existing?.text || '') === String(row?.text || '') &&
+          String(existing?.mediaUrl || '') === String(row?.mediaUrl || '')
+        )
+      })
+    })
+
+    if (!filteredOlderRows.length) return currentRows
+    return [...filteredOlderRows, ...currentRows]
+  }
   const syncConversationSummaryForUser = (peerUsername, nextRows) => {
     const normalizedPeer = String(peerUsername || '').trim()
     if (!normalizedPeer) return
@@ -493,7 +593,13 @@ function ChatPageNew() {
   }
   const getMessageFooterLabel = (message) => {
     if (isMessageFailed(message)) return `Not sent · ${message.timestamp}`
-    if (message?.deliveryStatus === 'uploading') return `Sending... · ${message.timestamp}`
+    if (message?.deliveryStatus === 'uploading') {
+      const progress = Math.max(0, Math.min(100, Number(message?.uploadProgress || 0)))
+      const rounded = Math.round(progress)
+      if (message?.uploadPhase === 'compressing') return `Compressing ${rounded}% · ${message.timestamp}`
+      if (message?.uploadPhase === 'uploading') return `Uploading ${rounded}% · ${message.timestamp}`
+      return `Sending... · ${message.timestamp}`
+    }
     if (message?.edited) return `edited · ${message.timestamp}`
     return message?.timestamp || getTimeLabel()
   }
@@ -550,8 +656,13 @@ function ChatPageNew() {
       return null
     }
   }
-  const compressImageToLimit = async (inputFile, maxBytes) => {
+  const compressImageToLimit = async (inputFile, maxBytes, onProgress) => {
     if (typeof window === 'undefined') return null
+    const reportProgress = (value) => {
+      if (typeof onProgress !== 'function') return
+      const safeValue = Math.max(0, Math.min(100, Math.round(Number(value || 0))))
+      onProgress(safeValue)
+    }
     try {
       const sourceUrl = URL.createObjectURL(inputFile)
       const image = await new Promise((resolve, reject) => {
@@ -571,7 +682,10 @@ function ChatPageNew() {
       if (!context) return null
 
       const qualitySteps = [0.92, 0.85, 0.78, 0.7, 0.62, 0.55, 0.48, 0.4]
+      const totalSteps = 6 * qualitySteps.length
+      let completedSteps = 0
       let bestBlob = null
+      reportProgress(1)
 
       for (let scaleStep = 0; scaleStep < 6; scaleStep += 1) {
         const scale = Math.max(0.28, 1 - (scaleStep * 0.14))
@@ -586,6 +700,8 @@ function ChatPageNew() {
           const blob = await new Promise((resolve) => {
             canvas.toBlob(resolve, 'image/jpeg', quality)
           })
+          completedSteps += 1
+          reportProgress((completedSteps / totalSteps) * 100)
           if (!blob) continue
           if (!bestBlob || blob.size < bestBlob.size) {
             bestBlob = blob
@@ -601,35 +717,52 @@ function ChatPageNew() {
       }
 
       if (bestBlob && bestBlob.size < inputFile.size) {
+        reportProgress(100)
         const outputName = (inputFile.name || 'image').replace(/\.[^.]+$/, '') + '.jpg'
         return new File([bestBlob], outputName, {
           type: 'image/jpeg',
           lastModified: Date.now(),
         })
       }
+      reportProgress(100)
       return null
     } catch {
+      reportProgress(100)
       return null
     }
   }
-  const compressMediaToLimit = async (inputFile, mediaType, maxBytes) => {
+  const compressMediaToLimit = async (inputFile, mediaType, maxBytes, onProgress) => {
+    const reportProgress = (value) => {
+      if (typeof onProgress !== 'function') return
+      const safeValue = Math.max(0, Math.min(100, Math.round(Number(value || 0))))
+      onProgress(safeValue)
+    }
     if (!inputFile || inputFile.size <= maxBytes) {
+      reportProgress(100)
       return { file: inputFile, compressed: false }
     }
 
     if (mediaType === 'image') {
-      const imageCompressed = await compressImageToLimit(inputFile, maxBytes)
+      const imageCompressed = await compressImageToLimit(inputFile, maxBytes, (value) => {
+        const mapped = 5 + ((Math.max(0, Math.min(100, value)) / 100) * 80)
+        reportProgress(mapped)
+      })
       if (imageCompressed && imageCompressed.size <= maxBytes) {
+        reportProgress(100)
         return { file: imageCompressed, compressed: true }
       }
+      reportProgress(85)
       const gzipCompressed = await gzipFile(inputFile)
+      reportProgress(100)
       if (gzipCompressed && gzipCompressed.size <= maxBytes) {
         return { file: gzipCompressed, compressed: true }
       }
       return null
     }
 
+    reportProgress(20)
     const gzipCompressed = await gzipFile(inputFile)
+    reportProgress(100)
     if (gzipCompressed && gzipCompressed.size <= maxBytes) {
       return { file: gzipCompressed, compressed: true }
     }
@@ -1179,11 +1312,20 @@ function ChatPageNew() {
 
     const loadUsersFromDb = async () => {
       try {
-        const dbUsers = await getAllUsers(flow.token)
+        const [dbUsers, serverSummaries] = await Promise.all([
+          getAllUsers(flow.token),
+          getConversationSummaries(flow.token),
+        ])
         if (cancelled) return
         const me = (flow.username || '').toLowerCase()
         const cachedByKey = readUsersCache().reduce((acc, row) => {
           acc[toUserKey(row.username)] = row
+          return acc
+        }, {})
+        const summaryByKey = (serverSummaries || []).reduce((acc, row) => {
+          const userKey = toUserKey(row?.peerUsername)
+          if (!userKey) return acc
+          acc[userKey] = summarizeServerConversationSummary(row)
           return acc
         }, {})
         const list = (dbUsers || [])
@@ -1193,19 +1335,25 @@ function ChatPageNew() {
           })
           .map((user) => {
             const username = (user.username || '').trim()
+            const userKey = toUserKey(username)
             const cacheRow = cachedByKey[toUserKey(username)] || {}
-            const hasConversation = Boolean(cacheRow.hasConversation)
-              || Boolean(String(cacheRow.lastMessage || '').trim())
-              || Boolean(String(cacheRow.timestamp || '').trim())
+            const summaryRow = summaryByKey[userKey] || {}
+            const cacheLastCreatedAt = Number(cacheRow.lastCreatedAt || 0) || 0
+            const summaryLastCreatedAt = Number(summaryRow.lastCreatedAt || 0) || 0
+            const useSummary = summaryLastCreatedAt >= cacheLastCreatedAt
+            const activePreview = useSummary ? summaryRow : cacheRow
+            const hasConversation = Boolean(activePreview.hasConversation)
+              || Boolean(String(activePreview.lastMessage || '').trim())
+              || Boolean(String(activePreview.timestamp || '').trim())
             return {
               id: user.id,
               username,
               name: (user.name || '').trim(),
               status: 'offline',
-              lastMessage: String(cacheRow.lastMessage || ''),
-              timestamp: String(cacheRow.timestamp || ''),
+              lastMessage: String(activePreview.lastMessage || ''),
+              timestamp: String(activePreview.timestamp || ''),
               hasConversation,
-              lastCreatedAt: Number(cacheRow.lastCreatedAt || 0) || 0,
+              lastCreatedAt: Math.max(cacheLastCreatedAt, summaryLastCreatedAt),
             }
           })
 
@@ -1236,35 +1384,6 @@ function ChatPageNew() {
             }
           })
         })
-
-        const usersNeedingHydration = list.filter((user) => !Boolean(user.hasConversation))
-        if (!usersNeedingHydration.length) return
-        const hydratedByKey = {}
-        const hydratedResults = await Promise.allSettled(
-          usersNeedingHydration.map(async (user) => {
-            const rows = await getConversation(flow.token, user.username)
-            return {
-              userKey: toUserKey(user.username),
-              summary: summarizeConversationForList(rows),
-            }
-          })
-        )
-        if (cancelled) return
-        hydratedResults.forEach((result) => {
-          if (result.status !== 'fulfilled') return
-          if (!result.value?.summary?.hasConversation) return
-          hydratedByKey[result.value.userKey] = result.value.summary
-        })
-        if (!Object.keys(hydratedByKey).length) return
-        setUsers((prev) => prev.map((user) => {
-          const hydrated = hydratedByKey[toUserKey(user.username)]
-          if (!hydrated) return user
-          const prevLastCreatedAt = Number(user.lastCreatedAt || 0) || 0
-          const nextLastCreatedAt = Number(hydrated.lastCreatedAt || 0) || 0
-          if (prevLastCreatedAt > nextLastCreatedAt && Boolean(user.hasConversation)) return user
-          return { ...user, ...hydrated }
-        }))
-        // Don't auto-select user - let user manually select from list
       } catch (error) {
         console.error('Failed loading users from database', error)
         notify.error('Failed to load users from database.')
@@ -1295,6 +1414,10 @@ function ChatPageNew() {
   useEffect(() => {
     if (!selectedUser) {
       setMessages([])
+      setHasOlderMessages(false)
+      setIsLoadingOlderMessages(false)
+      loadingOlderMessagesRef.current = false
+      nextConversationPageRef.current = 1
       return
     }
     const targetUsername = selectedUser.username
@@ -1304,6 +1427,10 @@ function ChatPageNew() {
     const diskCachedRows = readConversationCache(targetUsername, clearCutoff)
     const cachedRows = memoryCachedRows?.length ? memoryCachedRows : diskCachedRows
     const hasImmediateData = Array.isArray(cachedRows) && cachedRows.length > 0
+    setIsLoadingOlderMessages(false)
+    loadingOlderMessagesRef.current = false
+    setHasOlderMessages(Boolean(cachedRows?.length >= CONVERSATION_PAGE_SIZE))
+    nextConversationPageRef.current = 1
     if (Array.isArray(cachedRows) && cachedRows.length) {
       setMessages((prev) => {
         const pendingUploads = (prev || []).filter((msg) =>
@@ -1318,10 +1445,11 @@ function ChatPageNew() {
     let cancelled = false
     let attempt = 0
     const fetchConversation = () => {
-      getConversation(flow.token, targetUsername)
-      .then((rows) => {
+      getConversation(flow.token, targetUsername, { page: 0, size: CONVERSATION_PAGE_SIZE })
+      .then((result) => {
         if (cancelled) return
         if (toUserKey(selectedUserRef.current?.username) !== targetKey) return
+        const rows = Array.isArray(result?.messages) ? result.messages : []
         const normalized = normalizeConversationRows(rows, clearCutoff)
         conversationCacheRef.current[targetKey] = normalized
         writeConversationCache(targetUsername, normalized)
@@ -1334,6 +1462,8 @@ function ChatPageNew() {
           if (!pendingUploads.length) return normalized
           return [...normalized, ...pendingUploads]
         })
+        setHasOlderMessages(Boolean(result?.hasMore))
+        nextConversationPageRef.current = 1
         const latestIncoming = normalized
           .filter((msg) => msg.sender === 'other')
           .reduce((max, msg) => Math.max(max, Number(msg.createdAt || msg.clientCreatedAt || 0)), 0)
@@ -1380,6 +1510,47 @@ function ChatPageNew() {
       cancelled = true
     }
   }, [selectedUser, flow.token, conversationClears, conversationReloadTick])
+
+  const loadOlderMessages = async () => {
+    if (!selectedUser || !flow.token) return
+    if (!hasOlderMessages || loadingOlderMessagesRef.current) return
+
+    const targetUsername = selectedUser.username
+    const targetKey = toUserKey(targetUsername)
+    const pageToLoad = Number(nextConversationPageRef.current || 0)
+    if (pageToLoad < 1) return
+
+    loadingOlderMessagesRef.current = true
+    setIsLoadingOlderMessages(true)
+
+    const listEl = messagesAreaRef.current
+    const previousScrollTop = Number(listEl?.scrollTop || 0)
+    const previousScrollHeight = Number(listEl?.scrollHeight || 0)
+
+    try {
+      const result = await getConversation(flow.token, targetUsername, { page: pageToLoad, size: CONVERSATION_PAGE_SIZE })
+      if (toUserKey(selectedUserRef.current?.username) !== targetKey) return
+
+      const clearCutoff = getConversationClearCutoff(targetUsername)
+      const olderRows = normalizeConversationRows(result?.messages || [], clearCutoff)
+      setMessages((prev) => prependOlderMessages(olderRows, prev))
+      setHasOlderMessages(Boolean(result?.hasMore))
+      nextConversationPageRef.current = pageToLoad + 1
+
+      if (listEl) {
+        window.requestAnimationFrame(() => {
+          const updatedHeight = Number(listEl.scrollHeight || 0)
+          const delta = Math.max(0, updatedHeight - previousScrollHeight)
+          listEl.scrollTop = previousScrollTop + delta
+        })
+      }
+    } catch {
+      notify.warn('Failed to load older messages. Scroll up to retry.')
+    } finally {
+      loadingOlderMessagesRef.current = false
+      setIsLoadingOlderMessages(false)
+    }
+  }
 
   useEffect(() => {
     if (!flow.username || !selectedUser?.username || !messages?.length) return
@@ -1892,20 +2063,14 @@ function ChatPageNew() {
           if (cancelled) return
           try {
             const cutoff = getNotifyCutoff(flow.username, user.username)
-            const rows = await getConversation(flow.token, user.username)
+            const missed = await getMissedIncomingSince(flow.token, user.username, cutoff)
             if (cancelled) return
+            if (!missed?.count) continue
 
-            const missed = (rows || [])
-              .filter((row) => row?.sender === 'other')
-              .filter((row) => Number(row?.createdAt || 0) > cutoff)
-
-            if (!missed.length) continue
-
-            const latest = Math.max(...missed.map((row) => Number(row.createdAt || 0)))
-            setNotifyCutoff(flow.username, user.username, latest || Date.now())
+            setNotifyCutoff(flow.username, user.username, missed.latestIncomingAt || Date.now())
             setUnreadMap((prev) => ({ ...prev, [toUserKey(user.username)]: true }))
             if (!shouldSuppressChatNotification(user.username)) {
-              await pushNotify(`@${formatUsername(user.username)}`, `${missed.length} new message${missed.length > 1 ? 's' : ''}`)
+              await pushNotify(`@${formatUsername(user.username)}`, `${missed.count} new message${missed.count > 1 ? 's' : ''}`)
             }
           } catch {
             // Ignore missed-notification sync failures per conversation.
@@ -2439,6 +2604,18 @@ function ChatPageNew() {
     }
   }
 
+  const handleMessagesScroll = () => {
+    setActiveMessageActionsKey(null)
+    setReactionTray(null)
+
+    if (!hasOlderMessages || isLoadingOlderMessages) return
+    const listEl = messagesAreaRef.current
+    if (!listEl) return
+    if (Number(listEl.scrollTop || 0) <= CONVERSATION_SCROLL_TOP_THRESHOLD) {
+      loadOlderMessages()
+    }
+  }
+
   const stopRecordingTimer = () => {
     if (recordingTimerRef.current) {
       clearInterval(recordingTimerRef.current)
@@ -2470,47 +2647,38 @@ function ChatPageNew() {
       resolvedType = inferMediaKind(file)
     }
 
-    let uploadFile = file
-    const maxBytes = MAX_MEDIA_BYTES
-    if (uploadFile.size > maxBytes) {
-      notify.info('Large media detected. Compressing to fit 200MB limit...')
-      const compressedResult = await compressMediaToLimit(uploadFile, resolvedType, maxBytes)
-      if (!compressedResult?.file) {
-        notify.error('Upload must be below 200MB. Compression could not reduce this media enough.')
-        return
-      }
-      uploadFile = compressedResult.file
-      if (compressedResult.compressed) {
-        const beforeMb = Math.round(file.size / (1024 * 1024))
-        const afterMb = Math.round(uploadFile.size / (1024 * 1024))
-        notify.info(`Compressed media from ${beforeMb}MB to ${afterMb}MB`)
-      }
-    }
-
-    if (uploadFile.size > maxBytes) {
-      notify.error('Upload must be below 200MB.')
-      return
-    }
-
-    const localPreviewUrl = URL.createObjectURL(uploadFile)
     const currentReply = replyingTo
     const targetUser = selectedUser
     const tempId = createTempId()
+    const createdAtNow = Date.now()
     const label = resolvedType === 'voice' ? 'voice message' : resolvedType
     const article = resolvedType === 'image' || resolvedType === 'audio' ? 'an' : 'a'
+    const maxBytes = MAX_MEDIA_BYTES
+    const needsCompression = file.size > maxBytes
+    const localPreviewUrl = URL.createObjectURL(file)
+
+    const updateTempMessage = (patch) => {
+      setMessages((prev) => prev.map((msg) => (
+        msg.tempId === tempId ? { ...msg, ...patch } : msg
+      )))
+    }
 
     setMessages((prev) => [...prev, {
       sender: 'user',
       type: resolvedType,
       text: `Sent ${article} ${label}`,
-      fileName: uploadFile.name,
+      fileName: file.name,
       mediaUrl: localPreviewUrl,
-      mimeType: uploadFile.type,
+      mimeType: file.type,
       timestamp: getTimeLabel(),
+      createdAt: createdAtNow,
+      clientCreatedAt: createdAtNow,
       senderName: formatUsername(flow.username || 'You'),
       replyingTo: currentReply,
       tempId,
       deliveryStatus: 'uploading',
+      uploadPhase: needsCompression ? 'compressing' : 'uploading',
+      uploadProgress: needsCompression ? 1 : 0,
     }])
     setReplyingTo(null)
 
@@ -2520,7 +2688,7 @@ function ChatPageNew() {
         ? 'Sent a video'
       : resolvedType === 'voice'
           ? 'Sent a voice message'
-          : `Sent a file (${uploadFile.name})`
+          : `Sent a file (${file.name})`
 
     setUsers((prev) =>
       prev.map((user) =>
@@ -2530,9 +2698,50 @@ function ChatPageNew() {
       )
     )
 
+    let uploadFile = file
+    if (needsCompression) {
+      notify.info('Large media detected. Compressing to fit 200MB limit...')
+      const compressedResult = await compressMediaToLimit(uploadFile, resolvedType, maxBytes, (progress) => {
+        updateTempMessage({
+          uploadPhase: 'compressing',
+          uploadProgress: Math.max(1, Math.min(100, Number(progress || 0))),
+        })
+      })
+      if (!compressedResult?.file) {
+        updateTempMessage({ deliveryStatus: 'failed', uploadProgress: 100 })
+        notify.error('Upload must be below 200MB. Compression could not reduce this media enough.')
+        return
+      }
+      uploadFile = compressedResult.file
+      updateTempMessage({
+        fileName: uploadFile.name,
+        mimeType: uploadFile.type || file.type,
+        uploadPhase: 'uploading',
+        uploadProgress: 0,
+      })
+      if (compressedResult.compressed) {
+        const beforeMb = Math.round(file.size / (1024 * 1024))
+        const afterMb = Math.round(uploadFile.size / (1024 * 1024))
+        notify.info(`Compressed media from ${beforeMb}MB to ${afterMb}MB`)
+      }
+    }
+
+    if (uploadFile.size > maxBytes) {
+      updateTempMessage({ deliveryStatus: 'failed', uploadProgress: 100 })
+      notify.error('Upload must be below 200MB.')
+      return
+    }
+
     let uploaded
     try {
-      uploaded = await uploadMedia(flow.token, uploadFile)
+      uploaded = await uploadMedia(flow.token, uploadFile, {
+        onProgress: (progress) => {
+          updateTempMessage({
+            uploadPhase: 'uploading',
+            uploadProgress: Math.max(1, Math.min(100, Number(progress || 0))),
+          })
+        },
+      })
     } catch (error) {
       console.error('Media upload failed', error)
       if (error?.response?.status === 401) {
@@ -2542,10 +2751,11 @@ function ChatPageNew() {
         return
       }
       if (error?.response?.status === 413) {
+        updateTempMessage({ deliveryStatus: 'failed', uploadProgress: 100 })
         notify.error('File exceeds upload limit (200MB max).')
         return
       }
-      setMessages((prev) => prev.map((msg) => (msg.tempId === tempId ? { ...msg, deliveryStatus: 'failed' } : msg)))
+      updateTempMessage({ deliveryStatus: 'failed', uploadProgress: 100 })
       notify.error('Media upload failed. Please try a smaller file.')
       return
     }
@@ -2556,13 +2766,20 @@ function ChatPageNew() {
 
     setMessages((prev) => prev.map((msg) => (
       msg.tempId === tempId
-        ? { ...msg, mediaUrl: uploadedUrl, mimeType: uploadedMime, fileName: uploadedFileName }
+        ? {
+            ...msg,
+            mediaUrl: uploadedUrl,
+            mimeType: uploadedMime,
+            fileName: uploadedFileName,
+            uploadPhase: 'uploading',
+            uploadProgress: 100,
+          }
         : msg
     )))
 
     const isRealtimeReady = await waitForSocketConnected(15000, 300)
     if (!isRealtimeReady) {
-      setMessages((prev) => prev.map((msg) => (msg.tempId === tempId ? { ...msg, deliveryStatus: 'failed' } : msg)))
+      updateTempMessage({ deliveryStatus: 'failed' })
       notify.error('Media uploaded, but realtime is disconnected. Tap resend when connection returns.')
       return
     }
@@ -2570,7 +2787,7 @@ function ChatPageNew() {
     try {
       const activeSocket = socketRef.current
       if (!activeSocket?.connected) {
-        setMessages((prev) => prev.map((msg) => (msg.tempId === tempId ? { ...msg, deliveryStatus: 'failed' } : msg)))
+        updateTempMessage({ deliveryStatus: 'failed' })
         notify.error('Media uploaded, but realtime is disconnected. Tap resend when connection returns.')
         return
       }
@@ -2596,7 +2813,7 @@ function ChatPageNew() {
       }, 12000)
     } catch (error) {
       console.error('Realtime publish failed after upload', error)
-      setMessages((prev) => prev.map((msg) => (msg.tempId === tempId ? { ...msg, deliveryStatus: 'failed' } : msg)))
+      updateTempMessage({ deliveryStatus: 'failed' })
       notify.error('Media uploaded, but send failed. Tap resend.')
     }
   }
@@ -2951,6 +3168,7 @@ function ChatPageNew() {
     const isOutgoing = state.message?.sender === 'user'
     const reachedReplySwipe = isOutgoing ? (dx < -56 && Math.abs(dy) < 34) : (dx > 56 && Math.abs(dy) < 34)
     if (!state.swiped && reachedReplySwipe) {
+      Haptics.impact({ style: ImpactStyle.Light }).catch(() => {})
       setReplyingTo(state.message)
       setActiveMessageActionsKey(null)
       swipeTapSuppressUntilRef.current = Date.now() + 420
@@ -3246,10 +3464,7 @@ function ChatPageNew() {
           ref={messagesAreaRef}
           onDragOver={handleDragOver}
           onDrop={handleDrop}
-          onScroll={() => {
-            setActiveMessageActionsKey(null)
-            setReactionTray(null)
-          }}
+          onScroll={handleMessagesScroll}
           onClick={(event) => {
             const target = event.target
             if (!(target instanceof HTMLElement)) return
@@ -3262,6 +3477,11 @@ function ChatPageNew() {
           animate={{ opacity: 1 }}
           transition={{ duration: 0.3 }}
         >
+          {(isLoadingOlderMessages || hasOlderMessages) && (
+            <div className="messages-pagination-hint">
+              {isLoadingOlderMessages ? 'Loading older messages...' : 'Scroll up to load older messages'}
+            </div>
+          )}
           {shouldReduceMessageMotion ? (
             messages.map((message, index) => {
               const messageKey = getMessageUiKey(message, index)
@@ -3590,7 +3810,7 @@ function ChatPageNew() {
                 title={isRecordingVoice ? `Stop recording (${recordingSeconds}s)` : 'Record voice message'}
                 aria-label={isRecordingVoice ? 'Stop recording' : 'Record voice message'}
               >
-                {isRecordingVoice ? icons.send : icons.voice}
+                {isRecordingVoice ? icons.send : <VoiceActionIcon className="voice-action-icon" />}
               </button>
               {isRecordingVoice && (
                 <button

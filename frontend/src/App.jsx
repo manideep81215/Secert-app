@@ -139,6 +139,9 @@ function App() {
     const authToken = (flow?.token || '').trim()
     const authUsername = (flow?.username || '').trim()
     if (!authToken || !authUsername) return undefined
+    const currentPath = (location.pathname || '').toLowerCase()
+    // Page-level chat/game screens already maintain their own realtime sockets.
+    if (currentPath.startsWith('/chat') || currentPath.startsWith('/games')) return undefined
 
     const shouldSuppressGlobalMessageNotification = (pathname) => {
       if (!pathname) return false
@@ -193,7 +196,7 @@ function App() {
     return () => {
       client.deactivate()
     }
-  }, [flow?.token, flow?.username])
+  }, [flow?.token, flow?.username, location.pathname])
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined
