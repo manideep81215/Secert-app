@@ -13,7 +13,7 @@ import {
 } from '../lib/notifications'
 import { ensurePushSubscription } from '../lib/pushSubscription'
 import { syncNativePushRegistration } from '../lib/nativePush'
-import { getPushPublicKey, getPushStatus, sendTestPush } from '../services/pushApi'
+import { getPushPublicKey, getPushStatus, sendTestPush, subscribeMobilePush } from '../services/pushApi'
 import { useFlowState } from '../hooks/useFlowState'
 import { WS_CHAT_URL } from '../config/apiConfig'
 import { getConversation } from '../services/messagesApi'
@@ -340,6 +340,8 @@ function ChatInfoPage() {
         let keyError = ''
         let keyHint = ''
         let serverMobileTokens = 0
+        let statusSupported = false
+        let tokenSyncError = ''
         try {
           const keyConfig = await getPushPublicKey()
           pushServerEnabled = Boolean(keyConfig?.nativeEnabled ?? keyConfig?.enabled)
@@ -351,15 +353,28 @@ function ChatInfoPage() {
           keyError = error?.message || 'Push server check failed.'
         }
 
+        if (flow?.token && nativePermission === 'granted' && nativeToken) {
+          try {
+            await subscribeMobilePush(flow.token, {
+              token: nativeToken,
+              platform: nativePlatform || 'android',
+            })
+          } catch (error) {
+            tokenSyncError = error?.message || 'Token sync failed.'
+          }
+        }
+
         if (flow?.token) {
           try {
             const status = await getPushStatus(flow.token)
+            statusSupported = true
             serverMobileTokens = Number(status?.mobileTokens || 0)
             if (!pushServerEnabled) {
               pushServerEnabled = Boolean(status?.nativePushEnabled)
             }
           } catch (error) {
-            if (!keyError) {
+            const statusCode = Number(error?.response?.status || 0)
+            if (statusCode !== 404 && !keyError) {
               keyError = error?.message || 'Push status check failed.'
             }
           }
@@ -367,15 +382,17 @@ function ChatInfoPage() {
 
         const hasLocalToken = Boolean(nativeToken)
         const hasServerToken = serverMobileTokens > 0
-        const subscriptionExists = hasLocalToken && hasServerToken
+        const subscriptionExists = statusSupported ? (hasLocalToken && hasServerToken) : hasLocalToken
 
         if (!keyHint && nativePermission === 'granted' && !hasLocalToken) {
           keyHint = 'Device token not ready yet. Tap Notify again after a moment.'
-        } else if (!keyHint && hasLocalToken && !hasServerToken) {
+        } else if (!keyHint && statusSupported && hasLocalToken && !hasServerToken) {
           keyHint = 'Token exists on device but not on server yet. Keep app online and tap Refresh.'
+        } else if (!keyHint && !statusSupported && hasLocalToken) {
+          keyHint = 'Device token is ready. Status endpoint is unavailable on this backend version.'
         }
 
-        const combinedError = [registrationError, keyError].filter(Boolean).join(' ')
+        const combinedError = [registrationError, tokenSyncError, keyError].filter(Boolean).join(' ')
         const next = {
           loading: false,
           notificationPermission: nativePermission,

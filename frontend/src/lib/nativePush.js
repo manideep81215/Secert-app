@@ -51,8 +51,12 @@ async function syncMobileTokenToBackend(pushToken) {
       token: mobileToken,
       platform: Capacitor.getPlatform?.() || 'android',
     })
-  } catch {
-    // Ignore transient backend sync failures.
+  } catch (error) {
+    // Keep app flow alive, but expose failure in dev logs.
+    console.warn('[native-push] Failed to sync mobile token to backend', {
+      status: Number(error?.response?.status || 0),
+      message: error?.message || 'sync-failed',
+    })
   }
 }
 
@@ -63,7 +67,7 @@ function attachListeners() {
   const isChatRouteOpen = () => {
     if (typeof window === 'undefined') return false
     const hash = (window.location.hash || '').toLowerCase()
-    return hash.startsWith('#/chat')
+    return hash === '#/chat' || hash.startsWith('#/chat?')
   }
 
   PushNotifications.addListener('registration', async (token) => {

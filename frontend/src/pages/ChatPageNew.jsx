@@ -159,6 +159,7 @@ function ChatPageNew() {
   const offlineSinceRef = useRef({})
   const maxViewportHeightRef = useRef(0)
   const keyboardSettleUntilRef = useRef(0)
+  const syncKeyboardLayoutRef = useRef(() => {})
   const conversationCacheRef = useRef({})
   const CLEAR_CUTOFFS_KEY = 'chat_clear_cutoffs_v1'
   const USERS_CACHE_KEY_PREFIX = 'chat_users_cache_v1:'
@@ -1080,6 +1081,7 @@ function ChatPageNew() {
         syncKeyboardFromViewport()
       })
     }
+    syncKeyboardLayoutRef.current = queueSyncKeyboardFromViewport
 
     const onFocusIn = (event) => {
       const target = event.target
@@ -1166,8 +1168,101 @@ function ChatPageNew() {
       window.removeEventListener('orientationchange', queueSyncKeyboardFromViewport)
       if (syncRafId) cancelAnimationFrame(syncRafId)
       handles.forEach((handle) => handle?.remove?.())
+      syncKeyboardLayoutRef.current = () => {}
     }
   }, [isIosPlatform, isAndroidPlatform])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined
+    if (!isMobileView) return undefined
+    if (!isNativeCapacitorRuntime()) return undefined
+
+    let appStateHandle = null
+    let cancelled = false
+    const wakeTimers = []
+
+    const isMessageInputFocused = () => {
+      const active = document.activeElement
+      return active instanceof HTMLElement && Boolean(active.closest('.message-input'))
+    }
+
+    const refreshViewportState = () => {
+      const viewport = window.visualViewport
+      const measuredHeight = Math.round(viewport?.height || window.innerHeight || 0)
+      const measuredTop = Math.max(0, Math.round(viewport?.offsetTop || 0))
+      const layoutHeight = Math.round(window.innerHeight || measuredHeight || 0)
+      const measuredBottomGap = Math.max(0, layoutHeight - (measuredTop + measuredHeight))
+
+      if (measuredHeight > 0) {
+        maxViewportHeightRef.current = Math.max(maxViewportHeightRef.current || 0, measuredHeight, layoutHeight)
+        setViewportHeight((prev) => (Math.abs((prev || 0) - measuredHeight) <= 2 ? prev : measuredHeight))
+      }
+
+      if (isAndroidPlatform) {
+        setVisualViewportTop(0)
+        setVisualViewportBottomGap(0)
+      } else {
+        setVisualViewportTop((prev) => (Math.abs((prev || 0) - measuredTop) <= 1 ? prev : measuredTop))
+        setVisualViewportBottomGap((prev) => (Math.abs((prev || 0) - measuredBottomGap) <= 1 ? prev : measuredBottomGap))
+      }
+
+      if (!isMessageInputFocused()) {
+        keyboardSettleUntilRef.current = 0
+        setKeyboardOffset(0)
+        setIsKeyboardOpen(false)
+      }
+
+      syncKeyboardLayoutRef.current?.()
+    }
+
+    const runWakeRefresh = () => {
+      refreshViewportState()
+      const delays = [80, 220, 480, 900]
+      delays.forEach((delay) => {
+        const timerId = window.setTimeout(() => {
+          if (cancelled) return
+          refreshViewportState()
+        }, delay)
+        wakeTimers.push(timerId)
+      })
+    }
+
+    const onFocus = () => runWakeRefresh()
+    const onPageShow = () => runWakeRefresh()
+    const onVisibility = () => {
+      if (document.visibilityState !== 'visible') return
+      runWakeRefresh()
+    }
+
+    window.addEventListener('focus', onFocus)
+    window.addEventListener('pageshow', onPageShow)
+    document.addEventListener('visibilitychange', onVisibility)
+
+    const setupAppStateListener = async () => {
+      try {
+        const mod = await import('@capacitor/app')
+        if (cancelled) return
+        appStateHandle = await mod.App.addListener('appStateChange', (state) => {
+          if (!state?.isActive) return
+          runWakeRefresh()
+        })
+      } catch {
+        // Ignore App plugin availability errors.
+      }
+    }
+
+    setupAppStateListener()
+    runWakeRefresh()
+
+    return () => {
+      cancelled = true
+      wakeTimers.forEach((id) => window.clearTimeout(id))
+      window.removeEventListener('focus', onFocus)
+      window.removeEventListener('pageshow', onPageShow)
+      document.removeEventListener('visibilitychange', onVisibility)
+      appStateHandle?.remove?.()
+    }
+  }, [isAndroidPlatform, isMobileView])
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined

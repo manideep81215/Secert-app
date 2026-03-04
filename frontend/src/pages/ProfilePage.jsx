@@ -149,18 +149,30 @@ function ProfilePage() {
     try {
       if (isFirstTime) {
         await saveSecretKeyApi(flow.userId, secretKey, flow.token)
+        if (typeof document !== 'undefined') {
+          document.activeElement?.blur?.()
+        }
         setFlow((prev) => ({ ...prev, verified: true }))
         setShowSecretKeyModal(false)
         setSecretKey('')
+        if (typeof window !== 'undefined') {
+          setTimeout(() => window.dispatchEvent(new Event('resize')), 80)
+        }
         setTimeout(() => {
           navigate('/users')
         }, 500)
       } else {
         const data = await verifySecretKeyApi(flow.userId, secretKey, flow.token)
         if (data?.verified) {
+          if (typeof document !== 'undefined') {
+            document.activeElement?.blur?.()
+          }
           setFlow((prev) => ({ ...prev, verified: true }))
           setShowSecretKeyModal(false)
           setSecretKey('')
+          if (typeof window !== 'undefined') {
+            setTimeout(() => window.dispatchEvent(new Event('resize')), 80)
+          }
           setTimeout(() => {
             navigate('/users')
           }, 500)
@@ -219,9 +231,15 @@ function ProfilePage() {
           // Ignore local persistence failures.
         }
       }
+      if (typeof document !== 'undefined') {
+        document.activeElement?.blur?.()
+      }
       setFlow((prev) => ({ ...prev, verified: true }))
       setShowSecretKeyModal(false)
       setSecretKey('')
+      if (typeof window !== 'undefined') {
+        setTimeout(() => window.dispatchEvent(new Event('resize')), 80)
+      }
       navigate('/users')
       return true
     } catch {
