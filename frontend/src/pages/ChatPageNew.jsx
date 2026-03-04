@@ -3501,6 +3501,18 @@ function ChatPageNew() {
     window.matchMedia?.('(display-mode: standalone)')?.matches ||
     window.navigator?.standalone === true
   )
+  const runtimeInnerHeight = typeof window !== 'undefined' ? Math.round(window.innerHeight || 0) : 0
+  const runtimeVisualHeight = typeof window !== 'undefined' ? Math.round(window.visualViewport?.height || 0) : 0
+  const measuredViewportHeight = Math.max(
+    0,
+    Number(viewportHeight || 0),
+    runtimeVisualHeight,
+    runtimeInnerHeight,
+  )
+  const useStrictIosWebViewport = !isNativeRuntime && isIosPlatform && isKeyboardOpen
+  const resolvedViewportHeight = useStrictIosWebViewport
+    ? Math.max(0, measuredViewportHeight || fallbackViewportHeight)
+    : Math.max(0, measuredViewportHeight, fallbackViewportHeight)
   const renderReplyInsideComposer = Boolean(
     isNativeRuntime &&
     isAndroidPlatform &&
@@ -3525,7 +3537,7 @@ function ChatPageNew() {
       data-standalone={isStandaloneDisplayMode ? 'true' : 'false'}
       style={{
         '--chat-keyboard-offset': `${Math.max(0, keyboardOffset || 0)}px`,
-        '--chat-viewport-height': `${Math.max(0, viewportHeight || 0, fallbackViewportHeight)}px`,
+        '--chat-viewport-height': `${resolvedViewportHeight}px`,
         '--chat-safe-bottom': (isIosPlatform && !isKeyboardOpen) ? 'env(safe-area-inset-bottom)' : '0px',
         '--chat-safe-top': isIosPlatform ? 'env(safe-area-inset-top)' : '0px',
         '--chat-vv-top': `${Math.max(0, visualViewportTop)}px`,
