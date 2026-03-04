@@ -12,6 +12,7 @@ import SnakeLadderGamePage from './pages/SnakeLadderGamePage'
 import VerifyPage from './pages/VerifyPage'
 import ChatPageNew from './pages/ChatPageNew'
 import ChatInfoPage from './pages/ChatInfoPage'
+import LoveTimers from './pages/LoveTimers'
 import ProfilePage from './pages/ProfilePage'
 import { WS_CHAT_URL } from './config/apiConfig'
 import { resetFlowState, useFlowState } from './hooks/useFlowState'
@@ -49,7 +50,8 @@ function App() {
     location.pathname === '/profile' ||
     location.pathname === '/verify' ||
     location.pathname === '/users' ||
-    location.pathname.startsWith('/chat')
+    location.pathname.startsWith('/chat') ||
+    location.pathname === '/timers'
 
   useEffect(() => {
     isAuthenticatedRef.current = isAuthenticated
@@ -223,10 +225,11 @@ function App() {
             '/chat': '/users',
             '/users': '/profile',
             '/verify': '/profile',
+            '/timers': '/chat',
             '/profile': '/games',
           }
 
-          if (current === '/chat/info') {
+          if (current === '/chat/info' || current === '/timers') {
             navigate('/chat', { replace: true })
             return
           }
@@ -445,6 +448,7 @@ function App() {
           <Route path="/users" element={isAuthenticated ? <Navigate to="/chat" replace state={{ openUsersList: true }} /> : <Navigate to="/auth" replace />} />
           <Route path="/chat" element={isAuthenticated ? <ChatPageNew /> : <Navigate to="/auth" replace />} />
           <Route path="/chat/info" element={isAuthenticated ? <ChatInfoPage /> : <Navigate to="/auth" replace />} />
+          <Route path="/timers" element={isAuthenticated ? <LoveTimers /> : <Navigate to="/auth" replace />} />
           <Route path="/profile" element={isAuthenticated ? <ProfilePage /> : <Navigate to="/auth" replace />} />
           <Route path="*" element={<Navigate to="/auth" replace />} />
         </Routes>

@@ -3579,13 +3579,11 @@ function ChatPageNew() {
           <div className="chat-header-actions">
             <button
               className="btn-user-details"
-              onClick={openUserInfo}
-              onTouchEnd={openUserInfo}
-              title="User info"
-              aria-label="User info"
-              disabled={!selectedUser}
+              onClick={() => navigate('/timers')}
+              title="Love timers"
+              aria-label="Love timers"
             >
-              i
+              {'\uD83D\uDC95'}
             </button>
             <button
               className="btn-chat-reload"
