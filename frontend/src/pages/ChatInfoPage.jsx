@@ -345,7 +345,7 @@ function ChatInfoPage() {
   }
 
   return (
-    <div id="chat-info-container" className={`chat-info-page ${isNativeAndroid ? 'native-android' : ''}`} data-privacy-sensitive="true">
+    <div className={`chat-info-page ${isNativeAndroid ? 'native-android' : ''}`}>
       <div className="chat-info-header">
         <button type="button" className="chat-info-back" onClick={goBackToChat} aria-label="Back to chat"><BackIcon /></button>
         <h2>User Details</h2>

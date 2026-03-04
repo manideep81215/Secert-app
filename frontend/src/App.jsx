@@ -38,7 +38,6 @@ function App() {
   const routeHistoryRef = useRef([])
   const isAuthenticatedRef = useRef(isAuthenticated)
   const currentPathRef = useRef(location.pathname)
-  const backgroundedFromSensitiveRouteRef = useRef(false)
   const previousTokenRef = useRef((flow?.token || '').trim())
   const [installPromptEvent, setInstallPromptEvent] = useState(null)
   const [isAppInstalled, setIsAppInstalled] = useState(false)
@@ -51,8 +50,6 @@ function App() {
     location.pathname === '/verify' ||
     location.pathname === '/users' ||
     location.pathname.startsWith('/chat')
-  const isPrivacySensitiveRoute =
-    location.pathname === '/chat' || location.pathname === '/chat/info'
 
   useEffect(() => {
     isAuthenticatedRef.current = isAuthenticated
@@ -137,43 +134,6 @@ function App() {
       stack.splice(0, stack.length - 40)
     }
   }, [location.pathname])
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || typeof document === 'undefined') return undefined
-
-    const isSensitiveRoute = (pathname) => pathname === '/chat' || pathname === '/chat/info'
-    const markBackgrounded = () => {
-      if (!isAuthenticatedRef.current) {
-        backgroundedFromSensitiveRouteRef.current = false
-        return
-      }
-      backgroundedFromSensitiveRouteRef.current = isSensitiveRoute(currentPathRef.current || '')
-    }
-    const handleReturn = () => {
-      if (!backgroundedFromSensitiveRouteRef.current) return
-      backgroundedFromSensitiveRouteRef.current = false
-      if (!isAuthenticatedRef.current) return
-      if ((currentPathRef.current || '') !== '/profile') {
-        navigate('/profile', { replace: true })
-      }
-    }
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') {
-        markBackgrounded()
-      } else if (document.visibilityState === 'visible') {
-        handleReturn()
-      }
-    }
-
-    document.addEventListener('visibilitychange', onVisibilityChange)
-    window.addEventListener('pagehide', markBackgrounded)
-    window.addEventListener('pageshow', handleReturn)
-    return () => {
-      document.removeEventListener('visibilitychange', onVisibilityChange)
-      window.removeEventListener('pagehide', markBackgrounded)
-      window.removeEventListener('pageshow', handleReturn)
-    }
-  }, [navigate])
 
   useEffect(() => {
     const authToken = (flow?.token || '').trim()
@@ -401,138 +361,6 @@ function App() {
   }, [flow?.token])
 
   useEffect(() => {
-    if (typeof window === 'undefined' || typeof document === 'undefined') return undefined
-
-    const setMaskClass = (enabled) => {
-      document.documentElement.classList.toggle('privacy-mask-active', Boolean(enabled))
-    }
-    const setSensitiveContentHidden = (hidden) => {
-      const nodes = document.querySelectorAll('[data-privacy-sensitive="true"]')
-      nodes.forEach((node) => {
-        node.hidden = Boolean(hidden)
-      })
-    }
-    const isSensitiveRoute = () => (
-      currentPathRef.current === '/chat' || currentPathRef.current === '/chat/info'
-    )
-    const activatePrivacyMask = () => {
-      if (!isSensitiveRoute()) {
-        setMaskClass(false)
-        setSensitiveContentHidden(false)
-        return
-      }
-      setSensitiveContentHidden(true)
-      setMaskClass(true)
-    }
-    const deactivatePrivacyMask = () => {
-      setMaskClass(false)
-      setSensitiveContentHidden(false)
-    }
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') {
-        activatePrivacyMask()
-      } else {
-        deactivatePrivacyMask()
-      }
-    }
-    let disposed = false
-    let appStateListener = null
-    let edgeGestureTimer = null
-
-    const bindNativeAppState = async () => {
-      try {
-        const cap = window.Capacitor
-        const isNative = typeof cap?.isNativePlatform === 'function'
-          ? cap.isNativePlatform()
-          : cap?.getPlatform?.() === 'android' || cap?.getPlatform?.() === 'ios'
-        if (!isNative) return
-        const mod = await import('@capacitor/app')
-        if (disposed) return
-        appStateListener = await mod.App.addListener('appStateChange', ({ isActive }) => {
-          if (isActive) {
-            deactivatePrivacyMask()
-          } else {
-            activatePrivacyMask()
-          }
-        })
-      } catch {
-        // Ignore native app-state listener failures.
-      }
-    }
-
-    document.addEventListener('visibilitychange', onVisibilityChange)
-    document.addEventListener('webkitvisibilitychange', onVisibilityChange)
-    window.addEventListener('pagehide', activatePrivacyMask)
-    window.addEventListener('freeze', activatePrivacyMask)
-    window.addEventListener('beforeunload', activatePrivacyMask)
-    window.addEventListener('blur', activatePrivacyMask)
-    window.addEventListener('pageshow', deactivatePrivacyMask)
-    window.addEventListener('focus', deactivatePrivacyMask)
-
-    const onTouchStartCapture = (event) => {
-      if (!isSensitiveRoute()) return
-      const touch = event.touches?.[0]
-      if (!touch) return
-      // iOS app-switcher swipe can start above the bottom safe area on some devices.
-      const edgeInset = Math.max(24, Math.round(window.innerHeight * 0.18))
-      const nearBottomEdge = touch.clientY >= (window.innerHeight - edgeInset)
-      if (!nearBottomEdge) return
-      activatePrivacyMask()
-      if (edgeGestureTimer) {
-        window.clearTimeout(edgeGestureTimer)
-      }
-      edgeGestureTimer = window.setTimeout(() => {
-        edgeGestureTimer = null
-        if (document.visibilityState === 'visible') {
-          deactivatePrivacyMask()
-        }
-      }, 1200)
-    }
-
-    window.addEventListener('touchstart', onTouchStartCapture, true)
-
-    bindNativeAppState()
-    if (document.visibilityState === 'hidden') {
-      activatePrivacyMask()
-    } else {
-      deactivatePrivacyMask()
-    }
-    return () => {
-      disposed = true
-      appStateListener?.remove?.()
-      document.removeEventListener('visibilitychange', onVisibilityChange)
-      document.removeEventListener('webkitvisibilitychange', onVisibilityChange)
-      window.removeEventListener('pagehide', activatePrivacyMask)
-      window.removeEventListener('freeze', activatePrivacyMask)
-      window.removeEventListener('beforeunload', activatePrivacyMask)
-      window.removeEventListener('blur', activatePrivacyMask)
-      window.removeEventListener('pageshow', deactivatePrivacyMask)
-      window.removeEventListener('focus', deactivatePrivacyMask)
-      window.removeEventListener('touchstart', onTouchStartCapture, true)
-      if (edgeGestureTimer) {
-        window.clearTimeout(edgeGestureTimer)
-      }
-      setMaskClass(false)
-      setSensitiveContentHidden(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (typeof document === 'undefined') return
-    document.documentElement.classList.toggle('privacy-sensitive-route', isPrivacySensitiveRoute)
-    if (!isPrivacySensitiveRoute) {
-      document.documentElement.classList.remove('privacy-mask-active')
-      const nodes = document.querySelectorAll('[data-privacy-sensitive="true"]')
-      nodes.forEach((node) => {
-        node.hidden = false
-      })
-    }
-    return () => {
-      document.documentElement.classList.remove('privacy-sensitive-route')
-    }
-  }, [isPrivacySensitiveRoute])
-
-  useEffect(() => {
     if (!flow?.token) return undefined
 
     const clearNow = () => {
@@ -652,18 +480,6 @@ function App() {
         )}
       />
 
-      <div className="app-privacy-screen" aria-hidden="true">
-        <div className="app-privacy-brand">
-          <img
-            className="app-privacy-logo"
-            src="/theme/simp-games-quest-logo.png"
-            alt=""
-            loading="eager"
-            decoding="sync"
-          />
-          <span className="app-privacy-title">Simp Games Quest</span>
-        </div>
-      </div>
     </div>
   )
 }

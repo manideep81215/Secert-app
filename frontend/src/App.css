@@ -44,43 +44,6 @@
   background: linear-gradient(90deg, var(--accent-dark), #f59517);
 }
 
-.app-privacy-screen {
-  position: fixed;
-  inset: 0;
-  z-index: 999999;
-  background: #000;
-  pointer-events: none;
-  display: none;
-  align-items: center;
-  justify-content: center;
-}
-
-html.privacy-mask-active .app-privacy-screen {
-  display: flex;
-}
-
-.app-privacy-brand {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
-}
-
-.app-privacy-logo {
-  width: min(30vw, 128px);
-  height: auto;
-  display: block;
-}
-
-.app-privacy-title {
-  color: #f7e5c6;
-  font-weight: 700;
-  font-size: clamp(1rem, 3vw, 1.25rem);
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-}
-
 .app-toast-container.Toastify__toast-container {
   --app-toast-width: min(92vw, 680px);
   width: var(--app-toast-width);
