@@ -14,6 +14,7 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.messaging.simp.user.SimpSession;
 import org.springframework.messaging.simp.user.SimpUser;
 import org.springframework.messaging.simp.user.SimpUserRegistry;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.socket.messaging.SessionDisconnectEvent;
@@ -37,8 +38,10 @@ public class ChatWebSocketController {
   private final UserRepository userRepository;
   private final PushNotificationService pushNotificationService;
   private final boolean notifyWhenOnline;
+  private final long presenceTimeoutMs;
   private final Set<String> onlineUsers = ConcurrentHashMap.newKeySet();
   private final Map<String, Long> lastSeenMap = new ConcurrentHashMap<>();
+  private final Map<String, Long> presenceHeartbeatMap = new ConcurrentHashMap<>();
 
   public ChatWebSocketController(
       SimpMessagingTemplate messagingTemplate,
@@ -47,7 +50,8 @@ public class ChatWebSocketController {
       ChatReadReceiptRepository chatReadReceiptRepository,
       UserRepository userRepository,
       PushNotificationService pushNotificationService,
-      @Value("${app.push.notify-when-online:true}") boolean notifyWhenOnline) {
+      @Value("${app.push.notify-when-online:true}") boolean notifyWhenOnline,
+      @Value("${app.chat.presence-timeout-ms:65000}") long presenceTimeoutMs) {
     this.messagingTemplate = messagingTemplate;
     this.simpUserRegistry = simpUserRegistry;
     this.chatMessageRepository = chatMessageRepository;
@@ -55,6 +59,7 @@ public class ChatWebSocketController {
     this.userRepository = userRepository;
     this.pushNotificationService = pushNotificationService;
     this.notifyWhenOnline = notifyWhenOnline;
+    this.presenceTimeoutMs = Math.max(15000L, presenceTimeoutMs);
   }
 
   @MessageMapping("/chat.send")
@@ -359,9 +364,14 @@ public class ChatWebSocketController {
           "message", "Chat access is allowed only for chat role users"));
       return;
     }
+    long now = Instant.now().toEpochMilli();
+    boolean wasOnline = onlineUsers.contains(normalized) && isPresenceAlive(normalized, now);
     onlineUsers.add(normalized);
+    presenceHeartbeatMap.put(normalized, now);
     lastSeenMap.remove(normalized);
-    broadcastUserStatus(normalized, "online", null);
+    if (!wasOnline) {
+      broadcastUserStatus(normalized, "online", null);
+    }
     syncOnlineUsersFor(normalized);
     syncReadReceiptsFor(normalized);
   }
@@ -376,12 +386,7 @@ public class ChatWebSocketController {
     if (!hasChatRole(normalized)) {
       return;
     }
-    if (!isUserConnected(normalized)) {
-      onlineUsers.remove(normalized);
-      long lastSeenAt = Instant.now().toEpochMilli();
-      lastSeenMap.put(normalized, lastSeenAt);
-      broadcastUserStatus(normalized, "offline", lastSeenAt);
-    }
+    markUserOffline(normalized, Instant.now().toEpochMilli());
   }
 
   @MessageMapping("/chat.typing")
@@ -423,10 +428,7 @@ public class ChatWebSocketController {
     if (!normalized.isBlank()
         && onlineUsers.contains(normalized)
         && !hasOtherActiveSessions(normalized, disconnectingSessionId)) {
-      onlineUsers.remove(normalized);
-      long lastSeenAt = Instant.now().toEpochMilli();
-      lastSeenMap.put(normalized, lastSeenAt);
-      broadcastUserStatus(normalized, "offline", lastSeenAt);
+      markUserOffline(normalized, Instant.now().toEpochMilli());
     }
   }
 
@@ -436,8 +438,28 @@ public class ChatWebSocketController {
     boolean connected = user != null && !user.getSessions().isEmpty();
     if (!connected) {
       onlineUsers.remove(normalizedUsername);
+      presenceHeartbeatMap.remove(normalizedUsername);
     }
     return connected;
+  }
+
+  private boolean isPresenceAlive(String normalizedUsername, long now) {
+    if (normalizedUsername == null || normalizedUsername.isBlank()) return false;
+    Long lastPingValue = presenceHeartbeatMap.get(normalizedUsername);
+    long lastPing = lastPingValue != null ? lastPingValue : 0L;
+    if (lastPing <= 0) return false;
+    return (now - lastPing) <= presenceTimeoutMs;
+  }
+
+  private void markUserOffline(String normalizedUsername, long lastSeenAt) {
+    if (normalizedUsername == null || normalizedUsername.isBlank()) return;
+    boolean wasOnline = onlineUsers.remove(normalizedUsername);
+    presenceHeartbeatMap.remove(normalizedUsername);
+    if (!wasOnline && lastSeenMap.containsKey(normalizedUsername)) {
+      return;
+    }
+    lastSeenMap.put(normalizedUsername, lastSeenAt);
+    broadcastUserStatus(normalizedUsername, "offline", lastSeenAt);
   }
 
   private boolean hasOtherActiveSessions(String normalizedUsername, String disconnectedSessionId) {
@@ -459,18 +481,16 @@ public class ChatWebSocketController {
   }
 
   private void syncOnlineUsersFor(String username) {
+    long now = Instant.now().toEpochMilli();
     for (String onlineUsername : Set.copyOf(onlineUsers)) {
-      if (isUserConnected(onlineUsername)) {
+      if (isUserConnected(onlineUsername) && isPresenceAlive(onlineUsername, now)) {
         messagingTemplate.convertAndSendToUser(
             username,
             "/queue/user-status",
             new UserStatusPayload(onlineUsername, "online", null));
         continue;
       }
-      onlineUsers.remove(onlineUsername);
-      long lastSeenAt = Instant.now().toEpochMilli();
-      lastSeenMap.put(onlineUsername, lastSeenAt);
-      broadcastUserStatus(onlineUsername, "offline", lastSeenAt);
+      markUserOffline(onlineUsername, now);
     }
 
     for (Map.Entry<String, Long> entry : lastSeenMap.entrySet()) {
@@ -478,6 +498,17 @@ public class ChatWebSocketController {
           username,
           "/queue/user-status",
           new UserStatusPayload(entry.getKey(), "offline", entry.getValue()));
+    }
+  }
+
+  @Scheduled(fixedDelayString = "${app.chat.presence-prune-ms:20000}")
+  public void pruneStalePresence() {
+    long now = Instant.now().toEpochMilli();
+    for (String username : Set.copyOf(onlineUsers)) {
+      if (isUserConnected(username) && isPresenceAlive(username, now)) {
+        continue;
+      }
+      markUserOffline(username, now);
     }
   }
 

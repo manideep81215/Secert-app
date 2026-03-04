@@ -38,6 +38,7 @@ function ChatInfoPage() {
     () => location.state?.notificationPermission || getNotificationPermissionState()
   )
   const [showPushDebug, setShowPushDebug] = useState(false)
+  const [videoThumbMap, setVideoThumbMap] = useState({})
   const [pushDebug, setPushDebug] = useState({
     loading: false,
     notificationPermission: getNotificationPermissionState(),
@@ -278,6 +279,94 @@ function ChatInfoPage() {
   }
 
   useEffect(() => {
+    if (typeof window === 'undefined') return undefined
+    const videoUrls = [...new Set(
+      mediaItems
+        .filter((item) => item?.type === 'video' && item?.mediaUrl)
+        .map((item) => String(item.mediaUrl || '').trim())
+        .filter(Boolean)
+    )]
+    if (!videoUrls.length) return undefined
+    const pendingUrls = videoUrls.filter((url) => videoThumbMap[url] === undefined).slice(0, 6)
+    if (!pendingUrls.length) return undefined
+
+    let cancelled = false
+
+    const generateThumb = (url) => new Promise((resolve) => {
+      const video = document.createElement('video')
+      video.muted = true
+      video.playsInline = true
+      video.preload = 'metadata'
+      video.crossOrigin = 'anonymous'
+      video.src = url
+
+      const cleanup = () => {
+        video.pause()
+        video.removeAttribute('src')
+        video.load()
+      }
+
+      const fail = () => {
+        cleanup()
+        resolve(null)
+      }
+
+      const capture = () => {
+        try {
+          const width = video.videoWidth || 0
+          const height = video.videoHeight || 0
+          if (!width || !height) return fail()
+          const canvas = document.createElement('canvas')
+          canvas.width = width
+          canvas.height = height
+          const ctx = canvas.getContext('2d')
+          if (!ctx) return fail()
+          ctx.drawImage(video, 0, 0, width, height)
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.72)
+          cleanup()
+          resolve(dataUrl || null)
+        } catch {
+          fail()
+        }
+      }
+
+      video.addEventListener('loadedmetadata', () => {
+        try {
+          const targetTime = Math.min(0.4, Math.max((video.duration || 0) * 0.1, 0.05))
+          if (Number.isFinite(targetTime) && targetTime > 0) {
+            video.currentTime = targetTime
+          } else {
+            capture()
+          }
+        } catch {
+          capture()
+        }
+      }, { once: true })
+      video.addEventListener('seeked', capture, { once: true })
+      video.addEventListener('error', fail, { once: true })
+      setTimeout(fail, 8000)
+    })
+
+    const loadThumbs = async () => {
+      for (const url of pendingUrls) {
+        if (cancelled) return
+        const thumb = await generateThumb(url)
+        if (cancelled) return
+        setVideoThumbMap((prev) => {
+          if (prev[url] !== undefined) return prev
+          return { ...prev, [url]: thumb }
+        })
+      }
+    }
+
+    const timeoutId = window.setTimeout(() => { loadThumbs() }, 80)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timeoutId)
+    }
+  }, [mediaItems, videoThumbMap])
+
+  useEffect(() => {
     const syncPermission = () => setNotificationPermission(getNotificationPermissionState())
     window.addEventListener('focus', syncPermission)
     document.addEventListener('visibilitychange', syncPermission)
@@ -414,7 +503,9 @@ function ChatInfoPage() {
         <div className="chat-info-section">
           <h4>Media</h4>
           <div className="chat-info-media-grid">
-            {mediaItems.map((msg, idx) => (
+            {mediaItems.map((msg, idx) => {
+              const thumb = msg.type === 'video' ? videoThumbMap[String(msg.mediaUrl || '').trim()] : null
+              return (
               <button
                 key={`${msg.mediaUrl || idx}-${idx}`}
                 type="button"
@@ -428,12 +519,15 @@ function ChatInfoPage() {
               >
                 {msg.type === 'image' ? (
                   <img className="chat-info-media-thumb" src={msg.mediaUrl} alt={msg.fileName || 'image'} loading="lazy" />
+                ) : thumb ? (
+                  <img className="chat-info-media-thumb" src={thumb} alt={msg.fileName || 'video thumbnail'} loading="lazy" />
                 ) : (
                   <video className="chat-info-media-thumb chat-info-video-thumb" src={msg.mediaUrl} preload="metadata" muted playsInline />
                 )}
                 <span className="chat-info-media-badge">{msg.type === 'video' ? 'Video' : 'Image'}</span>
               </button>
-            ))}
+              )
+            })}
           </div>
           {mediaItems.length === 0 && (
             <p className="chat-info-empty">No media shared yet.</p>

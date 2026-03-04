@@ -1028,8 +1028,7 @@ function ChatPageNew() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined
-    const nativeRuntime = isNativeCapacitorRuntime()
-    const shouldDeferVideoThumbs = isTouchDevice || isMobileView || nativeRuntime || messages.length > 90
+    const shouldDeferVideoThumbs = messages.length > 140
     if (shouldDeferVideoThumbs) return undefined
     const videoUrls = [...new Set(
       messages
@@ -1121,7 +1120,7 @@ function ChatPageNew() {
       if (idleCallbackId !== null) window.cancelIdleCallback?.(idleCallbackId)
       if (timeoutId !== null) window.clearTimeout(timeoutId)
     }
-  }, [messages, videoThumbMap, isTouchDevice, isMobileView])
+  }, [messages, videoThumbMap])
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -3065,7 +3064,13 @@ function ChatPageNew() {
             {thumb ? (
               <img className="message-video-thumb-image" src={thumb} alt={message.fileName || 'video thumbnail'} />
             ) : (
-              <div className="message-video-placeholder" aria-hidden="true" />
+              <video
+                className="message-video-thumb-video"
+                src={message.mediaUrl}
+                preload="metadata"
+                muted
+                playsInline
+              />
             )}
             <span className="message-video-play-icon">{icons.video}</span>
           </div>
