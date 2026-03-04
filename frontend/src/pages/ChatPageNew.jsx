@@ -107,6 +107,8 @@ function ChatPageNew() {
   const [isIosPlatform, setIsIosPlatform] = useState(false)
   const [isAndroidPlatform, setIsAndroidPlatform] = useState(false)
   const [reactionTray, setReactionTray] = useState(null)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [pendingDeleteMessage, setPendingDeleteMessage] = useState(null)
   const [videoThumbMap, setVideoThumbMap] = useState({})
   const [notificationPermission, setNotificationPermission] = useState(
     getNotificationPermissionState()
@@ -322,7 +324,6 @@ function ChatPageNew() {
     file: '\uD83D\uDCC4',
     voice: '\uD83C\uDFA4',
     reply: '\u21A9',
-    delete: '\uD83D\uDDD1',
     edit: '\u270E',
     copy: '\u2398',
     resend: '\u21BB',
@@ -337,6 +338,13 @@ function ChatPageNew() {
     if (type === 'voice') return icons.voice
     return ''
   }
+  const DeleteActionIcon = () => (
+    <svg className="delete-action-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <circle cx="12" cy="12" r="11" />
+      <path d="M15.8 8.2h-1V7.6c0-1-0.8-1.8-1.8-1.8h-2c-1 0-1.8 0.8-1.8 1.8v0.6h-1c-0.4 0-0.8 0.3-0.8 0.8s0.3 0.8 0.8 0.8h0.2v6.5c0 1.1 0.9 2 2 2h3.2c1.1 0 2-0.9 2-2V9.7h0.2c0.4 0 0.8-0.3 0.8-0.8s-0.4-0.7-0.8-0.7Zm-5-0.6v-0.4c0-0.2 0.2-0.4 0.4-0.4h1.7c0.2 0 0.4 0.2 0.4 0.4v0.4h-2.5Z" />
+      <path d="M10.2 11.1c0-0.4-0.3-0.8-0.8-0.8s-0.8 0.3-0.8 0.8v4.1c0 0.4 0.3 0.8 0.8 0.8s0.8-0.3 0.8-0.8v-4.1Zm2.6 0c0-0.4-0.3-0.8-0.8-0.8s-0.8 0.3-0.8 0.8v4.1c0 0.4 0.3 0.8 0.8 0.8s0.8-0.3 0.8-0.8v-4.1Zm2.6 0c0-0.4-0.3-0.8-0.8-0.8s-0.8 0.3-0.8 0.8v4.1c0 0.4 0.3 0.8 0.8 0.8s0.8-0.3 0.8-0.8v-4.1Z" />
+    </svg>
+  )
   const formatTimestamp = (value) => {
     if (!value) return getTimeLabel()
     return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -2797,18 +2805,33 @@ function ChatPageNew() {
   }
 
   const handleDeleteMessage = (message) => {
-    if (!selectedUser || !message || message.sender !== 'user') return
-    const messageKey = getMessageEditKey(message)
-    if (!messageKey) return
+    if (!selectedUser || !message) return
+    setPendingDeleteMessage(message)
+    setShowDeleteConfirm(true)
+    setActiveMessageActionsKey(null)
+  }
 
-    const shouldDelete = typeof window === 'undefined' ? true : window.confirm('Delete this message?')
-    if (!shouldDelete) return
+  const confirmDeleteMessage = () => {
+    const message = pendingDeleteMessage
+    if (!selectedUser || !message) {
+      setShowDeleteConfirm(false)
+      setPendingDeleteMessage(null)
+      return
+    }
+    const messageKey = getMessageEditKey(message)
+    if (!messageKey) {
+      setShowDeleteConfirm(false)
+      setPendingDeleteMessage(null)
+      return
+    }
 
     const hasServerIdentity = Number(message?.messageId || 0) > 0
     if (hasServerIdentity) {
       const activeSocket = socketRef.current
       if (!activeSocket?.connected) {
         notify.error('Realtime server disconnected. Delete failed.')
+        setShowDeleteConfirm(false)
+        setPendingDeleteMessage(null)
         return
       }
       activeSocket.publish({
@@ -2833,6 +2856,8 @@ function ChatPageNew() {
     setEditingMessage((prev) => (prev?.key === messageKey ? null : prev))
     setReactionTray((prev) => (prev?.messageKey === messageKey ? null : prev))
     setActiveMessageActionsKey((prev) => (prev === messageKey ? null : prev))
+    setShowDeleteConfirm(false)
+    setPendingDeleteMessage(null)
   }
 
   const handleDragStart = (event, message) => {
@@ -3292,9 +3317,7 @@ function ChatPageNew() {
                   >
                     {icons.reply}
                   </button>
-                  {message.sender === 'user' && (
-                    <button className="btn-delete" onClick={() => handleDeleteMessage(message)} title="Delete" aria-label="Delete">{icons.delete}</button>
-                  )}
+                  <button className="btn-delete" onClick={() => handleDeleteMessage(message)} title="Delete" aria-label="Delete"><DeleteActionIcon /></button>
                   {message.sender === 'user' && !messageFailed && canEditMessage(message) && (
                     <button className="btn-edit" onClick={() => handleStartEdit(message)} title="Edit" aria-label="Edit">{icons.edit}</button>
                   )}
@@ -3377,9 +3400,7 @@ function ChatPageNew() {
                     >
                       {icons.reply}
                     </button>
-                    {message.sender === 'user' && (
-                      <button className="btn-delete" onClick={() => handleDeleteMessage(message)} title="Delete" aria-label="Delete">{icons.delete}</button>
-                    )}
+                    <button className="btn-delete" onClick={() => handleDeleteMessage(message)} title="Delete" aria-label="Delete"><DeleteActionIcon /></button>
                     {message.sender === 'user' && !messageFailed && canEditMessage(message) && (
                       <button className="btn-edit" onClick={() => handleStartEdit(message)} title="Edit" aria-label="Edit">{icons.edit}</button>
                     )}
@@ -3641,6 +3662,37 @@ function ChatPageNew() {
               <div className="image-preview-actions">
                 <button type="button" className="image-preview-cancel" onClick={clearPendingImagePreview}>Cancel</button>
                 <button type="button" className="image-preview-send" onClick={confirmImagePreviewSend}>Send</button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showDeleteConfirm && (
+          <motion.div className="confirm-modal" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <div
+              className="confirm-modal-backdrop"
+              onClick={() => {
+                setShowDeleteConfirm(false)
+                setPendingDeleteMessage(null)
+              }}
+            />
+            <motion.div className="confirm-modal-card" initial={{ y: 24, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 16, opacity: 0 }}>
+              <div className="confirm-modal-title">Delete message?</div>
+              <div className="confirm-modal-text">This message will be removed for both users.</div>
+              <div className="confirm-modal-actions">
+                <button
+                  type="button"
+                  className="confirm-cancel"
+                  onClick={() => {
+                    setShowDeleteConfirm(false)
+                    setPendingDeleteMessage(null)
+                  }}
+                >
+                  Cancel
+                </button>
+                <button type="button" className="confirm-danger" onClick={confirmDeleteMessage}>Delete</button>
               </div>
             </motion.div>
           </motion.div>

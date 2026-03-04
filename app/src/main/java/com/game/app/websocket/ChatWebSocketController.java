@@ -322,7 +322,8 @@ public class ChatWebSocketController {
 
     String normalizedFrom = normalizeUsername(entity.getFromUsername());
     String normalizedTo = normalizeUsername(entity.getToUsername());
-    if (!normalizedRequester.equals(normalizedFrom)) {
+    boolean isParticipant = normalizedRequester.equals(normalizedFrom) || normalizedRequester.equals(normalizedTo);
+    if (!isParticipant) {
       messagingTemplate.convertAndSendToUser(
           normalizedRequester,
           "/queue/delete-ack",

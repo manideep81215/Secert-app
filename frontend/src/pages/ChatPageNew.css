@@ -840,7 +840,23 @@
 }
 
 .btn-delete {
-  color: #7a1f1f;
+  background: #f44336;
+  color: #fff;
+  padding: 0;
+}
+
+.delete-action-icon {
+  width: 1.2rem;
+  height: 1.2rem;
+  display: block;
+}
+
+.delete-action-icon circle {
+  fill: #f44336;
+}
+
+.delete-action-icon path {
+  fill: #f5f5f5;
 }
 
 .btn-resend {
