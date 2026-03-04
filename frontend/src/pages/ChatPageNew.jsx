@@ -3497,6 +3497,10 @@ function ChatPageNew() {
 
   const fallbackViewportHeight = getViewportFallbackHeight()
   const isNativeRuntime = isNativeCapacitorRuntime()
+  const isStandaloneDisplayMode = typeof window !== 'undefined' && (
+    window.matchMedia?.('(display-mode: standalone)')?.matches ||
+    window.navigator?.standalone === true
+  )
   const renderReplyInsideComposer = Boolean(
     isNativeRuntime &&
     isAndroidPlatform &&
@@ -3518,6 +3522,7 @@ function ChatPageNew() {
       data-ios={isIosPlatform ? 'true' : 'false'}
       data-android={isAndroidPlatform ? 'true' : 'false'}
       data-native={isNativeRuntime ? 'true' : 'false'}
+      data-standalone={isStandaloneDisplayMode ? 'true' : 'false'}
       style={{
         '--chat-keyboard-offset': `${Math.max(0, keyboardOffset || 0)}px`,
         '--chat-viewport-height': `${Math.max(0, viewportHeight || 0, fallbackViewportHeight)}px`,

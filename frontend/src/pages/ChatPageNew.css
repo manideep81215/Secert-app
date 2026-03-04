@@ -2578,13 +2578,22 @@
     min-height: 100dvh !important;
   }
 
-  /* Apply viewport bottom compensation only on iOS web, where keyboard can overlay content. */
-  .chat-container[data-native="false"][data-ios="true"].keyboard-open:not(.mobile-users-open) .input-area {
+  /* Apply viewport bottom compensation only on iOS Safari tab-mode.
+     In standalone/PWA mode, iOS already resizes viewport and extra compensation creates a gap. */
+  .chat-container[data-native="false"][data-ios="true"][data-standalone="false"].keyboard-open:not(.mobile-users-open) .input-area {
     margin-bottom: var(--chat-vv-bottom, 0px) !important;
   }
 
-  .chat-container[data-native="false"][data-ios="true"].keyboard-open:not(.mobile-users-open) .messages-area {
+  .chat-container[data-native="false"][data-ios="true"][data-standalone="false"].keyboard-open:not(.mobile-users-open) .messages-area {
     padding-bottom: calc(0.5rem + var(--chat-vv-bottom, 0px)) !important;
+  }
+
+  .chat-container[data-native="false"][data-ios="true"][data-standalone="true"].keyboard-open:not(.mobile-users-open) .input-area {
+    margin-bottom: 0 !important;
+  }
+
+  .chat-container[data-native="false"][data-ios="true"][data-standalone="true"].keyboard-open:not(.mobile-users-open) .messages-area {
+    padding-bottom: 0.5rem !important;
   }
 
   /* Android web/PWA: never add extra keyboard gap. */
