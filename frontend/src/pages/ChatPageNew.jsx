@@ -9,6 +9,7 @@ import { getConversation, getConversationSummaries, uploadMedia } from '../servi
 import { getAllUsers } from '../services/usersApi'
 import BackIcon from '../components/BackIcon'
 import { FileAttachIcon, PhotoAttachIcon } from '../components/AttachmentIcons'
+import LoveReminder from '../components/LoveReminder'
 import timerLoveBirdsIcon from '../assets/in-love.png'
 import ChatUsersPanel from './ChatUsersPanel'
 import {
@@ -944,6 +945,18 @@ function ChatPageNew() {
     const isAndroid = platform === 'android'
     setIsIosPlatform(isiOS)
     setIsAndroidPlatform(isAndroid)
+  }, [])
+
+  useEffect(() => {
+    if (!isNativeCapacitorRuntime()) return
+    const t1 = setTimeout(() => window.dispatchEvent(new Event('resize')), 100)
+    const t2 = setTimeout(() => window.dispatchEvent(new Event('resize')), 350)
+    const t3 = setTimeout(() => window.dispatchEvent(new Event('resize')), 700)
+    return () => {
+      clearTimeout(t1)
+      clearTimeout(t2)
+      clearTimeout(t3)
+    }
   }, [])
 
   useEffect(() => {
@@ -3514,6 +3527,7 @@ function ChatPageNew() {
         '--chat-vv-bottom': `${Math.max(0, visualViewportBottomGap)}px`,
       }}
     >
+      <LoveReminder />
       <ChatUsersPanel
         filteredUsers={filteredUsers}
         selectedUserId={selectedUser?.id || null}
