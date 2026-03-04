@@ -28,7 +28,7 @@ const EDIT_WINDOW_MS = 15 * 60 * 1000
 const MESSAGE_ACTION_LONG_PRESS_MS = 1000
 const TYPING_STALE_MS = 1400
 const ONLINE_HEARTBEAT_MS = 30 * 1000
-const PRESENCE_ONLINE_STALE_MS = 90 * 1000
+const PRESENCE_ONLINE_STALE_MS = 60 * 1000
 const AUTO_REFRESH_DEBOUNCE_MS = 1200
 const TEXT_SEND_WAIT_MS = 8000
 const CONVERSATION_FETCH_RETRY_LIMIT = 4
@@ -119,6 +119,7 @@ function ChatPageNew() {
   const messagesEndRef = useRef(null)
   const keyboardBottomLockRef = useRef({ rafId: 0, until: 0 })
   const selectedUserRef = useRef(null)
+  const statusMapRef = useRef({})
   const socketRef = useRef(null)
   const attachMenuRef = useRef(null)
   const typingTimeoutRef = useRef(null)
@@ -709,6 +710,10 @@ function ChatPageNew() {
   useEffect(() => {
     selectedUserRef.current = selectedUser
   }, [selectedUser])
+
+  useEffect(() => {
+    statusMapRef.current = statusMap || {}
+  }, [statusMap])
 
   useEffect(() => {
     const active = selectedUser?.username
@@ -1525,8 +1530,9 @@ function ChatPageNew() {
             if (status !== 'online' && status !== 'offline') return
             const userKey = toUserKey(username)
             if (!userKey) return
+            const previousStatus = String(statusMapRef.current[userKey]?.status || '').trim().toLowerCase()
             setStatusMap((prev) => ({ ...prev, [userKey]: { status, lastSeenAt } }))
-            if (status === 'online') {
+            if (status === 'online' && previousStatus !== 'online') {
               updatePresenceLastSeen(username, Date.now())
             } else if (lastSeenAt) {
               setTypingMap((prev) => ({ ...prev, [userKey]: false }))
