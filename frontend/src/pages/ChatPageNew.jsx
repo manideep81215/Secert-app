@@ -461,6 +461,20 @@ function ChatPageNew() {
   }
   const isSameMessage = (message, key) => getMessageEditKey(message) === key
   const getMessageUiKey = (message, index) => getMessageEditKey(message) || `${index}-${message?.createdAt || message?.timestamp || 'x'}-${message?.sender || 'u'}`
+  const syncConversationSummaryForUser = (peerUsername, nextRows) => {
+    const normalizedPeer = String(peerUsername || '').trim()
+    if (!normalizedPeer) return
+    const peerKey = toUserKey(normalizedPeer)
+    const stableRows = (nextRows || []).filter((row) => !(row?.tempId || row?.deliveryStatus === 'uploading'))
+    conversationCacheRef.current[peerKey] = stableRows
+    writeConversationCache(normalizedPeer, stableRows)
+    const summary = summarizeConversationForList(stableRows)
+    setUsers((prev) => prev.map((user) => (
+      toUserKey(user.username) === peerKey
+        ? { ...user, ...summary }
+        : user
+    )))
+  }
   const canEditMessage = (message) => {
     if (!message || message.sender !== 'user') return false
     if (isMessageFailed(message)) return false
@@ -1706,6 +1720,53 @@ function ChatPageNew() {
           }
         })
 
+        client.subscribe('/user/queue/message-deletes', (frame) => {
+          try {
+            const event = JSON.parse(frame.body)
+            const messageId = Number(event?.messageId || 0)
+            if (!messageId) return
+            const deleteKey = `id:${messageId}`
+            const fromKey = toUserKey(event?.fromUsername)
+            const toKey = toUserKey(event?.toUsername)
+            const meKey = toUserKey(authUsername)
+            const activePeer = toUserKey(selectedUserRef.current?.username)
+            const affectsActiveConversation = Boolean(
+              activePeer &&
+              ((fromKey === meKey && toKey === activePeer) || (toKey === meKey && fromKey === activePeer))
+            )
+
+            setMessages((prev) => {
+              const next = prev.filter((msg) => Number(msg?.messageId || 0) !== messageId)
+              if (affectsActiveConversation && next.length !== prev.length) {
+                syncConversationSummaryForUser(selectedUserRef.current?.username, next)
+              }
+              return next
+            })
+            setEditingMessage((prev) => (prev?.key === deleteKey ? null : prev))
+            setReplyingTo((prev) => (Number(prev?.messageId || 0) === messageId ? null : prev))
+            setReactionTray((prev) => (prev?.messageKey === deleteKey ? null : prev))
+            setActiveMessageActionsKey((prev) => (prev === deleteKey ? null : prev))
+
+            if (!affectsActiveConversation && (fromKey === meKey || toKey === meKey)) {
+              setUsersReloadTick(Date.now())
+            }
+          } catch (error) {
+            console.error('Failed parsing message delete payload', error)
+          }
+        })
+
+        client.subscribe('/user/queue/delete-ack', (frame) => {
+          try {
+            const ack = JSON.parse(frame.body)
+            if (ack?.success) return
+            notify.error(ack?.reason ? `Delete failed: ${ack.reason}` : 'Delete failed.')
+            setUsersReloadTick(Date.now())
+            setConversationReloadTick(Date.now())
+          } catch {
+            // Ignore invalid delete acks.
+          }
+        })
+
         client.subscribe('/user/queue/read-receipts', (frame) => {
           try {
             const receipt = JSON.parse(frame.body)
@@ -2735,6 +2796,45 @@ function ChatPageNew() {
     setActiveMessageActionsKey(null)
   }
 
+  const handleDeleteMessage = (message) => {
+    if (!selectedUser || !message || message.sender !== 'user') return
+    const messageKey = getMessageEditKey(message)
+    if (!messageKey) return
+
+    const shouldDelete = typeof window === 'undefined' ? true : window.confirm('Delete this message?')
+    if (!shouldDelete) return
+
+    const hasServerIdentity = Number(message?.messageId || 0) > 0
+    if (hasServerIdentity) {
+      const activeSocket = socketRef.current
+      if (!activeSocket?.connected) {
+        notify.error('Realtime server disconnected. Delete failed.')
+        return
+      }
+      activeSocket.publish({
+        destination: '/app/chat.delete',
+        body: JSON.stringify({
+          messageId: message.messageId,
+          fromUsername: flow.username,
+        }),
+      })
+    }
+
+    setMessages((prev) => {
+      const next = hasServerIdentity
+        ? prev.filter((msg) => Number(msg?.messageId || 0) !== Number(message.messageId || 0))
+        : prev.filter((msg) => !isSameMessage(msg, messageKey))
+      if (next.length !== prev.length) {
+        syncConversationSummaryForUser(selectedUser.username, next)
+      }
+      return next
+    })
+    setReplyingTo((prev) => (prev && isSameMessage(prev, messageKey) ? null : prev))
+    setEditingMessage((prev) => (prev?.key === messageKey ? null : prev))
+    setReactionTray((prev) => (prev?.messageKey === messageKey ? null : prev))
+    setActiveMessageActionsKey((prev) => (prev === messageKey ? null : prev))
+  }
+
   const handleDragStart = (event, message) => {
     setDraggedMessage(message)
     setIsDraggingMessage(true)
@@ -3192,6 +3292,9 @@ function ChatPageNew() {
                   >
                     {icons.reply}
                   </button>
+                  {message.sender === 'user' && (
+                    <button className="btn-delete" onClick={() => handleDeleteMessage(message)} title="Delete" aria-label="Delete">{icons.delete}</button>
+                  )}
                   {message.sender === 'user' && !messageFailed && canEditMessage(message) && (
                     <button className="btn-edit" onClick={() => handleStartEdit(message)} title="Edit" aria-label="Edit">{icons.edit}</button>
                   )}
@@ -3274,6 +3377,9 @@ function ChatPageNew() {
                     >
                       {icons.reply}
                     </button>
+                    {message.sender === 'user' && (
+                      <button className="btn-delete" onClick={() => handleDeleteMessage(message)} title="Delete" aria-label="Delete">{icons.delete}</button>
+                    )}
                     {message.sender === 'user' && !messageFailed && canEditMessage(message) && (
                       <button className="btn-edit" onClick={() => handleStartEdit(message)} title="Edit" aria-label="Edit">{icons.edit}</button>
                     )}

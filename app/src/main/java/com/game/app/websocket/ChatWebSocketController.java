@@ -291,6 +291,60 @@ public class ChatWebSocketController {
     messagingTemplate.convertAndSendToUser(normalizedTo, "/queue/message-reactions", event);
   }
 
+  @MessageMapping("/chat.delete")
+  public void deleteMessage(DeleteMessage payload, Principal principal) {
+    if (payload == null || payload.messageId() == null) {
+      return;
+    }
+
+    String requester = principal != null ? principal.getName() : payload.fromUsername();
+    if (requester == null || requester.isBlank()) {
+      return;
+    }
+
+    String normalizedRequester = normalizeUsername(requester);
+    if (!hasChatRole(normalizedRequester)) {
+      messagingTemplate.convertAndSendToUser(
+          normalizedRequester,
+          "/queue/delete-ack",
+          new DeleteAck(payload.messageId(), false, "Chat access denied"));
+      return;
+    }
+
+    ChatMessageEntity entity = chatMessageRepository.findById(payload.messageId()).orElse(null);
+    if (entity == null) {
+      messagingTemplate.convertAndSendToUser(
+          normalizedRequester,
+          "/queue/delete-ack",
+          new DeleteAck(payload.messageId(), false, "Message not found"));
+      return;
+    }
+
+    String normalizedFrom = normalizeUsername(entity.getFromUsername());
+    String normalizedTo = normalizeUsername(entity.getToUsername());
+    if (!normalizedRequester.equals(normalizedFrom)) {
+      messagingTemplate.convertAndSendToUser(
+          normalizedRequester,
+          "/queue/delete-ack",
+          new DeleteAck(payload.messageId(), false, "Not allowed"));
+      return;
+    }
+
+    chatMessageRepository.delete(entity);
+
+    MessageDeletePayload event = new MessageDeletePayload(
+        entity.getId(),
+        normalizedFrom,
+        normalizedTo,
+        Instant.now().toEpochMilli());
+    messagingTemplate.convertAndSendToUser(normalizedFrom, "/queue/message-deletes", event);
+    messagingTemplate.convertAndSendToUser(normalizedTo, "/queue/message-deletes", event);
+    messagingTemplate.convertAndSendToUser(
+        normalizedFrom,
+        "/queue/delete-ack",
+        new DeleteAck(entity.getId(), true, null));
+  }
+
   @MessageMapping("/user.online")
   public void userOnline(UserStatusMessage payload, Principal principal) {
     String username = principal != null ? principal.getName() : (payload != null ? payload.username() : null);
@@ -530,4 +584,10 @@ public class ChatWebSocketController {
   public record ReactionMessage(Long messageId, String reaction, String fromUsername) {}
 
   public record MessageReactionPayload(Long messageId, String reaction, String reactedBy, Long reactedAt) {}
+
+  public record DeleteMessage(Long messageId, String fromUsername) {}
+
+  public record MessageDeletePayload(Long messageId, String fromUsername, String toUsername, Long deletedAt) {}
+
+  public record DeleteAck(Long messageId, boolean success, String reason) {}
 }
