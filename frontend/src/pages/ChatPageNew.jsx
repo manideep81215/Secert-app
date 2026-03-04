@@ -3549,22 +3549,13 @@ function ChatPageNew() {
           >
             <BackIcon />
           </button>
-          <div
+          <button
+            type="button"
             className="chat-header-left chat-header-left-btn"
             onClick={openUserInfo}
-            onTouchEnd={openUserInfo}
-            onKeyDown={(event) => {
-              if (!selectedUser) return
-              if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault()
-                openUserInfo()
-              }
-            }}
             title={selectedUser ? 'Open user details' : 'Select a user'}
             aria-label={selectedUser ? 'Open user details' : 'Select a user'}
-            role="button"
-            tabIndex={selectedUser ? 0 : -1}
-            aria-disabled={!selectedUser}
+            disabled={!selectedUser}
           >
             <div className="chat-user-avatar">{selectedUser ? getAvatarLabel(getUserDisplayName(selectedUser)) : '?'}</div>
             <div className="chat-user-info">
@@ -3575,7 +3566,7 @@ function ChatPageNew() {
                 {selectedPresence.status === 'online' ? 'online' : toLongLastSeen(selectedPresence.lastSeenAt)}
               </div>
             </div>
-          </div>
+          </button>
           <div className="chat-header-actions">
             <button
               className="btn-user-details"

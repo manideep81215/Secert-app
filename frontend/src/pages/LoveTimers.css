@@ -48,6 +48,68 @@
   pointer-events: none;
 }
 
+.timer-secret-wrap {
+  width: min(440px, calc(100vw - 1.4rem));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 22px;
+  padding: 1.2rem;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.32);
+  z-index: 2;
+}
+
+.timer-secret-title {
+  font-family: 'Playfair Display', serif;
+  color: #fff;
+  font-size: 1.45rem;
+  font-weight: 700;
+}
+
+.timer-secret-subtitle {
+  margin-top: 0.35rem;
+  color: rgba(255, 212, 226, 0.68);
+  font-size: 0.9rem;
+}
+
+.timer-secret-form {
+  margin-top: 0.9rem;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.55rem;
+}
+
+.timer-secret-input {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(9, 8, 14, 0.62);
+  color: #fff;
+  border-radius: 11px;
+  height: 2.5rem;
+  padding: 0 0.8rem;
+  outline: none;
+}
+
+.timer-secret-input:focus {
+  border-color: rgba(255, 143, 171, 0.9);
+}
+
+.timer-secret-btn {
+  border: 1px solid rgba(255, 153, 179, 0.62);
+  border-radius: 11px;
+  height: 2.5rem;
+  padding: 0 0.9rem;
+  color: #fff;
+  font-weight: 700;
+  background: linear-gradient(135deg, #ff6b9d, #d4548a);
+  cursor: pointer;
+}
+
+.timer-secret-error {
+  margin-top: 0.55rem;
+  color: #ff9caf;
+  font-size: 0.85rem;
+}
+
 .float-heart {
   position: absolute;
   bottom: -2rem;

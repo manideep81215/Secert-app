@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import './LoveTimers.css'
 
 const FIRST_TALK = new Date('2022-11-28T00:00:00')
-const TALKING_START = new Date('2024-03-11T00:00:00')
+const TALKING_START = new Date('2025-03-11T00:00:00')
 const LOVE_START = new Date('2025-10-07T00:00:00')
+const LOVE_TIMERS_SECRET_CODE = String(import.meta.env.VITE_LOVE_TIMERS_SECRET_CODE || '9192').trim()
 
 function getElapsed(since) {
   const now = new Date()
@@ -109,6 +110,9 @@ function TimerCard({ title, subtitle, icon, since, accentColor, glowColor, delay
 
 function LoveTimers() {
   const navigate = useNavigate()
+  const [enteredCode, setEnteredCode] = useState('')
+  const [isUnlocked, setIsUnlocked] = useState(false)
+  const [codeError, setCodeError] = useState('')
   const hearts = useMemo(() => (
     Array.from({ length: 12 }, () => ({
       left: `${Math.random() * 100}%`,
@@ -118,6 +122,20 @@ function LoveTimers() {
       opacity: 0.15 + (Math.random() * 0.25),
     }))
   ), [])
+  const handleUnlock = (event) => {
+    event.preventDefault()
+    const normalized = String(enteredCode || '').trim()
+    if (!normalized) {
+      setCodeError('Enter secret code.')
+      return
+    }
+    if (normalized !== LOVE_TIMERS_SECRET_CODE) {
+      setCodeError('Invalid secret code.')
+      return
+    }
+    setCodeError('')
+    setIsUnlocked(true)
+  }
 
   return (
     <div className="love-page">
@@ -138,44 +156,68 @@ function LoveTimers() {
           />
         ))}
 
-        <div className="love-header">
-          <h1>Our <span>Story</span></h1>
-          <p>every second counts {'\uD83D\uDC95'}</p>
-        </div>
+        {!isUnlocked ? (
+          <div className="timer-secret-wrap">
+            <div className="timer-secret-title">Enter Secret Code</div>
+            <p className="timer-secret-subtitle">Verification required to open love timers.</p>
+            <form className="timer-secret-form" onSubmit={handleUnlock}>
+              <input
+                className="timer-secret-input"
+                type="password"
+                value={enteredCode}
+                onChange={(event) => {
+                  setEnteredCode(event.target.value)
+                  if (codeError) setCodeError('')
+                }}
+                placeholder="Secret code"
+                autoComplete="off"
+              />
+              <button className="timer-secret-btn" type="submit">Unlock</button>
+            </form>
+            {codeError ? <p className="timer-secret-error">{codeError}</p> : null}
+          </div>
+        ) : (
+          <>
+            <div className="love-header">
+              <h1>Our <span>Story</span></h1>
+              <p>every second counts {'\uD83D\uDC95'}</p>
+            </div>
 
-        <div className="cards-wrap">
-          <TimerCard
-            title="First Hello"
-            subtitle="The very first time we talked"
-            icon={'\uD83D\uDCAC'}
-            since={FIRST_TALK}
-            accentColor="#c084fc"
-            glowColor="rgba(192, 132, 252, 0.6)"
-            delay={200}
-          />
-          <TimerCard
-            title="Found Again"
-            subtitle="When we came back to each other"
-            icon={'\uD83D\uDD01'}
-            since={TALKING_START}
-            accentColor="#ff8fab"
-            glowColor="rgba(255, 107, 157, 0.6)"
-            delay={500}
-          />
-          <TimerCard
-            title="In Love"
-            subtitle="When we said I love you"
-            icon={'\u2764\uFE0F'}
-            since={LOVE_START}
-            accentColor="#ff6b9d"
-            glowColor="rgba(200, 60, 120, 0.6)"
-            delay={800}
-          />
-        </div>
+            <div className="cards-wrap">
+              <TimerCard
+                title="First Hello"
+                subtitle="The very first time we talked"
+                icon={'\uD83D\uDCAC'}
+                since={FIRST_TALK}
+                accentColor="#c084fc"
+                glowColor="rgba(192, 132, 252, 0.6)"
+                delay={200}
+              />
+              <TimerCard
+                title="Found Again"
+                subtitle="When we came back to each other"
+                icon={'\uD83D\uDD01'}
+                since={TALKING_START}
+                accentColor="#ff8fab"
+                glowColor="rgba(255, 107, 157, 0.6)"
+                delay={500}
+              />
+              <TimerCard
+                title="In Love"
+                subtitle="When we said I love you"
+                icon={'\u2764\uFE0F'}
+                since={LOVE_START}
+                accentColor="#ff6b9d"
+                glowColor="rgba(200, 60, 120, 0.6)"
+                delay={800}
+              />
+            </div>
 
-        <div className="love-footer">
-          <p>"hello {'\u2192'} apart {'\u2192'} together {'\u2192'} forever {'\uD83D\uDC95'}"</p>
-        </div>
+            <div className="love-footer">
+              <p>"hello {'\u2192'} apart {'\u2192'} together {'\u2192'} forever {'\uD83D\uDC95'}"</p>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
