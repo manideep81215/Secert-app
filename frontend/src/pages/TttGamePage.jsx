@@ -5,6 +5,7 @@ import SockJS from 'sockjs-client'
 import { toast } from 'react-toastify'
 import { useFlowState } from '../hooks/useFlowState'
 import BackIcon from '../components/BackIcon'
+import { playComputerChoiceSound } from '../lib/gameAudio'
 import { WS_CHAT_URL } from '../config/apiConfig'
 import './TttGamePage.css'
 
@@ -536,6 +537,7 @@ function TttGamePage() {
       if (cpuMove >= 0) {
         next[cpuMove] = CPU
         latestMove = cpuMove
+        playComputerChoiceSound()
       }
       result = getWinner(next, boardSize)
     }

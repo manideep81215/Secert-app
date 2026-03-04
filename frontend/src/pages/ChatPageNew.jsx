@@ -9,6 +9,7 @@ import { getConversation, getConversationSummaries, uploadMedia } from '../servi
 import { getAllUsers } from '../services/usersApi'
 import BackIcon from '../components/BackIcon'
 import { FileAttachIcon, PhotoAttachIcon } from '../components/AttachmentIcons'
+import timerLoveBirdsIcon from '../assets/in-love.png'
 import ChatUsersPanel from './ChatUsersPanel'
 import {
   getNotificationPermissionState,
@@ -3574,7 +3575,7 @@ function ChatPageNew() {
               title="Love timers"
               aria-label="Love timers"
             >
-              {'\uD83D\uDC95'}
+              <img src={timerLoveBirdsIcon} alt="" className="timer-icon-image" aria-hidden="true" />
             </button>
             <button
               className="btn-chat-reload"

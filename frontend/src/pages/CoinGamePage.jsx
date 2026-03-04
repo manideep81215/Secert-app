@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useFlowState } from '../hooks/useFlowState'
 import { randomPick } from '../lib/gameUtils'
+import { playComputerChoiceSound } from '../lib/gameAudio'
 import BackIcon from '../components/BackIcon'
 import './CoinGamePage.css'
 
@@ -29,6 +30,7 @@ function CoinGamePage() {
     await sleep(280)
 
     const flip = randomPick(['heads', 'tails'])
+    playComputerChoiceSound()
     const win = flip === guess
     setRound({ guess, flip, win })
     setIsResolving(false)

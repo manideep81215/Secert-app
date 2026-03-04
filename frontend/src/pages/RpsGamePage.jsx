@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useFlowState } from '../hooks/useFlowState'
 import { randomPick, winsAgainst } from '../lib/gameUtils'
+import { playComputerChoiceSound } from '../lib/gameAudio'
 import BackIcon from '../components/BackIcon'
 import './RpsGamePage.css'
 
@@ -29,6 +30,7 @@ function RpsGamePage() {
     await sleep(280)
 
     const cpu = randomPick(['rock', 'paper', 'scissors'])
+    playComputerChoiceSound()
     const draw = pick === cpu
     const win = !draw && winsAgainst[pick] === cpu
     setRound({ pick, cpu, draw, win })

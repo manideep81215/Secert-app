@@ -5,6 +5,7 @@ import SockJS from 'sockjs-client'
 import { toast } from 'react-toastify'
 import { useFlowState } from '../hooks/useFlowState'
 import BackIcon from '../components/BackIcon'
+import { playComputerChoiceSound } from '../lib/gameAudio'
 import { WS_CHAT_URL } from '../config/apiConfig'
 import './SnakeLadderGamePage.css'
 
@@ -267,6 +268,9 @@ function SnakeLadderGamePage() {
     const actor = getPlayerLabel(playerKey)
     setIsRolling(true)
     const roll = randomDice()
+    if (mode === 'cpu' && playerKey === 'opponent') {
+      playComputerChoiceSound()
+    }
     setDiceValue(roll)
     await waitFor(420)
     if (animationVersion !== animationVersionRef.current) return

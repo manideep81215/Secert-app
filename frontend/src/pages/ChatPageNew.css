@@ -431,6 +431,13 @@
   background: linear-gradient(180deg, #4caf50 0%, #2e7d32 100%);
 }
 
+.timer-icon-image {
+  width: 1.45rem;
+  height: 1.45rem;
+  display: block;
+  object-fit: contain;
+}
+
 .btn-home-game:hover {
   transform: scale(1.05);
   box-shadow: 0 4px 12px rgba(76, 175, 80, 0.35);
@@ -1933,6 +1940,11 @@
   width: 1.9rem;
   height: 1.9rem;
   font-size: 1rem;
+}
+
+.chat-container .timer-icon-image {
+  width: 1.12rem;
+  height: 1.12rem;
 }
 
 .chat-container .btn-home-game {

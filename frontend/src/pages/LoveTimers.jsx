@@ -159,7 +159,7 @@ function LoveTimers() {
         {!isUnlocked ? (
           <div className="timer-secret-wrap">
             <div className="timer-secret-title">Enter Secret Code</div>
-            <p className="timer-secret-subtitle">Verification required to open love timers.</p>
+            <p className="timer-secret-subtitle">Enter verification code to proceed.</p>
             <form className="timer-secret-form" onSubmit={handleUnlock}>
               <input
                 className="timer-secret-input"

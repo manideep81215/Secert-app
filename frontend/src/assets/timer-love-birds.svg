@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Love timer icon">
+  <defs>
+    <clipPath id="clipLeftFace">
+      <circle cx="56" cy="80" r="26" />
+    </clipPath>
+  </defs>
+
+  <rect width="128" height="128" fill="none" />
+
+  <path d="M46 18c4-8 14-9 18-2 4-7 14-6 18 2 3 8-4 14-18 23-14-9-22-15-18-23Z" fill="#e77397" stroke="#495567" stroke-width="5" stroke-linejoin="round" />
+  <circle cx="75.5" cy="18.5" r="2.5" fill="#ffffff" />
+  <path d="M76 12c2 0 4 2 4 4 0 2-2 5-4 6" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" />
+
+  <path d="M26 126c2-10 8-18 16-24 6-5 13-8 22-9 9-1 18 1 26 5 9 5 16 13 20 24" fill="#dcc5a8" />
+
+  <circle cx="77" cy="82" r="29" fill="#dcc5a8" stroke="#495567" stroke-width="5" />
+  <circle cx="74.5" cy="84" r="23" fill="#d7bfa1" />
+
+  <circle cx="52" cy="80" r="31" fill="#f5f4f2" stroke="#495567" stroke-width="5" />
+  <circle cx="55.5" cy="82.5" r="24" fill="#e9d6bc" />
+
+  <circle cx="47.5" cy="69" r="3.5" fill="#495567" />
+  <circle cx="63.5" cy="69" r="3.5" fill="#495567" />
+  <path d="M47 81c5 5 12 5 17 0" fill="none" stroke="#495567" stroke-width="5" stroke-linecap="round" />
+
+  <circle cx="71" cy="73" r="3.5" fill="#495567" />
+  <circle cx="87" cy="73" r="3.5" fill="#495567" />
+  <path d="M70 83c5 5 12 5 17 0" fill="none" stroke="#495567" stroke-width="5" stroke-linecap="round" />
+
+  <path d="M18 111c4-5 10-8 16-9" fill="none" stroke="#495567" stroke-width="5" stroke-linecap="round" />
+  <path d="M72 106c9 3 15 9 18 20" fill="none" stroke="#495567" stroke-width="5" stroke-linecap="round" />
+  <path d="M102 104c9 5 14 11 18 22" fill="none" stroke="#495567" stroke-width="5" stroke-linecap="round" />
+
+  <path d="M12 78 4 76" fill="none" stroke="#495567" stroke-width="5" stroke-linecap="round" />
+  <path d="M10 90 2 94" fill="none" stroke="#495567" stroke-width="5" stroke-linecap="round" />
+  <path d="M11 84 1 83" fill="none" stroke="#495567" stroke-width="5" stroke-linecap="round" />
+
+  <g clip-path="url(#clipLeftFace)">
+    <path d="M73 104c-6-9-14-16-25-18" fill="none" stroke="#495567" stroke-width="5" stroke-linecap="round" />
+  </g>
+</svg>
