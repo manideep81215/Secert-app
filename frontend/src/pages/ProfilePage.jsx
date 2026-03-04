@@ -1,6 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { toast } from 'react-toastify'
+import { Capacitor } from '@capacitor/core'
+import { Preferences } from '@capacitor/preferences'
+import { BiometricAuth } from '@aparajita/capacitor-biometric-auth'
 import { resetFlowScores, resetFlowState, useFlowState } from '../hooks/useFlowState'
 import {
   getUserById,
@@ -11,6 +14,9 @@ import {
 import BackIcon from '../components/BackIcon'
 import './ProfilePage.css'
 
+const BIOMETRIC_VERIFIED_KEY_PREFIX = 'verify_biometric_ok_v1:'
+const getBiometricVerifiedKey = (username) => `${BIOMETRIC_VERIFIED_KEY_PREFIX}${String(username || '').trim().toLowerCase()}`
+
 function ProfilePage() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -19,12 +25,16 @@ function ProfilePage() {
   const [secretKey, setSecretKey] = useState('')
   const [isFirstTime, setIsFirstTime] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [isBiometricLoading, setIsBiometricLoading] = useState(false)
+  const [isBiometricAvailable, setIsBiometricAvailable] = useState(false)
   const longPressTimerRef = useRef(null)
   const longPressTriggeredRef = useRef(false)
   const suppressNextClickRef = useRef(false)
+  const autoBiometricTriedRef = useRef(false)
   const wins = flow.wins || { rps: 0, coin: 0, ttt: 0 }
   const totalWins = useMemo(() => wins.rps + wins.coin + wins.ttt, [wins])
   const previousPage = location.state?.from || '/games'
+  const isNativePlatform = Capacitor.isNativePlatform()
 
   // Only redirect if not authenticated on initial load
   useEffect(() => {
@@ -172,6 +182,97 @@ function ProfilePage() {
     }
   }
 
+  const triggerBiometricVerify = useCallback(async ({ manual = false, skipAvailabilityCheck = false } = {}) => {
+    if (!isNativePlatform || !showSecretKeyModal || isFirstTime || !flow.username || !flow.token) {
+      if (manual && !isNativePlatform) {
+        toast.info('Biometric unlock is available only in the mobile app.')
+      }
+      return false
+    }
+    if (isLoading || isBiometricLoading) return false
+
+    setIsBiometricLoading(true)
+    try {
+      if (!skipAvailabilityCheck) {
+        try {
+          const availability = await BiometricAuth.checkBiometry()
+          setIsBiometricAvailable(Boolean(availability?.isAvailable))
+        } catch {
+          // Still try authenticate below.
+        }
+      }
+
+      await BiometricAuth.authenticate({
+        reason: 'Authenticate to verify access',
+        cancelTitle: 'Cancel',
+        allowDeviceCredential: true,
+        iosFallbackTitle: 'Use passcode',
+        androidTitle: 'Verify identity',
+        androidSubtitle: 'Use fingerprint, face, or screen lock to continue',
+        androidConfirmationRequired: false,
+      })
+
+      if (flow.username) {
+        try {
+          await Preferences.set({ key: getBiometricVerifiedKey(flow.username), value: '1' })
+        } catch {
+          // Ignore local persistence failures.
+        }
+      }
+      setFlow((prev) => ({ ...prev, verified: true }))
+      setShowSecretKeyModal(false)
+      setSecretKey('')
+      navigate('/users')
+      return true
+    } catch {
+      if (manual) {
+        toast.error('Biometric verification failed. Use confirmation key.')
+      }
+      return false
+    } finally {
+      setIsBiometricLoading(false)
+    }
+  }, [
+    flow.token,
+    flow.username,
+    isBiometricLoading,
+    isFirstTime,
+    isLoading,
+    isNativePlatform,
+    navigate,
+    setFlow,
+    showSecretKeyModal,
+  ])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const runAutoBiometric = async () => {
+      if (!showSecretKeyModal || isFirstTime || !isNativePlatform || !flow.username || !flow.token) {
+        if (!cancelled) setIsBiometricAvailable(false)
+        return
+      }
+      if (autoBiometricTriedRef.current) return
+
+      try {
+        const availability = await BiometricAuth.checkBiometry()
+        if (cancelled) return
+        const available = Boolean(availability?.isAvailable)
+        setIsBiometricAvailable(available)
+        if (!available) return
+        autoBiometricTriedRef.current = true
+        await triggerBiometricVerify({ skipAvailabilityCheck: true })
+      } catch {
+        if (!cancelled) setIsBiometricAvailable(false)
+      }
+    }
+
+    void runAutoBiometric()
+    return () => {
+      cancelled = true
+    }
+  }, [flow.token, flow.username, isFirstTime, isNativePlatform, showSecretKeyModal, triggerBiometricVerify])
+
   return (
     <section className="profile-page">
       <header className="profile-topbar">
@@ -254,6 +355,23 @@ function ProfilePage() {
               disabled={isLoading}
               className="modal-input"
             />
+            {!isFirstTime && isNativePlatform ? (
+              <button
+                type="button"
+                onClick={() => {
+                  autoBiometricTriedRef.current = true
+                  void triggerBiometricVerify({ manual: true })
+                }}
+                disabled={isLoading || isBiometricLoading}
+                className="modal-btn modal-btn-secondary"
+              >
+                {isBiometricLoading
+                  ? 'Checking biometric...'
+                  : (isBiometricAvailable
+                      ? 'Use Fingerprint / Face / Screen Lock'
+                      : 'Check Fingerprint / Face / Screen Lock')}
+              </button>
+            ) : null}
             <div className="modal-buttons">
               <button
                 onClick={submitSecretKey}
@@ -266,6 +384,7 @@ function ProfilePage() {
                 onClick={() => {
                   setShowSecretKeyModal(false)
                   setSecretKey('')
+                  autoBiometricTriedRef.current = false
                 }}
                 disabled={isLoading}
                 className="modal-btn modal-btn-secondary"

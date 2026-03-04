@@ -197,6 +197,11 @@ public class PushNotificationService {
     return pushSubscriptionRepository.findByUsername(normalizedUser).size();
   }
 
+  public long countMobileTokens(String username) {
+    String normalizedUser = normalizeUsername(username);
+    return collapseMobileTokens(mobilePushTokenRepository.findByUsername(normalizedUser)).size();
+  }
+
   public PushSendResult sendTestNow(String username, String title, String body, String url) {
     String normalizedUser = normalizeUsername(username);
     boolean webPushEnabled = isPushEnabled();

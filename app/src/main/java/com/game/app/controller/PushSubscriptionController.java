@@ -40,6 +40,19 @@ public class PushSubscriptionController {
         pushNotificationService.isFcmEnabled());
   }
 
+  @GetMapping("/status")
+  public PushStatusResponse status(
+      @RequestHeader(value = "Authorization", required = false) String authHeader) {
+    UserEntity me = requireAuthUser(authHeader);
+    long webSubscriptions = pushNotificationService.countSubscriptions(me.getUsername());
+    long mobileTokens = pushNotificationService.countMobileTokens(me.getUsername());
+    return new PushStatusResponse(
+        pushNotificationService.isPushEnabled(),
+        pushNotificationService.isFcmEnabled(),
+        webSubscriptions,
+        mobileTokens);
+  }
+
   @PostMapping("/subscribe")
   public PushSubscribeResponse subscribe(
       @RequestHeader(value = "Authorization", required = false) String authHeader,
@@ -118,7 +131,7 @@ public class PushSubscriptionController {
 
     PushNotificationService.PushSendResult result =
         pushNotificationService.sendTestNow(me.getUsername(), title, body, url);
-    return new PushTestResponse(result.success(), result.message());
+    return new PushTestResponse(result.success(), result.message(), result.attempted(), result.sent());
   }
 
   private UserEntity requireAuthUser(String authHeader) {
@@ -133,6 +146,8 @@ public class PushSubscriptionController {
 
   public record PushPublicKeyResponse(boolean enabled, String publicKey, boolean nativeEnabled) {}
 
+  public record PushStatusResponse(boolean webPushEnabled, boolean nativePushEnabled, long webSubscriptions, long mobileTokens) {}
+
   public record PushSubscribeResponse(boolean success) {}
 
   public record PushUnsubscribeRequest(String endpoint) {}
@@ -141,5 +156,5 @@ public class PushSubscriptionController {
 
   public record PushTestRequest(String title, String body, String url) {}
 
-  public record PushTestResponse(boolean success, String message) {}
+  public record PushTestResponse(boolean success, String message, int attempted, int sent) {}
 }

@@ -7,6 +7,13 @@ export async function getPushPublicKey() {
   return data || { enabled: false, publicKey: '' }
 }
 
+export async function getPushStatus(token) {
+  const { data } = await pushClient.get('/status', {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  })
+  return data || { webPushEnabled: false, nativePushEnabled: false, webSubscriptions: 0, mobileTokens: 0 }
+}
+
 export async function subscribePush(token, subscription) {
   const { data } = await pushClient.post('/subscribe', subscription, {
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,

@@ -13,7 +13,7 @@ import {
 } from '../lib/notifications'
 import { ensurePushSubscription } from '../lib/pushSubscription'
 import { syncNativePushRegistration } from '../lib/nativePush'
-import { getPushPublicKey, sendTestPush } from '../services/pushApi'
+import { getPushPublicKey, getPushStatus, sendTestPush } from '../services/pushApi'
 import { useFlowState } from '../hooks/useFlowState'
 import { WS_CHAT_URL } from '../config/apiConfig'
 import { getConversation } from '../services/messagesApi'
@@ -339,6 +339,7 @@ function ChatInfoPage() {
         let pushKeyRegistered = false
         let keyError = ''
         let keyHint = ''
+        let serverMobileTokens = 0
         try {
           const keyConfig = await getPushPublicKey()
           pushServerEnabled = Boolean(keyConfig?.nativeEnabled ?? keyConfig?.enabled)
@@ -350,8 +351,28 @@ function ChatInfoPage() {
           keyError = error?.message || 'Push server check failed.'
         }
 
-        if (!keyHint && nativePermission === 'granted' && !nativeToken) {
+        if (flow?.token) {
+          try {
+            const status = await getPushStatus(flow.token)
+            serverMobileTokens = Number(status?.mobileTokens || 0)
+            if (!pushServerEnabled) {
+              pushServerEnabled = Boolean(status?.nativePushEnabled)
+            }
+          } catch (error) {
+            if (!keyError) {
+              keyError = error?.message || 'Push status check failed.'
+            }
+          }
+        }
+
+        const hasLocalToken = Boolean(nativeToken)
+        const hasServerToken = serverMobileTokens > 0
+        const subscriptionExists = hasLocalToken && hasServerToken
+
+        if (!keyHint && nativePermission === 'granted' && !hasLocalToken) {
           keyHint = 'Device token not ready yet. Tap Notify again after a moment.'
+        } else if (!keyHint && hasLocalToken && !hasServerToken) {
+          keyHint = 'Token exists on device but not on server yet. Keep app online and tap Refresh.'
         }
 
         const combinedError = [registrationError, keyError].filter(Boolean).join(' ')
@@ -359,7 +380,7 @@ function ChatInfoPage() {
           loading: false,
           notificationPermission: nativePermission,
           serviceWorkerActive: true,
-          subscriptionExists: Boolean(nativeToken),
+          subscriptionExists,
           pushKeyRegistered,
           pushServerEnabled,
           lastSyncAt: Date.now(),
@@ -469,9 +490,15 @@ function ChatInfoPage() {
     try {
       const result = await sendTestPush(flow.token, {})
       if (result?.success) {
-        notify.success(result?.message || 'Test push sent.')
+        const sent = Number(result?.sent || 0)
+        const attempted = Number(result?.attempted || 0)
+        const suffix = attempted > 0 ? ` (${sent}/${attempted})` : ''
+        notify.success((result?.message || 'Test push sent.') + suffix)
       } else {
-        notify.error(result?.message || 'Test push failed.')
+        const sent = Number(result?.sent || 0)
+        const attempted = Number(result?.attempted || 0)
+        const suffix = attempted > 0 ? ` (${sent}/${attempted})` : ''
+        notify.error((result?.message || 'Test push failed.') + suffix)
       }
       refreshPushDebug('test-push')
     } catch (error) {
