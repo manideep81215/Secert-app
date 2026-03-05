@@ -7,8 +7,12 @@ const LOVE_START  = new Date('2025-10-07T00:00:00')
 const LOVE_TIMERS_SECRET_CODE = String(import.meta.env.VITE_LOVE_TIMERS_SECRET_CODE || '9192').trim()
 
 function getElapsed(since) {
-  const now = new Date()
-  const diff = now - since
+  const sinceMs = since instanceof Date ? since.getTime() : new Date(since).getTime()
+  if (!Number.isFinite(sinceMs)) {
+    return { years: 0, months: 0, days: 0, hours: 0, minutes: 0, seconds: 0, totalDays: 0 }
+  }
+  const now = Date.now()
+  const diff = Math.max(0, now - sinceMs)
   const totalSeconds = Math.floor(diff / 1000)
   const totalMinutes = Math.floor(totalSeconds / 60)
   const totalHours   = Math.floor(totalMinutes / 60)
@@ -21,7 +25,10 @@ function getElapsed(since) {
 }
 
 function getDaysBetween(a, b) {
-  return Math.floor((b - a) / (1000 * 60 * 60 * 24))
+  const fromMs = a instanceof Date ? a.getTime() : new Date(a).getTime()
+  const toMs = b instanceof Date ? b.getTime() : new Date(b).getTime()
+  if (!Number.isFinite(fromMs) || !Number.isFinite(toMs)) return 0
+  return Math.max(0, Math.floor((toMs - fromMs) / (1000 * 60 * 60 * 24)))
 }
 
 function FloatingHeart({ style }) {
@@ -477,6 +484,7 @@ export default function LoveTimers() {
                   accent="#c084fc"
                   glow="rgba(192,132,252,.45)"
                   delay={300}
+                  since={FIRST_TALK}
                 />
 
                 <GapCard from={FIRST_TALK} to={FOUND_AGAIN} label="time apart" />
@@ -492,6 +500,7 @@ export default function LoveTimers() {
                   accent="#ff8fab"
                   glow="rgba(255,107,157,.45)"
                   delay={500}
+                  since={FOUND_AGAIN}
                 />
 
                 <GapCard from={FOUND_AGAIN} to={LOVE_START} label="growing closer" />
@@ -507,6 +516,7 @@ export default function LoveTimers() {
                   accent="#ff6b9d"
                   glow="rgba(200,60,120,.45)"
                   delay={700}
+                  since={LOVE_START}
                 />
               </div>
 

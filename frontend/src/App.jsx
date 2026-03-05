@@ -15,6 +15,7 @@ import ChatInfoPage from './pages/ChatInfoPage'
 import RecapPage from './pages/RecapPage'
 import LoveTimers from './pages/LoveTimers'
 import ProfilePage from './pages/ProfilePage'
+import PrivacyBlur from './components/PrivacyBlur'
 import { WS_CHAT_URL } from './config/apiConfig'
 import { resetFlowState, useFlowState } from './hooks/useFlowState'
 import { refreshAccessToken } from './services/authApi'
@@ -436,6 +437,7 @@ function App() {
 
   return (
     <div className={`app-wrap container-fluid ${isFullBleedRoute ? 'app-auth-route p-0' : 'py-4 px-3 px-md-4'}`}>
+      <PrivacyBlur />
       <div className={isFullBleedRoute ? 'app-auth-max' : 'mx-auto app-max'}>
         <Routes>
           <Route path="/" element={<Navigate to={isAuthenticated ? '/games' : '/auth'} replace />} />
