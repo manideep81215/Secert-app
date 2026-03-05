@@ -5,13 +5,14 @@ import SockJS from 'sockjs-client'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Haptics, ImpactStyle } from '@capacitor/haptics'
 import { getMe } from '../services/authApi'
-import { getConversation, getConversationSummaries, uploadMedia } from '../services/messagesApi'
+import { getChatStats, getConversation, getConversationSummaries, uploadMedia } from '../services/messagesApi'
 import { getAllUsers } from '../services/usersApi'
 import BackIcon from '../components/BackIcon'
 import { FileAttachIcon, PhotoAttachIcon } from '../components/AttachmentIcons'
 import LoveReminder from '../components/LoveReminder'
 import MonthlyRecap from '../components/MonthlyRecap'
 import MilestonePopup from '../components/MilestonePopup'
+import LovePercentageChip from '../components/LovePercentageChip'
 import timerLoveBirdsIcon from '../assets/in-love.png'
 import ChatUsersPanel from './ChatUsersPanel'
 import {
@@ -96,6 +97,7 @@ function ChatPageNew() {
   const [conversationReloadTick, setConversationReloadTick] = useState(0)
   const [usersReloadTick, setUsersReloadTick] = useState(0)
   const [lastSentMessageId, setLastSentMessageId] = useState(0)
+  const [headerStats, setHeaderStats] = useState({ yesterdayMessages: 0, dailyAverage: 0 })
   const [inputValue, setInputValue] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [showAttachMenu, setShowAttachMenu] = useState(false)
@@ -913,6 +915,33 @@ function ChatPageNew() {
   useEffect(() => {
     setEditingMessage(null)
   }, [selectedUser?.username])
+
+  useEffect(() => {
+    if (!flow?.token || !selectedUser?.username) {
+      setHeaderStats({ yesterdayMessages: 0, dailyAverage: 0 })
+      return
+    }
+
+    let cancelled = false
+    const loadHeaderStats = async () => {
+      try {
+        const data = await getChatStats(flow.token, selectedUser.username)
+        if (cancelled || !data) return
+        setHeaderStats({
+          yesterdayMessages: Number(data?.yesterdayMessages || 0),
+          dailyAverage: Number(data?.dailyAverage || 0),
+        })
+      } catch {
+        if (cancelled) return
+        setHeaderStats({ yesterdayMessages: 0, dailyAverage: 0 })
+      }
+    }
+
+    loadHeaderStats()
+    return () => {
+      cancelled = true
+    }
+  }, [flow?.token, selectedUser?.username, lastSentMessageId])
 
   useEffect(() => {
     const onResize = () => {
@@ -3608,6 +3637,12 @@ function ChatPageNew() {
               <div className={`chat-user-status ${selectedPresence.status === 'online' ? 'online' : 'offline'}`}>
                 {selectedPresence.status === 'online' ? 'online' : toLongLastSeen(selectedPresence.lastSeenAt)}
               </div>
+              {selectedUser && (
+                <LovePercentageChip
+                  yesterdayMessages={headerStats?.yesterdayMessages}
+                  dailyAverage={headerStats?.dailyAverage}
+                />
+              )}
             </div>
           </button>
           <div className="chat-header-actions">

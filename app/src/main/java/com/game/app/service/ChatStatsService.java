@@ -47,6 +47,10 @@ public class ChatStatsService {
     long thisMonthPhotos = toLong(chatMessageRepository.countMessagesByTypeBetweenSince(u1, u2, "image", monthStart));
     long thisMonthVideos = toLong(chatMessageRepository.countMessagesByTypeBetweenSince(u1, u2, "video", monthStart));
     long thisMonthVoices = toLong(chatMessageRepository.countMessagesByTypeBetweenSince(u1, u2, "voice", monthStart));
+    Instant yesterdayStart = LocalDate.now(zoneId).minusDays(1).atStartOfDay(zoneId).toInstant();
+    Instant todayStart = LocalDate.now(zoneId).atStartOfDay(zoneId).toInstant();
+    long yesterdayMessages = toLong(
+        chatMessageRepository.countMessagesBetweenRange(u1, u2, yesterdayStart, todayStart));
     long recapMessages = toLong(chatMessageRepository.countMessagesBetweenRange(u1, u2, previousMonthStart, monthStart));
     long recapPhotos = toLong(
         chatMessageRepository.countMessagesByTypeBetweenRange(u1, u2, "image", previousMonthStart, monthStart));
@@ -64,6 +68,7 @@ public class ChatStatsService {
         .stream()
         .map(java.sql.Date::toLocalDate)
         .toList();
+    long dailyAverage = !talkDates.isEmpty() ? totalMessages / talkDates.size() : 0L;
 
     StreakResult streakResult = calculateStreak(talkDates, LocalDate.now(zoneId));
     long previousTotal = trackAndGetPreviousTotal(u1, u2, totalMessages);
@@ -84,6 +89,8 @@ public class ChatStatsService {
         totalVoices,
         milestoneResult.reachedMilestone(),
         milestoneResult.justHit(),
+        yesterdayMessages,
+        dailyAverage,
         thisMonthTalkDays,
         currentMonth.lengthOfMonth(),
         String.format("%04d-%02d", previousMonth.getYear(), previousMonth.getMonthValue()),
@@ -237,6 +244,8 @@ public class ChatStatsService {
       long totalVoices,
       long milestoneReached,
       boolean milestoneJustHit,
+      long yesterdayMessages,
+      long dailyAverage,
       int thisMonthTalkDays,
       int daysInMonth,
       String recapMonth,
