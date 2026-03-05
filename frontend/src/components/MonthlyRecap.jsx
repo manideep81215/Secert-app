@@ -100,11 +100,12 @@ function MonthlyRecap({ token, peerUsername, forceShow = false }) {
   if (!show || !stats) return null
 
   const monthLabel = formatRecapMonthLabel(stats?.recapMonth, now)
-  const recapMessages = Number(stats?.recapMessages ?? stats?.thisMonthMessages ?? 0)
-  const recapPhotos = Number(stats?.recapPhotos ?? stats?.thisMonthPhotos ?? 0)
-  const recapVideos = Number(stats?.recapVideos ?? stats?.thisMonthVideos ?? 0)
-  const recapVoices = Number(stats?.recapVoices ?? stats?.thisMonthVoices ?? 0)
-  const streakDays = Number(stats?.daysTrackedStreak || 0)
+  const recapMessages = Number(stats?.recapMessages || 0)
+  const recapPhotos = Number(stats?.recapPhotos || 0)
+  const recapVideos = Number(stats?.recapVideos || 0)
+  const recapVoices = Number(stats?.recapVoices || 0)
+  const recapTalkDays = Number(stats?.recapTalkDays || 0)
+  const recapDaysInMonth = Math.max(1, Number(stats?.recapDaysInMonth || 1))
   const longestStreak = Number(stats?.longestStreak || 0)
 
   return (
@@ -121,18 +122,18 @@ function MonthlyRecap({ token, peerUsername, forceShow = false }) {
         <div className="mr-divider" />
 
         <div className="mr-stats">
-          <div className="mr-section-label">This Month</div>
-          <StatRow emoji="??" label="Messages sent" value={recapMessages} delay={120} color="#ff8fab" />
-          <StatRow emoji="??" label="Photos shared" value={recapPhotos} delay={200} color="#c084fc" />
-          <StatRow emoji="??" label="Videos shared" value={recapVideos} delay={280} color="#60a5fa" />
-          <StatRow emoji="??" label="Voice notes" value={recapVoices} delay={360} color="#34d399" />
+          <div className="mr-section-label">Last Month</div>
+          <StatRow emoji={'\uD83D\uDCAC'} label="Messages sent" value={recapMessages} delay={120} color="#ff8fab" />
+          <StatRow emoji={'\uD83D\uDCF8'} label="Photos shared" value={recapPhotos} delay={200} color="#c084fc" />
+          <StatRow emoji={'\uD83C\uDFAC'} label="Videos shared" value={recapVideos} delay={280} color="#60a5fa" />
+          <StatRow emoji={'\uD83C\uDFA4'} label="Voice notes" value={recapVoices} delay={360} color="#34d399" />
         </div>
 
         <div className="mr-streak-banner">
-          <div className="mr-streak-icon" aria-hidden="true">??</div>
+          <div className="mr-streak-icon" aria-hidden="true">{'\uD83D\uDD25'}</div>
           <div className="mr-streak-text">
-            <div className="mr-streak-title">{streakDays} day active streak</div>
-            <div className="mr-streak-sub">Longest streak: {longestStreak} days</div>
+            <div className="mr-streak-title">{`${recapTalkDays}/${recapDaysInMonth} days talked in ${monthLabel}`}</div>
+            <div className="mr-streak-sub">Longest streak ever: {longestStreak} days</div>
           </div>
         </div>
 

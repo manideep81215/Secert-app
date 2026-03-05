@@ -123,6 +123,34 @@
   color: rgba(255, 255, 255, 0.38);
 }
 
+.recap-progress-wrap {
+  margin-top: 0.75rem;
+  padding: 0.65rem 0.7rem 0.75rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.recap-progress-label {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.72);
+  margin-bottom: 0.42rem;
+}
+
+.recap-progress-track {
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.recap-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #ffb347 0%, #ff8fab 55%, #c084fc 100%);
+}
+
 .recap-pink { color: #ff8fab; }
 .recap-violet { color: #c084fc; }
 .recap-blue { color: #60a5fa; }
@@ -163,6 +191,60 @@
   gap: 0.45rem;
 }
 
+.recap-chart-wrap {
+  margin-bottom: 0.9rem;
+  border-radius: 14px;
+  padding: 0.75rem 0.55rem 0.55rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.recap-chart {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(32px, 1fr));
+  gap: 0.45rem;
+  align-items: end;
+}
+
+.recap-chart-col {
+  display: grid;
+  grid-template-rows: auto 132px auto;
+  align-items: end;
+  gap: 0.22rem;
+}
+
+.recap-chart-value {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.62rem;
+  color: rgba(255, 255, 255, 0.42);
+  text-align: center;
+  min-height: 0.9rem;
+}
+
+.recap-chart-track {
+  height: 132px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.recap-chart-bar {
+  width: 100%;
+  border-radius: 8px 8px 0 0;
+  background: linear-gradient(180deg, #ff8fab 0%, #c084fc 70%, #7f7fff 100%);
+}
+
+.recap-chart-label {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.64rem;
+  color: rgba(255, 255, 255, 0.62);
+  text-align: center;
+}
+
 .recap-timeline-item {
   display: flex;
   justify-content: space-between;
@@ -180,6 +262,15 @@
 .recap-timeline-item strong {
   color: #ff8fab;
   font-weight: 600;
+}
+
+.recap-since {
+  text-align: center;
+  font-family: 'Cormorant Garamond', serif;
+  font-style: italic;
+  font-size: 0.96rem;
+  color: rgba(255, 200, 220, 0.52);
+  padding: 0.8rem 1rem 2rem;
 }
 
 .recap-muted,

@@ -3,19 +3,19 @@ import { getChatStats } from '../services/messagesApi'
 import './MilestonePopup.css'
 
 const MESSAGE_MILESTONES = [
-  { count: 100, emoji: '??', title: '100 Messages!', color: '#60a5fa', glow: 'rgba(96,165,250,0.45)', message: '100 messages in. Every single one brought you closer.' },
-  { count: 500, emoji: '??', title: '500 Messages!', color: '#c084fc', glow: 'rgba(192,132,252,0.45)', message: '500 messages between you two. That is 500 moments of love.' },
-  { count: 1000, emoji: '??', title: '1,000 Messages!', color: '#ff8fab', glow: 'rgba(255,107,157,0.55)', message: '1,000 messages. A thousand little pieces of your love story.' },
-  { count: 2000, emoji: '??', title: '2,000 Messages!', color: '#f472b6', glow: 'rgba(244,114,182,0.45)', message: 'Two thousand messages. You never run out of things to say.' },
-  { count: 5000, emoji: '??', title: '5,000 Messages!', color: '#fb923c', glow: 'rgba(251,146,60,0.45)', message: 'Five thousand. This chat is pure commitment.' },
-  { count: 10000, emoji: '??', title: '10,000 Messages!', color: '#ef4444', glow: 'rgba(239,68,68,0.52)', message: 'Ten thousand messages. This is what forever looks like.' },
+  { count: 100, emoji: '\uD83D\uDCAC', title: '100 Messages!', color: '#60a5fa', glow: 'rgba(96,165,250,0.45)', message: '100 messages in. Every single one brought you closer.' },
+  { count: 500, emoji: '\uD83D\uDC8C', title: '500 Messages!', color: '#c084fc', glow: 'rgba(192,132,252,0.45)', message: '500 messages between you two. That is 500 moments of love.' },
+  { count: 1000, emoji: '\uD83C\uDF89', title: '1,000 Messages!', color: '#ff8fab', glow: 'rgba(255,107,157,0.55)', message: '1,000 messages. A thousand little pieces of your love story.' },
+  { count: 2000, emoji: '\uD83D\uDC95', title: '2,000 Messages!', color: '#f472b6', glow: 'rgba(244,114,182,0.45)', message: 'Two thousand messages. You never run out of things to say.' },
+  { count: 5000, emoji: '\uD83E\uDD79', title: '5,000 Messages!', color: '#fb923c', glow: 'rgba(251,146,60,0.45)', message: 'Five thousand. This chat is pure commitment.' },
+  { count: 10000, emoji: '\u2764\uFE0F', title: '10,000 Messages!', color: '#ef4444', glow: 'rgba(239,68,68,0.52)', message: 'Ten thousand messages. This is what forever looks like.' },
 ]
 
 const STREAK_MILESTONES = [
-  { days: 7, emoji: '??', title: '7 Days Straight!', color: '#fb923c', glow: 'rgba(251,146,60,0.45)', message: 'One whole week of talking every single day.' },
-  { days: 30, emoji: '??', title: '30 Days Straight!', color: '#f97316', glow: 'rgba(249,115,22,0.5)', message: '30 days straight. A full month without missing a day.' },
-  { days: 100, emoji: '??', title: '100 Days Straight!', color: '#ff8fab', glow: 'rgba(255,107,157,0.55)', message: '100 days of talking every day. This is a lifestyle.' },
-  { days: 365, emoji: '??', title: '365 Days Straight!', color: '#c084fc', glow: 'rgba(192,132,252,0.55)', message: 'A whole year of daily talks. Every single day.' },
+  { days: 7, emoji: '\uD83D\uDD25', title: '7 Days Straight!', color: '#fb923c', glow: 'rgba(251,146,60,0.45)', message: 'One whole week of talking every single day.' },
+  { days: 30, emoji: '\uD83D\uDD25', title: '30 Days Straight!', color: '#f97316', glow: 'rgba(249,115,22,0.5)', message: '30 days straight. A full month without missing a day.' },
+  { days: 100, emoji: '\uD83D\uDCAA', title: '100 Days Straight!', color: '#ff8fab', glow: 'rgba(255,107,157,0.55)', message: '100 days of talking every day. This is a lifestyle.' },
+  { days: 365, emoji: '\uD83E\uDD79', title: '365 Days Straight!', color: '#c084fc', glow: 'rgba(192,132,252,0.55)', message: 'A whole year of daily talks. Every single day.' },
 ]
 
 const CLOSE_ANIMATION_MS = 420
@@ -56,16 +56,7 @@ function createParticles(color) {
   })
 }
 
-function resolveNextMilestone(totalMessages, currentStreak) {
-  for (const milestone of [...MESSAGE_MILESTONES].reverse()) {
-    if (totalMessages >= milestone.count) {
-      if (!wasAlreadyCelebrated('msg', milestone.count)) {
-        return { ...milestone, kind: 'messages' }
-      }
-      break
-    }
-  }
-
+function resolveNextStreakMilestone(currentStreak) {
   for (const streak of [...STREAK_MILESTONES].reverse()) {
     if (currentStreak >= streak.days) {
       if (!wasAlreadyCelebrated('streak', streak.days)) {
@@ -74,7 +65,6 @@ function resolveNextMilestone(totalMessages, currentStreak) {
       break
     }
   }
-
   return null
 }
 
@@ -93,13 +83,26 @@ function MilestonePopup({ token, peerUsername, triggerCheck }) {
         const stats = await getChatStats(token, peerUsername)
         if (cancelled || !stats) return
 
-        const totalMessages = Number(stats?.totalMessages || 0)
-        const currentStreak = Number(stats?.daysTrackedStreak || 0)
-        const next = resolveNextMilestone(totalMessages, currentStreak)
-        if (!next) return
+        const reachedMilestone = Number(stats?.milestoneReached || 0)
+        const milestoneJustHit = Boolean(stats?.milestoneJustHit)
+        if (milestoneJustHit && reachedMilestone > 0 && !wasAlreadyCelebrated('msg', reachedMilestone)) {
+          const messageMilestone = MESSAGE_MILESTONES.find((row) => row.count === reachedMilestone)
+          if (messageMilestone) {
+            setMilestone({ ...messageMilestone, kind: 'messages' })
+            setParticles(createParticles(messageMilestone.color))
+            window.setTimeout(() => {
+              if (!cancelled) setVisible(true)
+            }, 80)
+            return
+          }
+        }
 
-        setMilestone(next)
-        setParticles(createParticles(next.color))
+        const currentStreak = Number(stats?.daysTrackedStreak || 0)
+        const streakMilestone = resolveNextStreakMilestone(currentStreak)
+        if (!streakMilestone) return
+
+        setMilestone(streakMilestone)
+        setParticles(createParticles(streakMilestone.color))
         window.setTimeout(() => {
           if (!cancelled) setVisible(true)
         }, 80)
@@ -193,7 +196,7 @@ function MilestonePopup({ token, peerUsername, triggerCheck }) {
           }}
           onClick={dismiss}
         >
-          Let's keep going ??
+          {`Let's keep going \uD83D\uDC95`}
         </button>
       </div>
     </div>

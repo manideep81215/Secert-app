@@ -10,8 +10,11 @@ import java.util.Set;
 import java.util.TreeSet;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import com.game.app.model.ChatStatsProgressEntity;
 import com.game.app.repository.ChatMessageRepository;
+import com.game.app.repository.ChatStatsProgressRepository;
 
 @Service
 public class ChatStatsService {
@@ -19,11 +22,16 @@ public class ChatStatsService {
   private static final long[] MESSAGE_MILESTONES = { 100L, 500L, 1000L, 2000L, 5000L, 10000L };
 
   private final ChatMessageRepository chatMessageRepository;
+  private final ChatStatsProgressRepository chatStatsProgressRepository;
 
-  public ChatStatsService(ChatMessageRepository chatMessageRepository) {
+  public ChatStatsService(
+      ChatMessageRepository chatMessageRepository,
+      ChatStatsProgressRepository chatStatsProgressRepository) {
     this.chatMessageRepository = chatMessageRepository;
+    this.chatStatsProgressRepository = chatStatsProgressRepository;
   }
 
+  @Transactional
   public ChatStatsDto getStats(String userOne, String userTwo) {
     String u1 = normalizeUsername(userOne);
     String u2 = normalizeUsername(userTwo);
@@ -58,7 +66,8 @@ public class ChatStatsService {
         .toList();
 
     StreakResult streakResult = calculateStreak(talkDates, LocalDate.now(zoneId));
-    MilestoneResult milestoneResult = checkMilestone(totalMessages);
+    long previousTotal = trackAndGetPreviousTotal(u1, u2, totalMessages);
+    MilestoneResult milestoneResult = checkMilestone(previousTotal, totalMessages);
     int thisMonthTalkDays = countMonthTalkDays(talkDates, currentMonth);
     int recapTalkDays = countMonthTalkDays(talkDates, previousMonth);
 
@@ -139,18 +148,51 @@ public class ChatStatsService {
     return (int) talkDates.stream().filter((date) -> YearMonth.from(date).equals(month)).distinct().count();
   }
 
-  private MilestoneResult checkMilestone(long totalMessages) {
+  private MilestoneResult checkMilestone(long previousTotal, long totalMessages) {
     long reached = 0;
-    boolean justHit = false;
+    long crossed = 0;
     for (long milestone : MESSAGE_MILESTONES) {
       if (totalMessages >= milestone) {
         reached = milestone;
       }
-      if (totalMessages == milestone) {
-        justHit = true;
+      if (previousTotal < milestone && totalMessages >= milestone) {
+        crossed = milestone;
       }
     }
-    return new MilestoneResult(reached, justHit);
+    return new MilestoneResult(reached, crossed > 0L);
+  }
+
+  private long trackAndGetPreviousTotal(String u1, String u2, long totalMessages) {
+    String[] pair = canonicalPair(u1, u2);
+    String low = pair[0];
+    String high = pair[1];
+
+    ChatStatsProgressEntity state = chatStatsProgressRepository
+        .findByUserLowAndUserHigh(low, high)
+        .orElse(null);
+
+    if (state == null) {
+      ChatStatsProgressEntity created = new ChatStatsProgressEntity();
+      created.setUserLow(low);
+      created.setUserHigh(high);
+      created.setLastMessageTotal(totalMessages);
+      chatStatsProgressRepository.save(created);
+      return totalMessages;
+    }
+
+    long previous = state.getLastMessageTotal();
+    state.setLastMessageTotal(totalMessages);
+    chatStatsProgressRepository.save(state);
+    return previous;
+  }
+
+  private String[] canonicalPair(String u1, String u2) {
+    String left = normalizeUsername(u1);
+    String right = normalizeUsername(u2);
+    if (left.compareTo(right) <= 0) {
+      return new String[] { left, right };
+    }
+    return new String[] { right, left };
   }
 
   private long toLong(Long value) {
