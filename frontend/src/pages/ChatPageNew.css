@@ -2709,4 +2709,9 @@
     width: 1.35rem !important;
     height: 1.35rem !important;
   }
+
+  /* Android native footer needs extra bottom gutter to clear gesture/nav bar. */
+  .chat-container[data-native="true"][data-android="true"]:not(.keyboard-open):not(.mobile-users-open) .input-area {
+    padding-bottom: max(0.55rem, env(safe-area-inset-bottom)) !important;
+  }
 }
