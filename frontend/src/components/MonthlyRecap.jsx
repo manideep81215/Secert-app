@@ -4,6 +4,7 @@ import { getChatStats } from '../services/messagesApi'
 import './MonthlyRecap.css'
 
 const DISMISS_KEY_PREFIX = 'monthly_recap_dismissed_v1:'
+const CLOSE_ANIMATION_MS = 380
 
 function getMonthKey(value) {
   const year = value.getFullYear()
@@ -11,45 +12,69 @@ function getMonthKey(value) {
   return `${year}-${month}`
 }
 
-function getPreviousMonthLabel(value) {
-  const previousMonth = new Date(value.getFullYear(), value.getMonth() - 1, 1)
+function formatRecapMonthLabel(monthKey, fallbackDate) {
+  if (monthKey && /^\d{4}-\d{2}$/.test(monthKey)) {
+    const [year, month] = monthKey.split('-').map(Number)
+    return new Date(year, month - 1, 1).toLocaleString(undefined, { month: 'long' })
+  }
+
+  const previousMonth = new Date(fallbackDate.getFullYear(), fallbackDate.getMonth() - 1, 1)
   return previousMonth.toLocaleString(undefined, { month: 'long' })
 }
 
-function formatMonthKeyLabel(monthKey) {
-  if (!monthKey || !/^\d{4}-\d{2}$/.test(monthKey)) return ''
-  const [year, month] = monthKey.split('-').map(Number)
-  return new Date(year, month - 1, 1).toLocaleString(undefined, { month: 'long' })
+function StatRow({ emoji, label, value, delay, color }) {
+  const [visible, setVisible] = useState(false)
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setVisible(true), delay)
+    return () => window.clearTimeout(timer)
+  }, [delay])
+
+  return (
+    <div className={`mr-stat-row ${visible ? 'mr-stat-visible' : ''}`}>
+      <div className="mr-stat-left">
+        <span className="mr-stat-emoji" aria-hidden="true">{emoji}</span>
+        <span className="mr-stat-label">{label}</span>
+      </div>
+      <div className="mr-stat-value" style={{ color }}>{Number(value || 0).toLocaleString()}</div>
+    </div>
+  )
 }
 
-function MonthlyRecap({ token, peerUsername }) {
+function MonthlyRecap({ token, peerUsername, forceShow = false }) {
   const navigate = useNavigate()
   const [stats, setStats] = useState(null)
+  const [show, setShow] = useState(false)
   const [visible, setVisible] = useState(false)
 
   const now = useMemo(() => new Date(), [])
   const dismissKey = `${DISMISS_KEY_PREFIX}${getMonthKey(now)}`
-  const titleMonthLabel = useMemo(() => getPreviousMonthLabel(now), [now])
 
   useEffect(() => {
     if (!token || !peerUsername) return
-    if (now.getDate() !== 1) return
+
+    const isFirstOfMonth = now.getDate() === 1
+    if (!isFirstOfMonth && !forceShow) return
 
     try {
-      if (window.localStorage.getItem(dismissKey)) return
+      if (!forceShow && window.localStorage.getItem(dismissKey) === '1') return
     } catch {
-      // Ignore localStorage read errors.
+      // Ignore localStorage read failures.
     }
 
     let cancelled = false
+
     const loadStats = async () => {
       try {
         const data = await getChatStats(token, peerUsername)
         if (cancelled || !data) return
         setStats(data)
-        setVisible(true)
+        setShow(true)
+        window.setTimeout(() => {
+          if (!cancelled) setVisible(true)
+        }, 80)
       } catch {
-        // Keep chat usable if recap fetch fails.
+        // Keep chat usable if recap loading fails.
       }
     }
 
@@ -57,49 +82,73 @@ function MonthlyRecap({ token, peerUsername }) {
     return () => {
       cancelled = true
     }
-  }, [dismissKey, now, peerUsername, token])
+  }, [dismissKey, forceShow, now, peerUsername, token])
 
-  const dismiss = () => {
-    try {
-      window.localStorage.setItem(dismissKey, '1')
-    } catch {
-      // Ignore localStorage write errors.
+  const closeSheet = (persistDismiss) => {
+    if (persistDismiss) {
+      try {
+        window.localStorage.setItem(dismissKey, '1')
+      } catch {
+        // Ignore localStorage write failures.
+      }
     }
+
     setVisible(false)
+    window.setTimeout(() => setShow(false), CLOSE_ANIMATION_MS)
   }
 
-  if (!visible || !stats) return null
+  if (!show || !stats) return null
 
-  const recapLabel = formatMonthKeyLabel(stats?.recapMonth) || titleMonthLabel
-  const messageCount = Number(stats?.recapMessages ?? stats?.thisMonthMessages ?? 0)
-  const photoCount = Number(stats?.recapPhotos ?? stats?.thisMonthPhotos ?? 0)
-  const voiceCount = Number(stats?.recapVoices ?? stats?.thisMonthVoices ?? 0)
-  const talkedDays = Number(stats?.recapTalkDays ?? stats?.thisMonthTalkDays ?? 0)
-  const daysInMonth = Number(stats?.recapDaysInMonth ?? stats?.daysInMonth ?? 0)
+  const monthLabel = formatRecapMonthLabel(stats?.recapMonth, now)
+  const recapMessages = Number(stats?.recapMessages ?? stats?.thisMonthMessages ?? 0)
+  const recapPhotos = Number(stats?.recapPhotos ?? stats?.thisMonthPhotos ?? 0)
+  const recapVideos = Number(stats?.recapVideos ?? stats?.thisMonthVideos ?? 0)
+  const recapVoices = Number(stats?.recapVoices ?? stats?.thisMonthVoices ?? 0)
+  const streakDays = Number(stats?.daysTrackedStreak || 0)
+  const longestStreak = Number(stats?.longestStreak || 0)
 
   return (
-    <div className="monthly-recap-overlay" role="dialog" aria-modal="true" aria-label="Monthly recap">
-      <div className="monthly-recap-card">
-        <button type="button" className="monthly-recap-close" onClick={dismiss} aria-label="Close monthly recap">X</button>
-        <h3 className="monthly-recap-title">{recapLabel} was beautiful</h3>
-        <p className="monthly-recap-subtitle">A quick look at your chat moments.</p>
-        <ul className="monthly-recap-list">
-          <li><span>Messages sent</span><strong>{messageCount}</strong></li>
-          <li><span>Photos shared</span><strong>{photoCount}</strong></li>
-          <li><span>Voice notes</span><strong>{voiceCount}</strong></li>
-          <li><span>Days talked</span><strong>{`${talkedDays}/${daysInMonth || talkedDays}`}</strong></li>
-        </ul>
-        <div className="monthly-recap-actions">
-          <button type="button" className="monthly-recap-outline" onClick={dismiss}>Later</button>
+    <div className="mr-overlay" role="dialog" aria-modal="true" aria-label="Monthly recap">
+      <div className={`mr-sheet ${visible ? 'mr-sheet-visible' : ''}`}>
+        <div className="mr-header">
+          <div className="mr-header-bg" />
+          <div className="mr-handle" />
+          <div className="mr-month-label">Monthly Recap</div>
+          <div className="mr-title"><span>{monthLabel}</span> was beautiful</div>
+          <div className="mr-subtitle">Here is your story in numbers</div>
+        </div>
+
+        <div className="mr-divider" />
+
+        <div className="mr-stats">
+          <div className="mr-section-label">This Month</div>
+          <StatRow emoji="??" label="Messages sent" value={recapMessages} delay={120} color="#ff8fab" />
+          <StatRow emoji="??" label="Photos shared" value={recapPhotos} delay={200} color="#c084fc" />
+          <StatRow emoji="??" label="Videos shared" value={recapVideos} delay={280} color="#60a5fa" />
+          <StatRow emoji="??" label="Voice notes" value={recapVoices} delay={360} color="#34d399" />
+        </div>
+
+        <div className="mr-streak-banner">
+          <div className="mr-streak-icon" aria-hidden="true">??</div>
+          <div className="mr-streak-text">
+            <div className="mr-streak-title">{streakDays} day active streak</div>
+            <div className="mr-streak-sub">Longest streak: {longestStreak} days</div>
+          </div>
+        </div>
+
+        <div className="mr-actions">
           <button
             type="button"
-            className="monthly-recap-btn"
+            className="mr-btn-full"
             onClick={() => {
-              dismiss()
+              closeSheet(true)
               navigate(`/chat/recap?peer=${encodeURIComponent(peerUsername)}`)
             }}
           >
             View Full Recap
+          </button>
+          <button type="button" className="mr-btn-dismiss" onClick={() => closeSheet(true)}>
+            So sweet
           </button>
         </div>
       </div>

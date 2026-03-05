@@ -11,6 +11,13 @@ function formatMonthLabel(monthKey) {
   return date.toLocaleString(undefined, { month: 'long', year: 'numeric' })
 }
 
+function formatDateLabel(value) {
+  if (!value) return '-'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value)
+  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
+}
+
 function RecapPage() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -22,10 +29,12 @@ function RecapPage() {
   const peerUsername = useMemo(() => {
     const fromSearch = new URLSearchParams(location.search).get('peer')
     if (fromSearch) return String(fromSearch).trim().toLowerCase()
+
     const fromState = String(location.state?.peerUsername || '').trim().toLowerCase()
     if (fromState) return fromState
 
     if (!flow?.username) return ''
+
     try {
       const key = `active_chat_peer_v1:${String(flow.username || '').trim().toLowerCase()}`
       return String(window.localStorage.getItem(key) || '').trim().toLowerCase()
@@ -41,6 +50,7 @@ function RecapPage() {
     }
 
     let cancelled = false
+
     const loadStats = async () => {
       try {
         setLoading(true)
@@ -79,70 +89,87 @@ function RecapPage() {
   return (
     <div className="recap-page">
       <div className="recap-card">
-        <div className="recap-header">
-          <h2 className="recap-title">Conversation Recap</h2>
-          <button type="button" className="recap-back" onClick={() => navigate('/chat')}>Back to Chat</button>
-        </div>
-        <div className="recap-peer">With @{peerUsername}</div>
-
-        <div className="recap-grid">
-          <div className="recap-box">
-            <p className="recap-label">This Month Messages</p>
-            <p className="recap-value">{Number(stats?.thisMonthMessages || 0)}</p>
-          </div>
-          <div className="recap-box">
-            <p className="recap-label">This Month Photos</p>
-            <p className="recap-value">{Number(stats?.thisMonthPhotos || 0)}</p>
-          </div>
-          <div className="recap-box">
-            <p className="recap-label">This Month Voices</p>
-            <p className="recap-value">{Number(stats?.thisMonthVoices || 0)}</p>
-          </div>
-          <div className="recap-box">
-            <p className="recap-label">Days Talked This Month</p>
-            <p className="recap-value">{`${Number(stats?.thisMonthTalkDays || 0)}/${Number(stats?.daysInMonth || 0)}`}</p>
-          </div>
-          <div className="recap-box">
-            <p className="recap-label">All Time Messages</p>
-            <p className="recap-value">{Number(stats?.totalMessages || 0)}</p>
-          </div>
-          <div className="recap-box">
-            <p className="recap-label">All Time Photos</p>
-            <p className="recap-value">{Number(stats?.totalPhotos || 0)}</p>
-          </div>
-          <div className="recap-box">
-            <p className="recap-label">All Time Voices</p>
-            <p className="recap-value">{Number(stats?.totalVoices || 0)}</p>
-          </div>
-          <div className="recap-box">
-            <p className="recap-label">First Message</p>
-            <p className="recap-value">{stats?.firstMessageDate || '-'}</p>
-          </div>
-          <div className="recap-box">
-            <p className="recap-label">Current Streak</p>
-            <p className="recap-value">{Number(stats?.daysTrackedStreak || 0)} days</p>
-          </div>
-          <div className="recap-box">
-            <p className="recap-label">Longest Streak</p>
-            <p className="recap-value">{Number(stats?.longestStreak || 0)} days</p>
-          </div>
+        <div className="recap-page-header">
+          <button type="button" className="recap-page-back" onClick={() => navigate('/chat')}>?</button>
+          <div className="recap-page-title">Your <span>Love Story</span> in Numbers</div>
+          <div className="recap-page-sub">with @{peerUsername}</div>
         </div>
 
-        <div className="recap-timeline">
-          <h3>Monthly Timeline</h3>
+        <section className="recap-section">
+          <div className="recap-section-title">This Month</div>
+          <div className="recap-big-grid">
+            <div className="recap-big-card">
+              <div className="recap-big-icon">??</div>
+              <div className="recap-big-number recap-pink">{Number(stats?.thisMonthMessages || 0).toLocaleString()}</div>
+              <div className="recap-big-label">messages</div>
+            </div>
+            <div className="recap-big-card">
+              <div className="recap-big-icon">??</div>
+              <div className="recap-big-number recap-amber">{Number(stats?.daysTrackedStreak || 0)}</div>
+              <div className="recap-big-label">day streak</div>
+            </div>
+            <div className="recap-big-card">
+              <div className="recap-big-icon">??</div>
+              <div className="recap-big-number recap-violet">{Number(stats?.thisMonthPhotos || 0)}</div>
+              <div className="recap-big-label">photos</div>
+            </div>
+            <div className="recap-big-card">
+              <div className="recap-big-icon">??</div>
+              <div className="recap-big-number recap-blue">{Number(stats?.thisMonthVideos || 0)}</div>
+              <div className="recap-big-label">videos</div>
+            </div>
+            <div className="recap-big-card">
+              <div className="recap-big-icon">??</div>
+              <div className="recap-big-number recap-green">{Number(stats?.thisMonthVoices || 0)}</div>
+              <div className="recap-big-label">voice notes</div>
+            </div>
+            <div className="recap-big-card">
+              <div className="recap-big-icon">??</div>
+              <div className="recap-big-number recap-amber">{`${Number(stats?.thisMonthTalkDays || 0)}/${Number(stats?.daysInMonth || 0)}`}</div>
+              <div className="recap-big-label">days talked</div>
+            </div>
+          </div>
+        </section>
+
+        <section className="recap-section">
+          <div className="recap-section-title">All Time Together</div>
+          <div className="recap-all-time-row">
+            <div className="recap-all-time-left">?? Total messages ever</div>
+            <div className="recap-all-time-value">{Number(stats?.totalMessages || 0).toLocaleString()}</div>
+          </div>
+          <div className="recap-all-time-row">
+            <div className="recap-all-time-left">?? Total photos shared</div>
+            <div className="recap-all-time-value">{Number(stats?.totalPhotos || 0).toLocaleString()}</div>
+          </div>
+          <div className="recap-all-time-row">
+            <div className="recap-all-time-left">?? Total voice notes</div>
+            <div className="recap-all-time-value">{Number(stats?.totalVoices || 0).toLocaleString()}</div>
+          </div>
+          <div className="recap-all-time-row">
+            <div className="recap-all-time-left">?? Longest streak ever</div>
+            <div className="recap-all-time-value">{Number(stats?.longestStreak || 0)} days</div>
+          </div>
+          <div className="recap-all-time-row">
+            <div className="recap-all-time-left">??? First message date</div>
+            <div className="recap-all-time-value">{formatDateLabel(stats?.firstMessageDate)}</div>
+          </div>
+        </section>
+
+        <section className="recap-section recap-timeline-section">
+          <div className="recap-section-title">Monthly Timeline</div>
           {timeline.length ? (
             <ul className="recap-timeline-list">
               {timeline.map((row) => (
                 <li key={String(row.month)} className="recap-timeline-item">
                   <span>{formatMonthLabel(row.month)}</span>
-                  <strong>{Number(row.messages || 0)} msgs</strong>
+                  <strong>{Number(row.messages || 0).toLocaleString()} msgs</strong>
                 </li>
               ))}
             </ul>
           ) : (
             <div className="recap-muted">No timeline data yet.</div>
           )}
-        </div>
+        </section>
       </div>
     </div>
   )

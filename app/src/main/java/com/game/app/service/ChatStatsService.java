@@ -42,6 +42,8 @@ public class ChatStatsService {
     long recapMessages = toLong(chatMessageRepository.countMessagesBetweenRange(u1, u2, previousMonthStart, monthStart));
     long recapPhotos = toLong(
         chatMessageRepository.countMessagesByTypeBetweenRange(u1, u2, "image", previousMonthStart, monthStart));
+    long recapVideos = toLong(
+        chatMessageRepository.countMessagesByTypeBetweenRange(u1, u2, "video", previousMonthStart, monthStart));
     long recapVoices = toLong(
         chatMessageRepository.countMessagesByTypeBetweenRange(u1, u2, "voice", previousMonthStart, monthStart));
     long totalPhotos = toLong(chatMessageRepository.countMessagesByTypeBetween(u1, u2, "image"));
@@ -78,6 +80,7 @@ public class ChatStatsService {
         String.format("%04d-%02d", previousMonth.getYear(), previousMonth.getMonthValue()),
         recapMessages,
         recapPhotos,
+        recapVideos,
         recapVoices,
         recapTalkDays,
         previousMonth.lengthOfMonth(),
@@ -197,6 +200,7 @@ public class ChatStatsService {
       String recapMonth,
       long recapMessages,
       long recapPhotos,
+      long recapVideos,
       long recapVoices,
       int recapTalkDays,
       int recapDaysInMonth,

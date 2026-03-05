@@ -2,81 +2,199 @@ import { useEffect, useState } from 'react'
 import { getChatStats } from '../services/messagesApi'
 import './MilestonePopup.css'
 
-const MESSAGE_MILESTONES = [100, 500, 1000, 2000, 5000, 10000]
-const STREAK_MESSAGES = {
-  7: 'One week of talking every day.',
-  30: '30 days straight.',
-  100: '100 days. Unbreakable.',
-  365: 'A whole year of daily talks.',
+const MESSAGE_MILESTONES = [
+  { count: 100, emoji: '??', title: '100 Messages!', color: '#60a5fa', glow: 'rgba(96,165,250,0.45)', message: '100 messages in. Every single one brought you closer.' },
+  { count: 500, emoji: '??', title: '500 Messages!', color: '#c084fc', glow: 'rgba(192,132,252,0.45)', message: '500 messages between you two. That is 500 moments of love.' },
+  { count: 1000, emoji: '??', title: '1,000 Messages!', color: '#ff8fab', glow: 'rgba(255,107,157,0.55)', message: '1,000 messages. A thousand little pieces of your love story.' },
+  { count: 2000, emoji: '??', title: '2,000 Messages!', color: '#f472b6', glow: 'rgba(244,114,182,0.45)', message: 'Two thousand messages. You never run out of things to say.' },
+  { count: 5000, emoji: '??', title: '5,000 Messages!', color: '#fb923c', glow: 'rgba(251,146,60,0.45)', message: 'Five thousand. This chat is pure commitment.' },
+  { count: 10000, emoji: '??', title: '10,000 Messages!', color: '#ef4444', glow: 'rgba(239,68,68,0.52)', message: 'Ten thousand messages. This is what forever looks like.' },
+]
+
+const STREAK_MILESTONES = [
+  { days: 7, emoji: '??', title: '7 Days Straight!', color: '#fb923c', glow: 'rgba(251,146,60,0.45)', message: 'One whole week of talking every single day.' },
+  { days: 30, emoji: '??', title: '30 Days Straight!', color: '#f97316', glow: 'rgba(249,115,22,0.5)', message: '30 days straight. A full month without missing a day.' },
+  { days: 100, emoji: '??', title: '100 Days Straight!', color: '#ff8fab', glow: 'rgba(255,107,157,0.55)', message: '100 days of talking every day. This is a lifestyle.' },
+  { days: 365, emoji: '??', title: '365 Days Straight!', color: '#c084fc', glow: 'rgba(192,132,252,0.55)', message: 'A whole year of daily talks. Every single day.' },
+]
+
+const CLOSE_ANIMATION_MS = 420
+
+function buildCelebrationKey(kind, value) {
+  return `milestone_celebrated_v1:${kind}:${value}`
+}
+
+function wasAlreadyCelebrated(kind, value) {
+  const scoped = buildCelebrationKey(kind, value)
+  const legacy = kind === 'msg' ? `milestone_celebrated_v1:${value}` : `streak_celebrated_v1:${value}`
+  return window.localStorage.getItem(scoped) === '1' || window.localStorage.getItem(legacy) === '1'
+}
+
+function markCelebrated(kind, value) {
+  window.localStorage.setItem(buildCelebrationKey(kind, value), '1')
+}
+
+function createParticles(color) {
+  return Array.from({ length: 18 }, (_, index) => {
+    const tx = ((Math.random() * 2) - 1).toFixed(3)
+    const ty = (Math.random() + 0.2).toFixed(3)
+
+    return {
+      id: `${index}-${Date.now()}`,
+      left: `${10 + Math.random() * 80}%`,
+      top: `${8 + Math.random() * 60}%`,
+      width: `${3 + Math.random() * 5}px`,
+      height: `${3 + Math.random() * 5}px`,
+      background: index % 3 === 0 ? color : index % 3 === 1 ? '#ffffff' : '#ffd700',
+      borderRadius: index % 2 === 0 ? '50%' : '2px',
+      animationDelay: `${Math.random() * 0.45}s`,
+      animationDuration: `${0.85 + Math.random() * 0.75}s`,
+      opacity: 0.65 + Math.random() * 0.35,
+      tx,
+      ty,
+    }
+  })
+}
+
+function resolveNextMilestone(totalMessages, currentStreak) {
+  for (const milestone of [...MESSAGE_MILESTONES].reverse()) {
+    if (totalMessages >= milestone.count) {
+      if (!wasAlreadyCelebrated('msg', milestone.count)) {
+        return { ...milestone, kind: 'messages' }
+      }
+      break
+    }
+  }
+
+  for (const streak of [...STREAK_MILESTONES].reverse()) {
+    if (currentStreak >= streak.days) {
+      if (!wasAlreadyCelebrated('streak', streak.days)) {
+        return { ...streak, kind: 'streak' }
+      }
+      break
+    }
+  }
+
+  return null
 }
 
 function MilestonePopup({ token, peerUsername, triggerCheck }) {
-  const [popup, setPopup] = useState(null)
+  const [milestone, setMilestone] = useState(null)
+  const [visible, setVisible] = useState(false)
+  const [particles, setParticles] = useState([])
 
   useEffect(() => {
     if (!token || !peerUsername || !triggerCheck) return
 
     let cancelled = false
-    const checkMilestones = async () => {
+
+    const loadAndCheck = async () => {
       try {
-        const data = await getChatStats(token, peerUsername)
-        if (cancelled || !data) return
+        const stats = await getChatStats(token, peerUsername)
+        if (cancelled || !stats) return
 
-        const milestone = Number(data?.milestoneReached || 0)
-        const justHit = Boolean(data?.milestoneJustHit)
-        if (justHit && MESSAGE_MILESTONES.includes(milestone)) {
-          const key = `milestone_celebrated_v1:${milestone}`
-          if (!window.localStorage.getItem(key)) {
-            setPopup({
-              storageKey: key,
-              title: `You just sent your ${milestone}th message!`,
-              description: 'Your love story in numbers keeps growing.',
-            })
-            return
-          }
-        }
+        const totalMessages = Number(stats?.totalMessages || 0)
+        const currentStreak = Number(stats?.daysTrackedStreak || 0)
+        const next = resolveNextMilestone(totalMessages, currentStreak)
+        if (!next) return
 
-        const streak = Number(data?.daysTrackedStreak || 0)
-        if (STREAK_MESSAGES[streak]) {
-          const key = `streak_celebrated_v1:${streak}`
-          if (!window.localStorage.getItem(key)) {
-            setPopup({
-              storageKey: key,
-              title: 'Streak Milestone',
-              description: STREAK_MESSAGES[streak],
-            })
-          }
-        }
+        setMilestone(next)
+        setParticles(createParticles(next.color))
+        window.setTimeout(() => {
+          if (!cancelled) setVisible(true)
+        }, 80)
       } catch {
-        // Ignore milestone fetch errors.
+        // Ignore milestone failures to avoid interrupting chat flow.
       }
     }
 
-    checkMilestones()
+    loadAndCheck()
     return () => {
       cancelled = true
     }
   }, [peerUsername, token, triggerCheck])
 
   const dismiss = () => {
-    if (popup?.storageKey) {
-      try {
-        window.localStorage.setItem(popup.storageKey, '1')
-      } catch {
-        // Ignore localStorage write errors.
-      }
-    }
-    setPopup(null)
+    if (!milestone) return
+
+    const keyValue = milestone.kind === 'messages' ? milestone.count : milestone.days
+    markCelebrated(milestone.kind === 'messages' ? 'msg' : 'streak', keyValue)
+
+    setVisible(false)
+    window.setTimeout(() => {
+      setMilestone(null)
+      setParticles([])
+    }, CLOSE_ANIMATION_MS)
   }
 
-  if (!popup) return null
+  if (!milestone) return null
 
   return (
-    <div className="milestone-popup-overlay" role="dialog" aria-modal="true" aria-label="Milestone reached">
-      <div className="milestone-popup-card">
-        <h3 className="milestone-popup-title">{popup.title}</h3>
-        <p className="milestone-popup-text">{popup.description}</p>
-        <button type="button" className="milestone-popup-btn" onClick={dismiss}>Celebrate</button>
+    <div className="ms-overlay" role="dialog" aria-modal="true" aria-label="Milestone reached">
+      <div className={`ms-card ${visible ? 'ms-visible' : ''}`}>
+        <div className="ms-card-bg" />
+        <div
+          className="ms-card-glow"
+          style={{
+            background: `radial-gradient(ellipse at 50% 0%, ${milestone.glow} 0%, transparent 60%)`,
+            boxShadow: `0 0 60px ${milestone.glow}, inset 0 0 52px ${milestone.glow}`,
+          }}
+        />
+
+        <div className="ms-rings" aria-hidden="true">
+          {[0, 1, 2].map((index) => (
+            <div
+              key={`${milestone.title}-ring-${index}`}
+              className="ms-ring"
+              style={{ borderColor: milestone.color, animationDelay: `${index * 0.2}s` }}
+            />
+          ))}
+        </div>
+
+        {particles.map((particle) => (
+          <div
+            key={particle.id}
+            className="ms-particle"
+            style={{
+              left: particle.left,
+              top: particle.top,
+              width: particle.width,
+              height: particle.height,
+              background: particle.background,
+              borderRadius: particle.borderRadius,
+              animationDelay: particle.animationDelay,
+              animationDuration: particle.animationDuration,
+              opacity: particle.opacity,
+              '--tx': particle.tx,
+              '--ty': particle.ty,
+            }}
+          />
+        ))}
+
+        <span className="ms-emoji" aria-hidden="true">{milestone.emoji}</span>
+
+        <div className="ms-title" style={{ color: milestone.color }}>{milestone.title}</div>
+
+        <div className="ms-counter">
+          <span className="ms-counter-num" style={{ color: milestone.color }}>
+            {milestone.kind === 'messages' ? Number(milestone.count).toLocaleString() : Number(milestone.days)}
+          </span>
+          <span className="ms-counter-label">{milestone.kind === 'messages' ? 'messages' : 'day streak'}</span>
+        </div>
+
+        <div className="ms-message">{milestone.message}</div>
+
+        <button
+          type="button"
+          className="ms-btn"
+          style={{
+            background: `linear-gradient(135deg, ${milestone.color}, ${milestone.color}cc)`,
+            boxShadow: `0 6px 20px ${milestone.glow}`,
+          }}
+          onClick={dismiss}
+        >
+          Let's keep going ??
+        </button>
       </div>
     </div>
   )
