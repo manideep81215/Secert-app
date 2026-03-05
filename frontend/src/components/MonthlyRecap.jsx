@@ -53,8 +53,8 @@ function MonthlyRecap({ token, peerUsername, forceShow = false }) {
   useEffect(() => {
     if (!token || !peerUsername) return
 
-    const isFirstOfMonth = now.getDate() === 1
-    if (!isFirstOfMonth && !forceShow) return
+    const isRecapDay = now.getDate() === 13
+    if (!isRecapDay && !forceShow) return
 
     try {
       if (!forceShow && window.localStorage.getItem(dismissKey) === '1') return

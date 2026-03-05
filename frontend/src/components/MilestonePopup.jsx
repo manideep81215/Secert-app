@@ -2,13 +2,13 @@ import { useEffect, useState } from 'react'
 import { getChatStats } from '../services/messagesApi'
 import './MilestonePopup.css'
 
-const MESSAGE_MILESTONES = [
-  { count: 100, emoji: '\uD83D\uDCAC', title: '100 Messages!', color: '#60a5fa', glow: 'rgba(96,165,250,0.45)', message: '100 messages in. Every single one brought you closer.' },
-  { count: 500, emoji: '\uD83D\uDC8C', title: '500 Messages!', color: '#c084fc', glow: 'rgba(192,132,252,0.45)', message: '500 messages between you two. That is 500 moments of love.' },
-  { count: 1000, emoji: '\uD83C\uDF89', title: '1,000 Messages!', color: '#ff8fab', glow: 'rgba(255,107,157,0.55)', message: '1,000 messages. A thousand little pieces of your love story.' },
-  { count: 2000, emoji: '\uD83D\uDC95', title: '2,000 Messages!', color: '#f472b6', glow: 'rgba(244,114,182,0.45)', message: 'Two thousand messages. You never run out of things to say.' },
-  { count: 5000, emoji: '\uD83E\uDD79', title: '5,000 Messages!', color: '#fb923c', glow: 'rgba(251,146,60,0.45)', message: 'Five thousand. This chat is pure commitment.' },
-  { count: 10000, emoji: '\u2764\uFE0F', title: '10,000 Messages!', color: '#ef4444', glow: 'rgba(239,68,68,0.52)', message: 'Ten thousand messages. This is what forever looks like.' },
+const MESSAGE_MILESTONE_THEMES = [
+  { emoji: '\uD83D\uDC8C', color: '#60a5fa', glow: 'rgba(96,165,250,0.45)' },
+  { emoji: '\uD83C\uDF89', color: '#c084fc', glow: 'rgba(192,132,252,0.45)' },
+  { emoji: '\uD83D\uDC95', color: '#ff8fab', glow: 'rgba(255,107,157,0.55)' },
+  { emoji: '\uD83E\uDD79', color: '#f472b6', glow: 'rgba(244,114,182,0.45)' },
+  { emoji: '\uD83D\uDE0D', color: '#fb923c', glow: 'rgba(251,146,60,0.45)' },
+  { emoji: '\u2764\uFE0F', color: '#ef4444', glow: 'rgba(239,68,68,0.52)' },
 ]
 
 const STREAK_MILESTONES = [
@@ -56,6 +56,21 @@ function createParticles(color) {
   })
 }
 
+function buildMessageMilestone(count) {
+  const safeCount = Math.max(500, Number(count || 0))
+  const tierIndex = Math.max(0, Math.floor(safeCount / 500) - 1)
+  const theme = MESSAGE_MILESTONE_THEMES[tierIndex % MESSAGE_MILESTONE_THEMES.length]
+  return {
+    kind: 'messages',
+    count: safeCount,
+    emoji: theme.emoji,
+    color: theme.color,
+    glow: theme.glow,
+    title: `${safeCount.toLocaleString()} Messages!`,
+    message: `${safeCount.toLocaleString()} messages and your story keeps growing.`,
+  }
+}
+
 function resolveNextStreakMilestone(currentStreak) {
   for (const streak of [...STREAK_MILESTONES].reverse()) {
     if (currentStreak >= streak.days) {
@@ -86,15 +101,13 @@ function MilestonePopup({ token, peerUsername, triggerCheck }) {
         const reachedMilestone = Number(stats?.milestoneReached || 0)
         const milestoneJustHit = Boolean(stats?.milestoneJustHit)
         if (milestoneJustHit && reachedMilestone > 0 && !wasAlreadyCelebrated('msg', reachedMilestone)) {
-          const messageMilestone = MESSAGE_MILESTONES.find((row) => row.count === reachedMilestone)
-          if (messageMilestone) {
-            setMilestone({ ...messageMilestone, kind: 'messages' })
-            setParticles(createParticles(messageMilestone.color))
-            window.setTimeout(() => {
-              if (!cancelled) setVisible(true)
-            }, 80)
-            return
-          }
+          const messageMilestone = buildMessageMilestone(reachedMilestone)
+          setMilestone(messageMilestone)
+          setParticles(createParticles(messageMilestone.color))
+          window.setTimeout(() => {
+            if (!cancelled) setVisible(true)
+          }, 80)
+          return
         }
 
         const currentStreak = Number(stats?.daysTrackedStreak || 0)

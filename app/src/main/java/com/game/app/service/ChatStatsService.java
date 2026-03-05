@@ -19,7 +19,7 @@ import com.game.app.repository.ChatStatsProgressRepository;
 @Service
 public class ChatStatsService {
 
-  private static final long[] MESSAGE_MILESTONES = { 100L, 500L, 1000L, 2000L, 5000L, 10000L };
+  private static final long MESSAGE_MILESTONE_STEP = 500L;
 
   private final ChatMessageRepository chatMessageRepository;
   private final ChatStatsProgressRepository chatStatsProgressRepository;
@@ -156,17 +156,19 @@ public class ChatStatsService {
   }
 
   private MilestoneResult checkMilestone(long previousTotal, long totalMessages) {
-    long reached = 0;
-    long crossed = 0;
-    for (long milestone : MESSAGE_MILESTONES) {
-      if (totalMessages >= milestone) {
-        reached = milestone;
-      }
-      if (previousTotal < milestone && totalMessages >= milestone) {
-        crossed = milestone;
-      }
-    }
-    return new MilestoneResult(reached, crossed > 0L);
+    long reached = totalMessages >= MESSAGE_MILESTONE_STEP
+        ? (totalMessages / MESSAGE_MILESTONE_STEP) * MESSAGE_MILESTONE_STEP
+        : 0L;
+
+    long previousBucket = previousTotal >= MESSAGE_MILESTONE_STEP
+        ? previousTotal / MESSAGE_MILESTONE_STEP
+        : 0L;
+    long currentBucket = totalMessages >= MESSAGE_MILESTONE_STEP
+        ? totalMessages / MESSAGE_MILESTONE_STEP
+        : 0L;
+
+    boolean crossed = totalMessages > previousTotal && currentBucket > previousBucket;
+    return new MilestoneResult(reached, crossed);
   }
 
   private long trackAndGetPreviousTotal(String u1, String u2, long totalMessages) {
