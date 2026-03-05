@@ -1,6 +1,7 @@
 import { createApiClient } from './apiClient'
 
 const messagesClient = createApiClient('/messages', 10000)
+const chatStatsClient = createApiClient('/chat', 10000)
 messagesClient.defaults.timeout = 20000
 
 export async function getConversation(token, withUsername, options = {}) {
@@ -63,4 +64,12 @@ export async function uploadMedia(token, file, options = {}) {
   })
   if (onProgress) onProgress(100)
   return data
+}
+
+export async function getChatStats(token, peerUsername) {
+  const { data } = await chatStatsClient.get('/stats', {
+    params: { peerUsername },
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  })
+  return data || null
 }

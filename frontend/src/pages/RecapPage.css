@@ -1,0 +1,110 @@
+.recap-page {
+  min-height: 100dvh;
+  background: radial-gradient(circle at 18% 0%, #fff0f4 0%, #f5f8ff 46%, #eef3ff 100%);
+  padding: clamp(1rem, 2vw, 2rem);
+}
+
+.recap-card {
+  max-width: 860px;
+  margin: 0 auto;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 20px 48px rgba(21, 31, 55, 0.14);
+  border-radius: 1.1rem;
+  padding: clamp(1rem, 2.5vw, 1.5rem);
+}
+
+.recap-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+  margin-bottom: 0.9rem;
+}
+
+.recap-back {
+  border: none;
+  border-radius: 999px;
+  padding: 0.42rem 0.85rem;
+  background: rgba(30, 42, 74, 0.08);
+  color: #1c2a48;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.recap-title {
+  margin: 0;
+  color: #22345c;
+}
+
+.recap-peer {
+  color: #4c5f86;
+  font-size: 0.92rem;
+  margin-bottom: 0.8rem;
+}
+
+.recap-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.7rem;
+  margin-bottom: 1rem;
+}
+
+.recap-box {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.92) 0%, rgba(239, 245, 255, 0.76) 100%);
+  border: 1px solid rgba(177, 193, 222, 0.34);
+  border-radius: 0.9rem;
+  padding: 0.75rem;
+}
+
+.recap-label {
+  font-size: 0.82rem;
+  color: #4b5d83;
+  margin: 0;
+}
+
+.recap-value {
+  margin: 0.28rem 0 0;
+  color: #10203f;
+  font-size: 1.2rem;
+  font-weight: 800;
+}
+
+.recap-timeline {
+  margin-top: 0.6rem;
+}
+
+.recap-timeline h3 {
+  margin: 0 0 0.5rem;
+  color: #22345c;
+}
+
+.recap-timeline-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.recap-timeline-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(244, 248, 255, 0.88);
+  border-radius: 0.75rem;
+  padding: 0.45rem 0.62rem;
+  color: #1e2e54;
+}
+
+.recap-muted,
+.recap-error {
+  text-align: center;
+  padding: 1.3rem;
+  color: #42557f;
+}
+
+.recap-error {
+  color: #9f1f3d;
+}

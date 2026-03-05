@@ -10,6 +10,8 @@ import { getAllUsers } from '../services/usersApi'
 import BackIcon from '../components/BackIcon'
 import { FileAttachIcon, PhotoAttachIcon } from '../components/AttachmentIcons'
 import LoveReminder from '../components/LoveReminder'
+import MonthlyRecap from '../components/MonthlyRecap'
+import MilestonePopup from '../components/MilestonePopup'
 import timerLoveBirdsIcon from '../assets/in-love.png'
 import ChatUsersPanel from './ChatUsersPanel'
 import {
@@ -93,6 +95,7 @@ function ChatPageNew() {
   const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false)
   const [conversationReloadTick, setConversationReloadTick] = useState(0)
   const [usersReloadTick, setUsersReloadTick] = useState(0)
+  const [lastSentMessageId, setLastSentMessageId] = useState(0)
   const [inputValue, setInputValue] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [showAttachMenu, setShowAttachMenu] = useState(false)
@@ -1993,10 +1996,15 @@ function ChatPageNew() {
             const ack = JSON.parse(frame.body)
             const tempId = ack?.tempId
             if (!tempId) return
+            const ackMessageId = Number(ack?.messageId || ack?.id || 0)
 
             if (sendAckTimeoutsRef.current[tempId]) {
               clearTimeout(sendAckTimeoutsRef.current[tempId])
               delete sendAckTimeoutsRef.current[tempId]
+            }
+
+            if (ack?.success && ackMessageId > 0) {
+              setLastSentMessageId(ackMessageId)
             }
 
             setMessages((prev) =>
@@ -3546,6 +3554,8 @@ function ChatPageNew() {
       }}
     >
       <LoveReminder />
+      <MonthlyRecap token={flow.token} peerUsername={selectedUser?.username} />
+      <MilestonePopup token={flow.token} peerUsername={selectedUser?.username} triggerCheck={lastSentMessageId} />
       <ChatUsersPanel
         filteredUsers={filteredUsers}
         selectedUserId={selectedUser?.id || null}

@@ -1,0 +1,205 @@
+package com.game.app.service;
+
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.YearMonth;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
+
+import org.springframework.stereotype.Service;
+
+import com.game.app.repository.ChatMessageRepository;
+
+@Service
+public class ChatStatsService {
+
+  private static final long[] MESSAGE_MILESTONES = { 100L, 500L, 1000L, 2000L, 5000L, 10000L };
+
+  private final ChatMessageRepository chatMessageRepository;
+
+  public ChatStatsService(ChatMessageRepository chatMessageRepository) {
+    this.chatMessageRepository = chatMessageRepository;
+  }
+
+  public ChatStatsDto getStats(String userOne, String userTwo) {
+    String u1 = normalizeUsername(userOne);
+    String u2 = normalizeUsername(userTwo);
+    ZoneId zoneId = ZoneId.systemDefault();
+
+    YearMonth currentMonth = YearMonth.now(zoneId);
+    Instant monthStart = currentMonth.atDay(1).atStartOfDay(zoneId).toInstant();
+    YearMonth previousMonth = currentMonth.minusMonths(1);
+    Instant previousMonthStart = previousMonth.atDay(1).atStartOfDay(zoneId).toInstant();
+
+    long totalMessages = toLong(chatMessageRepository.countMessagesBetween(u1, u2));
+    long thisMonthMessages = toLong(chatMessageRepository.countMessagesBetweenSince(u1, u2, monthStart));
+    long thisMonthPhotos = toLong(chatMessageRepository.countMessagesByTypeBetweenSince(u1, u2, "image", monthStart));
+    long thisMonthVideos = toLong(chatMessageRepository.countMessagesByTypeBetweenSince(u1, u2, "video", monthStart));
+    long thisMonthVoices = toLong(chatMessageRepository.countMessagesByTypeBetweenSince(u1, u2, "voice", monthStart));
+    long recapMessages = toLong(chatMessageRepository.countMessagesBetweenRange(u1, u2, previousMonthStart, monthStart));
+    long recapPhotos = toLong(
+        chatMessageRepository.countMessagesByTypeBetweenRange(u1, u2, "image", previousMonthStart, monthStart));
+    long recapVoices = toLong(
+        chatMessageRepository.countMessagesByTypeBetweenRange(u1, u2, "voice", previousMonthStart, monthStart));
+    long totalPhotos = toLong(chatMessageRepository.countMessagesByTypeBetween(u1, u2, "image"));
+    long totalVoices = toLong(chatMessageRepository.countMessagesByTypeBetween(u1, u2, "voice"));
+
+    Instant firstMessageAt = chatMessageRepository.findFirstMessageAt(u1, u2);
+    LocalDate firstMessageDate = firstMessageAt != null ? LocalDate.ofInstant(firstMessageAt, zoneId) : null;
+
+    List<LocalDate> talkDates = chatMessageRepository.findDistinctTalkDates(u1, u2)
+        .stream()
+        .map(java.sql.Date::toLocalDate)
+        .toList();
+
+    StreakResult streakResult = calculateStreak(talkDates, LocalDate.now(zoneId));
+    MilestoneResult milestoneResult = checkMilestone(totalMessages);
+    int thisMonthTalkDays = countMonthTalkDays(talkDates, currentMonth);
+    int recapTalkDays = countMonthTalkDays(talkDates, previousMonth);
+
+    return new ChatStatsDto(
+        totalMessages,
+        thisMonthMessages,
+        thisMonthPhotos,
+        thisMonthVideos,
+        thisMonthVoices,
+        streakResult.currentStreak(),
+        streakResult.longestStreak(),
+        firstMessageDate,
+        totalPhotos,
+        totalVoices,
+        milestoneResult.reachedMilestone(),
+        milestoneResult.justHit(),
+        thisMonthTalkDays,
+        currentMonth.lengthOfMonth(),
+        String.format("%04d-%02d", previousMonth.getYear(), previousMonth.getMonthValue()),
+        recapMessages,
+        recapPhotos,
+        recapVoices,
+        recapTalkDays,
+        previousMonth.lengthOfMonth(),
+        mapTimeline(chatMessageRepository.findMonthlyMessageCounts(u1, u2)));
+  }
+
+  private List<MonthCountDto> mapTimeline(List<Object[]> rows) {
+    List<MonthCountDto> timeline = new ArrayList<>();
+    for (Object[] row : rows) {
+      if (row == null || row.length < 3) continue;
+      int year = (int) toLong(row[0]);
+      int month = (int) toLong(row[1]);
+      long count = toLong(row[2]);
+      if (year <= 0 || month <= 0 || month > 12) continue;
+      timeline.add(new MonthCountDto(String.format("%04d-%02d", year, month), count));
+    }
+    return timeline;
+  }
+
+  private StreakResult calculateStreak(List<LocalDate> talkDates, LocalDate today) {
+    if (talkDates == null || talkDates.isEmpty()) {
+      return new StreakResult(0, 0);
+    }
+
+    Set<LocalDate> distinctDates = new TreeSet<>(talkDates);
+
+    int currentStreak = 0;
+    LocalDate cursor = today;
+    while (distinctDates.contains(cursor)) {
+      currentStreak += 1;
+      cursor = cursor.minusDays(1);
+    }
+
+    int longestStreak = 0;
+    int running = 0;
+    LocalDate previous = null;
+    for (LocalDate date : distinctDates) {
+      if (previous != null && previous.plusDays(1).equals(date)) {
+        running += 1;
+      } else {
+        running = 1;
+      }
+      if (running > longestStreak) {
+        longestStreak = running;
+      }
+      previous = date;
+    }
+
+    return new StreakResult(currentStreak, longestStreak);
+  }
+
+  private int countMonthTalkDays(List<LocalDate> talkDates, YearMonth month) {
+    if (talkDates == null || talkDates.isEmpty()) {
+      return 0;
+    }
+    return (int) talkDates.stream().filter((date) -> YearMonth.from(date).equals(month)).distinct().count();
+  }
+
+  private MilestoneResult checkMilestone(long totalMessages) {
+    long reached = 0;
+    boolean justHit = false;
+    for (long milestone : MESSAGE_MILESTONES) {
+      if (totalMessages >= milestone) {
+        reached = milestone;
+      }
+      if (totalMessages == milestone) {
+        justHit = true;
+      }
+    }
+    return new MilestoneResult(reached, justHit);
+  }
+
+  private long toLong(Long value) {
+    return value == null ? 0L : value;
+  }
+
+  private long toLong(Object value) {
+    if (value == null) return 0L;
+    if (value instanceof Number number) {
+      return number.longValue();
+    }
+    try {
+      return Long.parseLong(String.valueOf(value));
+    } catch (NumberFormatException exception) {
+      return 0L;
+    }
+  }
+
+  private String normalizeUsername(String username) {
+    return username == null ? "" : username.trim().toLowerCase();
+  }
+
+  private record StreakResult(int currentStreak, int longestStreak) {
+  }
+
+  private record MilestoneResult(long reachedMilestone, boolean justHit) {
+  }
+
+  public record MonthCountDto(String month, long messages) {
+  }
+
+  public record ChatStatsDto(
+      long totalMessages,
+      long thisMonthMessages,
+      long thisMonthPhotos,
+      long thisMonthVideos,
+      long thisMonthVoices,
+      int daysTrackedStreak,
+      int longestStreak,
+      LocalDate firstMessageDate,
+      long totalPhotos,
+      long totalVoices,
+      long milestoneReached,
+      boolean milestoneJustHit,
+      int thisMonthTalkDays,
+      int daysInMonth,
+      String recapMonth,
+      long recapMessages,
+      long recapPhotos,
+      long recapVoices,
+      int recapTalkDays,
+      int recapDaysInMonth,
+      List<MonthCountDto> monthlyTimeline) {
+  }
+}

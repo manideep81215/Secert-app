@@ -12,6 +12,7 @@ import SnakeLadderGamePage from './pages/SnakeLadderGamePage'
 import VerifyPage from './pages/VerifyPage'
 import ChatPageNew from './pages/ChatPageNew'
 import ChatInfoPage from './pages/ChatInfoPage'
+import RecapPage from './pages/RecapPage'
 import LoveTimers from './pages/LoveTimers'
 import ProfilePage from './pages/ProfilePage'
 import { WS_CHAT_URL } from './config/apiConfig'
@@ -447,6 +448,7 @@ function App() {
           <Route path="/verify" element={isAuthenticated ? <VerifyPage /> : <Navigate to="/auth" replace />} />
           <Route path="/users" element={isAuthenticated ? <Navigate to="/chat" replace state={{ openUsersList: true }} /> : <Navigate to="/auth" replace />} />
           <Route path="/chat" element={isAuthenticated ? <ChatPageNew /> : <Navigate to="/auth" replace />} />
+          <Route path="/chat/recap" element={isAuthenticated ? <RecapPage /> : <Navigate to="/auth" replace />} />
           <Route path="/chat/info" element={isAuthenticated ? <ChatInfoPage /> : <Navigate to="/auth" replace />} />
           <Route path="/timers" element={isAuthenticated ? <LoveTimers /> : <Navigate to="/auth" replace />} />
           <Route path="/profile" element={isAuthenticated ? <ProfilePage /> : <Navigate to="/auth" replace />} />

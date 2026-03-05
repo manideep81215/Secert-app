@@ -1,0 +1,89 @@
+.monthly-recap-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: rgba(9, 13, 25, 0.52);
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+
+.monthly-recap-card {
+  width: min(460px, 100%);
+  border-radius: 1.2rem;
+  background: linear-gradient(145deg, #fff3f3 0%, #ffffff 52%, #f2f7ff 100%);
+  box-shadow: 0 22px 50px rgba(21, 28, 50, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  padding: 1.2rem;
+  position: relative;
+}
+
+.monthly-recap-close {
+  position: absolute;
+  right: 0.6rem;
+  top: 0.6rem;
+  border: none;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: rgba(16, 23, 42, 0.08);
+  color: #1f2a44;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+.monthly-recap-title {
+  margin: 0;
+  color: #a61e4d;
+  font-size: 1.35rem;
+}
+
+.monthly-recap-subtitle {
+  margin: 0.25rem 0 0.9rem;
+  color: #4d5b80;
+  font-size: 0.9rem;
+}
+
+.monthly-recap-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.48rem;
+  color: #1b2742;
+}
+
+.monthly-recap-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 0.7rem;
+  padding: 0.55rem 0.7rem;
+}
+
+.monthly-recap-actions {
+  margin-top: 0.95rem;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.55rem;
+}
+
+.monthly-recap-btn,
+.monthly-recap-outline {
+  border: none;
+  border-radius: 999px;
+  padding: 0.52rem 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.monthly-recap-btn {
+  background: linear-gradient(135deg, #ff5f8a 0%, #8b5cf6 100%);
+  color: #fff;
+}
+
+.monthly-recap-outline {
+  background: rgba(18, 24, 44, 0.08);
+  color: #1e2c4b;
+}

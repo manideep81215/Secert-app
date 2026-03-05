@@ -56,6 +56,109 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessageEntity, 
       """, nativeQuery = true)
   List<ChatMessageEntity> findLatestMessagesByPeer(@Param("username") String username);
 
+  @Query("""
+      SELECT COUNT(m) FROM ChatMessageEntity m
+      WHERE ((m.fromUsername = :u1 AND m.toUsername = :u2)
+         OR (m.fromUsername = :u2 AND m.toUsername = :u1))
+      """)
+  Long countMessagesBetween(@Param("u1") String userOne, @Param("u2") String userTwo);
+
+  @Query("""
+      SELECT COUNT(m) FROM ChatMessageEntity m
+      WHERE ((m.fromUsername = :u1 AND m.toUsername = :u2)
+         OR (m.fromUsername = :u2 AND m.toUsername = :u1))
+        AND m.createdAt >= :startDate
+      """)
+  Long countMessagesBetweenSince(
+      @Param("u1") String userOne,
+      @Param("u2") String userTwo,
+      @Param("startDate") Instant startDate);
+
+  @Query("""
+      SELECT COUNT(m) FROM ChatMessageEntity m
+      WHERE ((m.fromUsername = :u1 AND m.toUsername = :u2)
+         OR (m.fromUsername = :u2 AND m.toUsername = :u1))
+        AND m.createdAt >= :startDate
+        AND m.createdAt < :endDate
+      """)
+  Long countMessagesBetweenRange(
+      @Param("u1") String userOne,
+      @Param("u2") String userTwo,
+      @Param("startDate") Instant startDate,
+      @Param("endDate") Instant endDate);
+
+  @Query("""
+      SELECT COUNT(m) FROM ChatMessageEntity m
+      WHERE ((m.fromUsername = :u1 AND m.toUsername = :u2)
+         OR (m.fromUsername = :u2 AND m.toUsername = :u1))
+        AND LOWER(COALESCE(m.type, '')) = :type
+      """)
+  Long countMessagesByTypeBetween(
+      @Param("u1") String userOne,
+      @Param("u2") String userTwo,
+      @Param("type") String type);
+
+  @Query("""
+      SELECT COUNT(m) FROM ChatMessageEntity m
+      WHERE ((m.fromUsername = :u1 AND m.toUsername = :u2)
+         OR (m.fromUsername = :u2 AND m.toUsername = :u1))
+        AND LOWER(COALESCE(m.type, '')) = :type
+        AND m.createdAt >= :startDate
+      """)
+  Long countMessagesByTypeBetweenSince(
+      @Param("u1") String userOne,
+      @Param("u2") String userTwo,
+      @Param("type") String type,
+      @Param("startDate") Instant startDate);
+
+  @Query("""
+      SELECT COUNT(m) FROM ChatMessageEntity m
+      WHERE ((m.fromUsername = :u1 AND m.toUsername = :u2)
+         OR (m.fromUsername = :u2 AND m.toUsername = :u1))
+        AND LOWER(COALESCE(m.type, '')) = :type
+        AND m.createdAt >= :startDate
+        AND m.createdAt < :endDate
+      """)
+  Long countMessagesByTypeBetweenRange(
+      @Param("u1") String userOne,
+      @Param("u2") String userTwo,
+      @Param("type") String type,
+      @Param("startDate") Instant startDate,
+      @Param("endDate") Instant endDate);
+
+  @Query(value = """
+      SELECT DISTINCT DATE(m.created_at)
+      FROM chat_messages m
+      WHERE ((m.from_username = :u1 AND m.to_username = :u2)
+         OR (m.from_username = :u2 AND m.to_username = :u1))
+      ORDER BY DATE(m.created_at) DESC
+      """, nativeQuery = true)
+  List<java.sql.Date> findDistinctTalkDates(
+      @Param("u1") String userOne,
+      @Param("u2") String userTwo);
+
+  @Query("""
+      SELECT MIN(m.createdAt) FROM ChatMessageEntity m
+      WHERE ((m.fromUsername = :u1 AND m.toUsername = :u2)
+         OR (m.fromUsername = :u2 AND m.toUsername = :u1))
+      """)
+  Instant findFirstMessageAt(
+      @Param("u1") String userOne,
+      @Param("u2") String userTwo);
+
+  @Query(value = """
+      SELECT YEAR(m.created_at) AS year_value, MONTH(m.created_at) AS month_value, COUNT(*) AS message_count
+      FROM chat_messages m
+      WHERE ((m.from_username = :u1 AND m.to_username = :u2)
+         OR (m.from_username = :u2 AND m.to_username = :u1))
+      GROUP BY YEAR(m.created_at), MONTH(m.created_at)
+      ORDER BY YEAR(m.created_at) DESC, MONTH(m.created_at) DESC
+      LIMIT 24
+      """, nativeQuery = true)
+  List<Object[]> findMonthlyMessageCounts(
+      @Param("u1") String userOne,
+      @Param("u2") String userTwo);
+
   @Modifying
   @Query(value = """
       DELETE FROM chat_messages
