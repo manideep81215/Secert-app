@@ -962,7 +962,8 @@ function ChatPageNew() {
   useEffect(() => {
     if (typeof document === 'undefined') return undefined
     if (!isMobileView) return undefined
-    if (!isNativeCapacitorRuntime()) return undefined
+    const shouldLockDocumentViewport = isNativeCapacitorRuntime() || isIosPlatform
+    if (!shouldLockDocumentViewport) return undefined
     const html = document.documentElement
     const body = document.body
     const root = document.getElementById('root')
@@ -1011,7 +1012,7 @@ function ChatPageNew() {
         window.scrollTo(0, lockScrollY)
       }
     }
-  }, [isMobileView])
+  }, [isMobileView, isIosPlatform])
 
   useEffect(() => {
     if (typeof window === 'undefined' || !window.Capacitor) return
