@@ -847,6 +847,35 @@ function ChatPageNew() {
   const selectedSeen = selectedUser
     ? Number(seenAtMap[(selectedUser.username || '').toLowerCase()] || 0) >= selectedLastOutgoingAt && selectedLastOutgoingAt > 0
     : false
+  const localTodayMessages = useMemo(() => {
+    const now = new Date()
+    const targetYear = now.getFullYear()
+    const targetMonth = now.getMonth()
+    const targetDay = now.getDate()
+    let count = 0
+
+    for (const msg of messages) {
+      if (!msg || msg.deliveryStatus === 'failed') continue
+      let createdAtMs = Number(msg?.createdAt || msg?.clientCreatedAt || 0)
+      if (!createdAtMs) continue
+      if (createdAtMs > 0 && createdAtMs < 1_000_000_000_000) {
+        createdAtMs *= 1000
+      }
+      const date = new Date(createdAtMs)
+      if (Number.isNaN(date.getTime())) continue
+      if (
+        date.getFullYear() === targetYear &&
+        date.getMonth() === targetMonth &&
+        date.getDate() === targetDay
+      ) {
+        count += 1
+      }
+    }
+
+    return count
+  }, [messages])
+  const apiTodayMessages = Math.max(0, Number(headerStats?.todayMessages || 0))
+  const effectiveTodayMessages = Math.max(apiTodayMessages, localTodayMessages)
   const lastOutgoingIndex = useMemo(() => {
     for (let index = messages.length - 1; index >= 0; index -= 1) {
       if (messages[index]?.sender === 'user') return index
@@ -3640,7 +3669,7 @@ function ChatPageNew() {
               </div>
               {selectedUser && (
                 <LovePercentageChip
-                  todayMessages={headerStats?.todayMessages}
+                  todayMessages={effectiveTodayMessages}
                   yesterdayMessages={headerStats?.yesterdayMessages}
                   dailyAverage={headerStats?.dailyAverage}
                 />
