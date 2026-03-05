@@ -60,6 +60,7 @@ public class ChatStatsService {
     long recapPhotos = 0L;
     long recapVideos = 0L;
     long recapVoices = 0L;
+    long todayMessages = 0L;
     long yesterdayMessages = 0L;
     LocalDate firstMessageDate = null;
     Set<LocalDate> talkDatesSet = new TreeSet<>();
@@ -102,6 +103,10 @@ public class ChatStatsService {
         recapVoices += dayVoices;
       }
 
+      if (talkDate.equals(today)) {
+        todayMessages += dayMessages;
+      }
+
       if (talkDate.equals(yesterday)) {
         yesterdayMessages += dayMessages;
       }
@@ -129,6 +134,7 @@ public class ChatStatsService {
         totalVoices,
         milestoneResult.reachedMilestone(),
         milestoneResult.justHit(),
+        todayMessages,
         yesterdayMessages,
         dailyAverage,
         thisMonthTalkDays,
@@ -262,6 +268,7 @@ public class ChatStatsService {
       long totalVoices,
       long milestoneReached,
       boolean milestoneJustHit,
+      long todayMessages,
       long yesterdayMessages,
       long dailyAverage,
       int thisMonthTalkDays,

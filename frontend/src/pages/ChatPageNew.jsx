@@ -97,7 +97,7 @@ function ChatPageNew() {
   const [conversationReloadTick, setConversationReloadTick] = useState(0)
   const [usersReloadTick, setUsersReloadTick] = useState(0)
   const [lastSentMessageId, setLastSentMessageId] = useState(0)
-  const [headerStats, setHeaderStats] = useState({ yesterdayMessages: 0, dailyAverage: 0 })
+  const [headerStats, setHeaderStats] = useState({ todayMessages: 0, yesterdayMessages: 0, dailyAverage: 0 })
   const [inputValue, setInputValue] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [showAttachMenu, setShowAttachMenu] = useState(false)
@@ -918,7 +918,7 @@ function ChatPageNew() {
 
   useEffect(() => {
     if (!flow?.token || !selectedUser?.username) {
-      setHeaderStats({ yesterdayMessages: 0, dailyAverage: 0 })
+      setHeaderStats({ todayMessages: 0, yesterdayMessages: 0, dailyAverage: 0 })
       return
     }
 
@@ -928,12 +928,13 @@ function ChatPageNew() {
         const data = await getChatStats(flow.token, selectedUser.username)
         if (cancelled || !data) return
         setHeaderStats({
+          todayMessages: Number(data?.todayMessages || 0),
           yesterdayMessages: Number(data?.yesterdayMessages || 0),
           dailyAverage: Number(data?.dailyAverage || 0),
         })
       } catch {
         if (cancelled) return
-        setHeaderStats({ yesterdayMessages: 0, dailyAverage: 0 })
+        setHeaderStats({ todayMessages: 0, yesterdayMessages: 0, dailyAverage: 0 })
       }
     }
 
@@ -3639,6 +3640,7 @@ function ChatPageNew() {
               </div>
               {selectedUser && (
                 <LovePercentageChip
+                  todayMessages={headerStats?.todayMessages}
                   yesterdayMessages={headerStats?.yesterdayMessages}
                   dailyAverage={headerStats?.dailyAverage}
                 />

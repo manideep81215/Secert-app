@@ -1,16 +1,22 @@
 import './LovePercentageChip.css'
 
-function calcPercentage(yesterdayMessages, dailyAverage) {
-  if (!dailyAverage || dailyAverage === 0) {
-    const now = new Date()
-    const seed = now.getFullYear() * 10000
-      + (now.getMonth() + 1) * 100
-      + now.getDate()
-    return 85 + (Math.abs(seed * 2654435761) % 16)
-  }
-  const ratio = yesterdayMessages / dailyAverage
-  const raw = Math.round(Math.min(ratio * 90, 100))
-  return Math.max(raw, 70)
+function calcPercentage(todayMessages, yesterdayMessages, dailyAverage) {
+  const today = Math.max(0, Number(todayMessages || 0))
+  const yesterday = Math.max(0, Number(yesterdayMessages || 0))
+  const average = Math.max(0, Number(dailyAverage || 0))
+
+  if (today === 0) return 0
+
+  if (today >= yesterday && today >= average) return 100
+
+  const ratios = []
+  if (yesterday > 0) ratios.push(today / yesterday)
+  if (average > 0) ratios.push(today / average)
+  if (!ratios.length) return 100
+
+  const blendedRatio = ratios.reduce((sum, value) => sum + value, 0) / ratios.length
+  const computed = Math.round(blendedRatio * 100)
+  return Math.max(0, Math.min(99, computed))
 }
 
 function getChipColor(pct) {
@@ -22,8 +28,9 @@ function getChipColor(pct) {
   return '#60a5fa'
 }
 
-function LovePercentageChip({ yesterdayMessages, dailyAverage }) {
+function LovePercentageChip({ todayMessages, yesterdayMessages, dailyAverage }) {
   const pct = calcPercentage(
+    Number(todayMessages || 0),
     Number(yesterdayMessages || 0),
     Number(dailyAverage || 0)
   )
