@@ -1,10 +1,33 @@
 import { useEffect, useRef, useState } from 'react'
 
+function isIosDevice() {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false
+
+  const capPlatform = window?.Capacitor?.getPlatform?.()
+  if (capPlatform === 'ios') return true
+
+  const ua = navigator.userAgent || ''
+  const isAppleMobileUa = /iPad|iPhone|iPod/i.test(ua)
+  const isIpadDesktopMode = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1
+  return isAppleMobileUa || isIpadDesktopMode
+}
+
+function isStandalonePwa() {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false
+  return Boolean(
+    window.matchMedia?.('(display-mode: standalone)')?.matches ||
+    navigator.standalone === true
+  )
+}
+
 export default function PrivacyBlur() {
   const [blurred, setBlurred] = useState(false)
+  const [iosPwaMode, setIosPwaMode] = useState(false)
   const resumeTimerRef = useRef(null)
 
   useEffect(() => {
+    setIosPwaMode(isIosDevice() && isStandalonePwa())
+
     const clearResumeTimer = () => {
       if (!resumeTimerRef.current) return
       window.clearTimeout(resumeTimerRef.current)
@@ -48,8 +71,6 @@ export default function PrivacyBlur() {
     }
   }, [])
 
-  if (!blurred) return null
-
   return (
     <>
       <style>{`
@@ -65,6 +86,15 @@ export default function PrivacyBlur() {
           align-items: center;
           justify-content: center;
           gap: 0.8rem;
+          opacity: 0;
+          visibility: hidden;
+          pointer-events: none;
+        }
+
+        .pb-overlay.pb-active {
+          opacity: 1;
+          visibility: visible;
+          pointer-events: auto;
           animation: pb-in 0.08s ease forwards;
         }
 
@@ -99,9 +129,20 @@ export default function PrivacyBlur() {
           letter-spacing: 0.08em;
           text-transform: uppercase;
         }
+
+        .pb-overlay.pb-overlay-ios-pwa {
+          backdrop-filter: none;
+          -webkit-backdrop-filter: none;
+          background: #080610;
+          animation: none;
+        }
+
+        .pb-overlay.pb-overlay-ios-pwa .pb-icon {
+          animation: none;
+        }
       `}</style>
 
-      <div className="pb-overlay">
+      <div className={`pb-overlay ${blurred ? 'pb-active' : ''} ${iosPwaMode ? 'pb-overlay-ios-pwa' : ''}`}>
         <div className="pb-icon" aria-hidden="true">
           <img className="pb-logo" src="/theme/simp-games-quest-logo.png" alt="" />
         </div>
