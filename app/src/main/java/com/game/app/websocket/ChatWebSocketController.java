@@ -25,6 +25,7 @@ import com.game.app.model.UserEntity;
 import com.game.app.repository.ChatMessageRepository;
 import com.game.app.repository.ChatReadReceiptRepository;
 import com.game.app.repository.UserRepository;
+import com.game.app.service.ChatAnalyticsService;
 import com.game.app.service.PushNotificationService;
 
 @Controller
@@ -36,6 +37,7 @@ public class ChatWebSocketController {
   private final ChatMessageRepository chatMessageRepository;
   private final ChatReadReceiptRepository chatReadReceiptRepository;
   private final UserRepository userRepository;
+  private final ChatAnalyticsService chatAnalyticsService;
   private final PushNotificationService pushNotificationService;
   private final boolean notifyWhenOnline;
   private final long presenceTimeoutMs;
@@ -49,6 +51,7 @@ public class ChatWebSocketController {
       ChatMessageRepository chatMessageRepository,
       ChatReadReceiptRepository chatReadReceiptRepository,
       UserRepository userRepository,
+      ChatAnalyticsService chatAnalyticsService,
       PushNotificationService pushNotificationService,
       @Value("${app.push.notify-when-online:true}") boolean notifyWhenOnline,
       @Value("${app.chat.presence-timeout-ms:65000}") long presenceTimeoutMs) {
@@ -57,6 +60,7 @@ public class ChatWebSocketController {
     this.chatMessageRepository = chatMessageRepository;
     this.chatReadReceiptRepository = chatReadReceiptRepository;
     this.userRepository = userRepository;
+    this.chatAnalyticsService = chatAnalyticsService;
     this.pushNotificationService = pushNotificationService;
     this.notifyWhenOnline = notifyWhenOnline;
     this.presenceTimeoutMs = Math.max(15000L, presenceTimeoutMs);
@@ -108,6 +112,11 @@ public class ChatWebSocketController {
     entity.setReplyText(payload.replyingTo() != null ? payload.replyingTo().text() : payload.replyText());
     entity.setReplySenderName(payload.replyingTo() != null ? payload.replyingTo().senderName() : payload.replySenderName());
     entity = chatMessageRepository.save(entity);
+    try {
+      chatAnalyticsService.recordMessage(normalizedFrom, normalizedTo, payload.type(), entity.getCreatedAt());
+    } catch (Exception ignored) {
+      // Keep message delivery non-blocking if analytics write fails.
+    }
 
     messagingTemplate.convertAndSendToUser(
         normalizedTo,

@@ -2,18 +2,21 @@ package com.game.app.service;
 
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.time.YearMonth;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.game.app.model.ChatAnalyticsDailyEntity;
 import com.game.app.model.ChatStatsProgressEntity;
-import com.game.app.repository.ChatMessageRepository;
+import com.game.app.repository.ChatAnalyticsDailyRepository;
 import com.game.app.repository.ChatStatsProgressRepository;
 
 @Service
@@ -21,60 +24,97 @@ public class ChatStatsService {
 
   private static final long MESSAGE_MILESTONE_STEP = 500L;
 
-  private final ChatMessageRepository chatMessageRepository;
+  private final ChatAnalyticsDailyRepository chatAnalyticsDailyRepository;
   private final ChatStatsProgressRepository chatStatsProgressRepository;
 
   public ChatStatsService(
-      ChatMessageRepository chatMessageRepository,
+      ChatAnalyticsDailyRepository chatAnalyticsDailyRepository,
       ChatStatsProgressRepository chatStatsProgressRepository) {
-    this.chatMessageRepository = chatMessageRepository;
+    this.chatAnalyticsDailyRepository = chatAnalyticsDailyRepository;
     this.chatStatsProgressRepository = chatStatsProgressRepository;
   }
 
   @Transactional
   public ChatStatsDto getStats(String userOne, String userTwo) {
-    String u1 = normalizeUsername(userOne);
-    String u2 = normalizeUsername(userTwo);
+    String[] pair = canonicalPair(userOne, userTwo);
+    String low = pair[0];
+    String high = pair[1];
+
     ZoneId zoneId = ZoneId.systemDefault();
-
-    YearMonth currentMonth = YearMonth.now(zoneId);
-    Instant monthStart = currentMonth.atDay(1).atStartOfDay(zoneId).toInstant();
+    LocalDate today = LocalDate.now(zoneId);
+    LocalDate yesterday = today.minusDays(1);
+    YearMonth currentMonth = YearMonth.from(today);
     YearMonth previousMonth = currentMonth.minusMonths(1);
-    Instant previousMonthStart = previousMonth.atDay(1).atStartOfDay(zoneId).toInstant();
 
-    long totalMessages = toLong(chatMessageRepository.countMessagesBetween(u1, u2));
-    long thisMonthMessages = toLong(chatMessageRepository.countMessagesBetweenSince(u1, u2, monthStart));
-    long thisMonthPhotos = toLong(chatMessageRepository.countMessagesByTypeBetweenSince(u1, u2, "image", monthStart));
-    long thisMonthVideos = toLong(chatMessageRepository.countMessagesByTypeBetweenSince(u1, u2, "video", monthStart));
-    long thisMonthVoices = toLong(chatMessageRepository.countMessagesByTypeBetweenSince(u1, u2, "voice", monthStart));
-    Instant yesterdayStart = LocalDate.now(zoneId).minusDays(1).atStartOfDay(zoneId).toInstant();
-    Instant todayStart = LocalDate.now(zoneId).atStartOfDay(zoneId).toInstant();
-    long yesterdayMessages = toLong(
-        chatMessageRepository.countMessagesBetweenRange(u1, u2, yesterdayStart, todayStart));
-    long recapMessages = toLong(chatMessageRepository.countMessagesBetweenRange(u1, u2, previousMonthStart, monthStart));
-    long recapPhotos = toLong(
-        chatMessageRepository.countMessagesByTypeBetweenRange(u1, u2, "image", previousMonthStart, monthStart));
-    long recapVideos = toLong(
-        chatMessageRepository.countMessagesByTypeBetweenRange(u1, u2, "video", previousMonthStart, monthStart));
-    long recapVoices = toLong(
-        chatMessageRepository.countMessagesByTypeBetweenRange(u1, u2, "voice", previousMonthStart, monthStart));
-    long totalPhotos = toLong(chatMessageRepository.countMessagesByTypeBetween(u1, u2, "image"));
-    long totalVoices = toLong(chatMessageRepository.countMessagesByTypeBetween(u1, u2, "voice"));
+    List<ChatAnalyticsDailyEntity> dailyRows = chatAnalyticsDailyRepository
+        .findByUserLowAndUserHighOrderByTalkDateAsc(low, high);
 
-    Instant firstMessageAt = chatMessageRepository.findFirstMessageAt(u1, u2);
-    LocalDate firstMessageDate = firstMessageAt != null ? LocalDate.ofInstant(firstMessageAt, zoneId) : null;
+    long totalMessages = 0L;
+    long totalPhotos = 0L;
+    long totalVoices = 0L;
+    long thisMonthMessages = 0L;
+    long thisMonthPhotos = 0L;
+    long thisMonthVideos = 0L;
+    long thisMonthVoices = 0L;
+    long recapMessages = 0L;
+    long recapPhotos = 0L;
+    long recapVideos = 0L;
+    long recapVoices = 0L;
+    long yesterdayMessages = 0L;
+    LocalDate firstMessageDate = null;
+    Set<LocalDate> talkDatesSet = new TreeSet<>();
+    Map<YearMonth, Long> monthlyCounts = new TreeMap<>();
 
-    List<LocalDate> talkDates = chatMessageRepository.findDistinctTalkDates(u1, u2)
-        .stream()
-        .map(java.sql.Date::toLocalDate)
-        .toList();
+    for (ChatAnalyticsDailyEntity row : dailyRows) {
+      LocalDate talkDate = row.getTalkDate();
+      if (talkDate == null) continue;
+
+      long dayMessages = row.getMessageCount();
+      long dayPhotos = row.getImageCount();
+      long dayVideos = row.getVideoCount();
+      long dayVoices = row.getVoiceCount();
+
+      totalMessages += dayMessages;
+      totalPhotos += dayPhotos;
+      totalVoices += dayVoices;
+
+      if (dayMessages > 0) {
+        if (firstMessageDate == null || talkDate.isBefore(firstMessageDate)) {
+          firstMessageDate = talkDate;
+        }
+        talkDatesSet.add(talkDate);
+      }
+
+      YearMonth month = YearMonth.from(talkDate);
+      monthlyCounts.put(month, monthlyCounts.getOrDefault(month, 0L) + dayMessages);
+
+      if (currentMonth.equals(month)) {
+        thisMonthMessages += dayMessages;
+        thisMonthPhotos += dayPhotos;
+        thisMonthVideos += dayVideos;
+        thisMonthVoices += dayVoices;
+      }
+
+      if (previousMonth.equals(month)) {
+        recapMessages += dayMessages;
+        recapPhotos += dayPhotos;
+        recapVideos += dayVideos;
+        recapVoices += dayVoices;
+      }
+
+      if (talkDate.equals(yesterday)) {
+        yesterdayMessages += dayMessages;
+      }
+    }
+
+    List<LocalDate> talkDates = new ArrayList<>(talkDatesSet);
     long dailyAverage = !talkDates.isEmpty() ? totalMessages / talkDates.size() : 0L;
-
-    StreakResult streakResult = calculateStreak(talkDates, LocalDate.now(zoneId));
-    long previousTotal = trackAndGetPreviousTotal(u1, u2, totalMessages);
-    MilestoneResult milestoneResult = checkMilestone(previousTotal, totalMessages);
     int thisMonthTalkDays = countMonthTalkDays(talkDates, currentMonth);
     int recapTalkDays = countMonthTalkDays(talkDates, previousMonth);
+
+    StreakResult streakResult = calculateStreak(talkDates, today);
+    long previousTotal = trackAndGetPreviousTotal(low, high, totalMessages);
+    MilestoneResult milestoneResult = checkMilestone(previousTotal, totalMessages);
 
     return new ChatStatsDto(
         totalMessages,
@@ -100,20 +140,16 @@ public class ChatStatsService {
         recapVoices,
         recapTalkDays,
         previousMonth.lengthOfMonth(),
-        mapTimeline(chatMessageRepository.findMonthlyMessageCounts(u1, u2)));
+        mapTimeline(monthlyCounts));
   }
 
-  private List<MonthCountDto> mapTimeline(List<Object[]> rows) {
-    List<MonthCountDto> timeline = new ArrayList<>();
-    for (Object[] row : rows) {
-      if (row == null || row.length < 3) continue;
-      int year = (int) toLong(row[0]);
-      int month = (int) toLong(row[1]);
-      long count = toLong(row[2]);
-      if (year <= 0 || month <= 0 || month > 12) continue;
-      timeline.add(new MonthCountDto(String.format("%04d-%02d", year, month), count));
-    }
-    return timeline;
+  private List<MonthCountDto> mapTimeline(Map<YearMonth, Long> monthToCount) {
+    return monthToCount.entrySet().stream()
+        .sorted((left, right) -> right.getKey().compareTo(left.getKey()))
+        .map((entry) -> new MonthCountDto(
+            String.format("%04d-%02d", entry.getKey().getYear(), entry.getKey().getMonthValue()),
+            entry.getValue()))
+        .toList();
   }
 
   private StreakResult calculateStreak(List<LocalDate> talkDates, LocalDate today) {
@@ -171,11 +207,7 @@ public class ChatStatsService {
     return new MilestoneResult(reached, crossed);
   }
 
-  private long trackAndGetPreviousTotal(String u1, String u2, long totalMessages) {
-    String[] pair = canonicalPair(u1, u2);
-    String low = pair[0];
-    String high = pair[1];
-
+  private long trackAndGetPreviousTotal(String low, String high, long totalMessages) {
     ChatStatsProgressEntity state = chatStatsProgressRepository
         .findByUserLowAndUserHigh(low, high)
         .orElse(null);
@@ -202,22 +234,6 @@ public class ChatStatsService {
       return new String[] { left, right };
     }
     return new String[] { right, left };
-  }
-
-  private long toLong(Long value) {
-    return value == null ? 0L : value;
-  }
-
-  private long toLong(Object value) {
-    if (value == null) return 0L;
-    if (value instanceof Number number) {
-      return number.longValue();
-    }
-    try {
-      return Long.parseLong(String.valueOf(value));
-    } catch (NumberFormatException exception) {
-      return 0L;
-    }
   }
 
   private String normalizeUsername(String username) {
