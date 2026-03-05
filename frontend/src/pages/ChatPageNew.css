@@ -2045,6 +2045,11 @@
 
 .chat-container .chat-user-status {
   font-size: 0.75rem;
+  line-height: 1.05;
+}
+
+.chat-container .chat-user-info {
+  gap: 0.06rem;
 }
 
 .chat-container .input-wrapper {
