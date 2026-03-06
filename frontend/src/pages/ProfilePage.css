@@ -374,6 +374,18 @@
   box-shadow: 0 2px 0 rgba(180, 160, 140, 0.2);
 }
 
+.modal-btn-icon {
+  width: 3.2rem;
+  height: 3.2rem;
+  min-width: 3.2rem;
+  padding: 0;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 0.8rem;
+}
+
 .modal-biometric-icon {
   width: 1.55rem;
   height: 1.55rem;

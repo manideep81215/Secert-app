@@ -387,7 +387,7 @@ function ProfilePage() {
                   void triggerBiometricVerify({ manual: true })
                 }}
                 disabled={isLoading || isBiometricLoading}
-                className="modal-btn modal-btn-secondary"
+                className="modal-btn modal-btn-secondary modal-btn-icon"
                 title={isBiometricLoading ? 'Checking biometric...' : 'Use biometric'}
                 aria-label={isBiometricLoading ? 'Checking biometric' : 'Use biometric'}
               >

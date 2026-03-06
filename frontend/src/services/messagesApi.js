@@ -46,24 +46,44 @@ export async function uploadMedia(token, file, options = {}) {
   const onProgress = typeof options?.onProgress === 'function' ? options.onProgress : null
   const form = new FormData()
   form.append('file', file)
-  const { data } = await messagesClient.post('/media', form, {
-    timeout: 0,
-    headers: {
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      'Content-Type': 'multipart/form-data',
-    },
-    onUploadProgress: onProgress
-      ? (event) => {
-          const loaded = Number(event?.loaded || 0)
-          const total = Number(event?.total || file?.size || 0)
-          if (!total) return
-          const percent = Math.max(1, Math.min(100, Math.round((loaded / total) * 100)))
-          onProgress(percent)
-        }
-      : undefined,
-  })
-  if (onProgress) onProgress(100)
-  return data
+  try {
+    const { data } = await messagesClient.post('/media', form, {
+      timeout: 0,
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      onUploadProgress: onProgress
+        ? (event) => {
+            const loaded = Number(event?.loaded || 0)
+            const total = Number(event?.total || file?.size || 0)
+            if (!total) return
+            const percent = Math.max(1, Math.min(100, Math.round((loaded / total) * 100)))
+            onProgress(percent)
+          }
+        : undefined,
+    })
+    if (onProgress) onProgress(100)
+    return data
+  } catch (primaryError) {
+    // Capacitor WebView can fail multipart uploads with Axios on some Android devices.
+    try {
+      const response = await fetch(`${API_APP_BASE_URL}/messages/media`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        body: form,
+      })
+      if (!response.ok) {
+        const fallbackError = new Error(`upload-failed-${response.status}`)
+        fallbackError.response = { status: response.status }
+        throw fallbackError
+      }
+      const data = await response.json()
+      if (onProgress) onProgress(100)
+      return data
+    } catch {
+      throw primaryError
+    }
+  }
 }
 
 export async function getChatStats(token, peerUsername) {

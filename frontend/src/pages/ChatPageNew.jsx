@@ -5,6 +5,7 @@ import SockJS from 'sockjs-client'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Haptics, ImpactStyle } from '@capacitor/haptics'
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera'
+import { Filesystem } from '@capacitor/filesystem'
 import { getMe } from '../services/authApi'
 import { getChatStats, getConversation, getConversationSummaries, uploadMedia } from '../services/messagesApi'
 import { getAllUsers } from '../services/usersApi'
@@ -3618,6 +3619,37 @@ function ChatPageNew() {
     }
 
     try {
+      const toFileFromBlob = (blob, name, typeHint = '') => {
+        const safeType = String(blob?.type || typeHint || '').trim()
+        return new File([blob], name, {
+          type: safeType || 'application/octet-stream',
+          lastModified: Date.now(),
+        })
+      }
+      const base64ToBlob = (base64Data, mimeType) => {
+        const binary = window.atob(base64Data)
+        const len = binary.length
+        const bytes = new Uint8Array(len)
+        for (let i = 0; i < len; i += 1) {
+          bytes[i] = binary.charCodeAt(i)
+        }
+        return new Blob([bytes], { type: mimeType || 'application/octet-stream' })
+      }
+      const readNativePathBlob = async (path, mimeType) => {
+        const pathText = String(path || '').trim()
+        if (!pathText) return null
+        try {
+          const read = await Filesystem.readFile({ path: pathText })
+          const rawData = read?.data
+          if (!rawData) return null
+          if (rawData instanceof Blob) return rawData
+          const base64Data = String(rawData).split(',').pop() || ''
+          if (!base64Data) return null
+          return base64ToBlob(base64Data, mimeType)
+        } catch {
+          return null
+        }
+      }
       const photo = await Camera.getPhoto({
         source: CameraSource.Camera,
         resultType: CameraResultType.Uri,
@@ -3625,19 +3657,21 @@ function ChatPageNew() {
         saveToGallery: false,
         correctOrientation: true,
       })
-      const webPath = String(photo?.webPath || '').trim()
-      if (!webPath) return
-      const response = await fetch(webPath)
-      if (!response.ok) throw new Error(`camera-fetch-failed-${response.status}`)
-      const blob = await response.blob()
       const rawFormat = String(photo?.format || '').trim().toLowerCase()
       const extension = rawFormat || 'jpg'
-      const fileType = blob.type || `image/${extension === 'jpg' ? 'jpeg' : extension}`
-      const file = new File([blob], `camera-${Date.now()}.${extension}`, {
-        type: fileType,
-        lastModified: Date.now(),
-      })
-      await sendMediaFile(file, 'photo')
+      const fileType = `image/${extension === 'jpg' ? 'jpeg' : extension}`
+      let blob = await readNativePathBlob(photo?.path, fileType)
+      if (!blob) {
+        const webPath = String(photo?.webPath || '').trim()
+        if (!webPath) throw new Error('camera-photo-path-missing')
+        const response = await fetch(webPath)
+        if (!response.ok) throw new Error(`camera-fetch-failed-${response.status}`)
+        blob = await response.blob()
+      }
+      const file = toFileFromBlob(blob, `camera-${Date.now()}.${extension}`, fileType)
+      clearPendingImagePreview()
+      const previewUrl = URL.createObjectURL(file)
+      setPendingImagePreview({ file, url: previewUrl, name: file.name || 'image' })
     } catch (error) {
       const code = String(error?.message || '').toLowerCase()
       const cancelled = code.includes('cancel') || code.includes('user cancelled')
@@ -3661,6 +3695,30 @@ function ChatPageNew() {
     }
 
     try {
+      const base64ToBlob = (base64Data, mimeType) => {
+        const binary = window.atob(base64Data)
+        const len = binary.length
+        const bytes = new Uint8Array(len)
+        for (let i = 0; i < len; i += 1) {
+          bytes[i] = binary.charCodeAt(i)
+        }
+        return new Blob([bytes], { type: mimeType || 'application/octet-stream' })
+      }
+      const readNativePathBlob = async (path, mimeType) => {
+        const pathText = String(path || '').trim()
+        if (!pathText) return null
+        try {
+          const read = await Filesystem.readFile({ path: pathText })
+          const rawData = read?.data
+          if (!rawData) return null
+          if (rawData instanceof Blob) return rawData
+          const base64Data = String(rawData).split(',').pop() || ''
+          if (!base64Data) return null
+          return base64ToBlob(base64Data, mimeType)
+        } catch {
+          return null
+        }
+      }
       const capturedFiles = await new Promise((resolve, reject) => {
         mediaCaptureApi.captureVideo(
           (files) => resolve(Array.isArray(files) ? files : []),
@@ -3679,14 +3737,17 @@ function ChatPageNew() {
       ).trim()
       if (!localPath) throw new Error('video-capture-empty-path')
 
-      const resolvedPath = window?.Capacitor?.convertFileSrc
-        ? window.Capacitor.convertFileSrc(localPath)
-        : localPath
-      const response = await fetch(resolvedPath)
-      if (!response.ok) throw new Error(`video-capture-fetch-failed-${response.status}`)
-      const blob = await response.blob()
-
       const originalName = String(captured.name || '').trim()
+      const mimeHint = String(captured.type || '').trim() || 'video/mp4'
+      let blob = await readNativePathBlob(localPath, mimeHint)
+      if (!blob) {
+        const resolvedPath = window?.Capacitor?.convertFileSrc
+          ? window.Capacitor.convertFileSrc(localPath)
+          : localPath
+        const response = await fetch(resolvedPath)
+        if (!response.ok) throw new Error(`video-capture-fetch-failed-${response.status}`)
+        blob = await response.blob()
+      }
       const fallbackExt = blob.type.includes('webm') ? 'webm' : 'mp4'
       const nameHasExt = /\.[a-z0-9]+$/i.test(originalName)
       const outputName = originalName
@@ -4288,7 +4349,7 @@ function ChatPageNew() {
             type="file"
             ref={cameraVideoInputRef}
             style={{ display: 'none' }}
-            onChange={(event) => handleFileUpload(event, 'photo')}
+            onChange={(event) => handleFileUpload(event, 'video')}
             accept="video/*"
             capture="camcorder"
           />
