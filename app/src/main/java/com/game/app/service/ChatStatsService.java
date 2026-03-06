@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.game.app.model.ChatAnalyticsDailyEntity;
 import com.game.app.model.ChatStatsProgressEntity;
 import com.game.app.repository.ChatAnalyticsDailyRepository;
+import com.game.app.repository.ChatMessageRepository;
 import com.game.app.repository.ChatStatsProgressRepository;
 
 @Service
@@ -25,20 +26,24 @@ public class ChatStatsService {
   private static final long MESSAGE_MILESTONE_STEP = 500L;
 
   private final ChatAnalyticsDailyRepository chatAnalyticsDailyRepository;
+  private final ChatMessageRepository chatMessageRepository;
   private final ChatStatsProgressRepository chatStatsProgressRepository;
 
   public ChatStatsService(
       ChatAnalyticsDailyRepository chatAnalyticsDailyRepository,
+      ChatMessageRepository chatMessageRepository,
       ChatStatsProgressRepository chatStatsProgressRepository) {
     this.chatAnalyticsDailyRepository = chatAnalyticsDailyRepository;
+    this.chatMessageRepository = chatMessageRepository;
     this.chatStatsProgressRepository = chatStatsProgressRepository;
   }
 
   @Transactional
-  public ChatStatsDto getStats(String userOne, String userTwo) {
+  public ChatStatsDto getStats(String userOne, String userTwo, boolean trackMilestone) {
     String[] pair = canonicalPair(userOne, userTwo);
     String low = pair[0];
     String high = pair[1];
+    String viewer = normalizeUsername(userOne);
 
     ZoneId zoneId = ZoneId.systemDefault();
     LocalDate today = LocalDate.now(zoneId);
@@ -48,6 +53,7 @@ public class ChatStatsService {
 
     List<ChatAnalyticsDailyEntity> dailyRows = chatAnalyticsDailyRepository
         .findByUserLowAndUserHighOrderByTalkDateAsc(low, high);
+    long globalTotalMessages = chatMessageRepository.count();
 
     long totalMessages = 0L;
     long totalPhotos = 0L;
@@ -118,10 +124,12 @@ public class ChatStatsService {
     int recapTalkDays = countMonthTalkDays(talkDates, previousMonth);
 
     StreakResult streakResult = calculateStreak(talkDates, today);
-    long previousTotal = trackAndGetPreviousTotal(low, high, totalMessages);
-    MilestoneResult milestoneResult = checkMilestone(previousTotal, totalMessages);
+    MilestoneResult milestoneResult = trackMilestone
+        ? checkMilestone(trackAndGetPreviousTotal(low, high, viewer, totalMessages), totalMessages)
+        : new MilestoneResult(0L, false);
 
     return new ChatStatsDto(
+        globalTotalMessages,
         totalMessages,
         thisMonthMessages,
         thisMonthPhotos,
@@ -213,15 +221,16 @@ public class ChatStatsService {
     return new MilestoneResult(reached, crossed);
   }
 
-  private long trackAndGetPreviousTotal(String low, String high, long totalMessages) {
+  private long trackAndGetPreviousTotal(String low, String high, String viewer, long totalMessages) {
     ChatStatsProgressEntity state = chatStatsProgressRepository
-        .findByUserLowAndUserHigh(low, high)
+        .findByUserLowAndUserHighAndViewerUsername(low, high, viewer)
         .orElse(null);
 
     if (state == null) {
       ChatStatsProgressEntity created = new ChatStatsProgressEntity();
       created.setUserLow(low);
       created.setUserHigh(high);
+      created.setViewerUsername(viewer);
       created.setLastMessageTotal(totalMessages);
       chatStatsProgressRepository.save(created);
       return totalMessages;
@@ -256,6 +265,7 @@ public class ChatStatsService {
   }
 
   public record ChatStatsDto(
+      long globalTotalMessages,
       long totalMessages,
       long thisMonthMessages,
       long thisMonthPhotos,

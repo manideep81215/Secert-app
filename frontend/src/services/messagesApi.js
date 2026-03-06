@@ -1,4 +1,5 @@
 import { createApiClient } from './apiClient'
+import { API_APP_BASE_URL } from '../config/apiConfig'
 
 const messagesClient = createApiClient('/messages', 10000)
 const chatStatsClient = createApiClient('/chat', 10000)
@@ -44,9 +45,29 @@ export async function getConversationSummaries(token) {
 
 export async function uploadMedia(token, file, options = {}) {
   const onProgress = typeof options?.onProgress === 'function' ? options.onProgress : null
-  const form = new FormData()
-  form.append('file', file)
-  try {
+  const createForm = () => {
+    const form = new FormData()
+    const fileName = String(file?.name || `upload-${Date.now()}`).trim() || `upload-${Date.now()}`
+    form.append('file', file, fileName)
+    return form
+  }
+  const nativeRuntime = typeof window !== 'undefined' && Boolean(window?.Capacitor?.isNativePlatform?.())
+  const fetchUpload = async () => {
+    const form = createForm()
+    const response = await fetch(`${API_APP_BASE_URL}/messages/media`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      body: form,
+    })
+    if (!response.ok) {
+      const fallbackError = new Error(`upload-failed-${response.status}`)
+      fallbackError.response = { status: response.status }
+      throw fallbackError
+    }
+    return response.json()
+  }
+  const axiosUpload = async () => {
+    const form = createForm()
     const { data } = await messagesClient.post('/media', form, {
       timeout: 0,
       headers: {
@@ -62,33 +83,31 @@ export async function uploadMedia(token, file, options = {}) {
           }
         : undefined,
     })
+    return data
+  }
+
+  let firstError = null
+  try {
+    const data = nativeRuntime ? await fetchUpload() : await axiosUpload()
     if (onProgress) onProgress(100)
     return data
-  } catch (primaryError) {
-    // Capacitor WebView can fail multipart uploads with Axios on some Android devices.
-    try {
-      const response = await fetch(`${API_APP_BASE_URL}/messages/media`, {
-        method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-        body: form,
-      })
-      if (!response.ok) {
-        const fallbackError = new Error(`upload-failed-${response.status}`)
-        fallbackError.response = { status: response.status }
-        throw fallbackError
-      }
-      const data = await response.json()
-      if (onProgress) onProgress(100)
-      return data
-    } catch {
-      throw primaryError
-    }
+  } catch (error) {
+    firstError = error
+  }
+
+  try {
+    const data = nativeRuntime ? await axiosUpload() : await fetchUpload()
+    if (onProgress) onProgress(100)
+    return data
+  } catch (secondError) {
+    throw secondError || firstError
   }
 }
 
-export async function getChatStats(token, peerUsername) {
+export async function getChatStats(token, peerUsername, options = {}) {
+  const trackMilestone = Boolean(options?.trackMilestone)
   const { data } = await chatStatsClient.get('/stats', {
-    params: { peerUsername },
+    params: { peerUsername, trackMilestone },
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
   })
   return data || null

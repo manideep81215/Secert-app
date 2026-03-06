@@ -34,7 +34,8 @@ public class ChatStatsController {
   @GetMapping("/stats")
   public ChatStatsDto getChatStats(
       @RequestHeader(value = "Authorization", required = false) String authHeader,
-      @RequestParam("peerUsername") String peerUsername) {
+      @RequestParam("peerUsername") String peerUsername,
+      @RequestParam(value = "trackMilestone", required = false, defaultValue = "false") boolean trackMilestone) {
     UserEntity me = requireAuthUser(authHeader);
     String myUsername = normalizeUsername(me.getUsername());
     String peer = normalizeUsername(peerUsername);
@@ -49,7 +50,7 @@ public class ChatStatsController {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
     }
 
-    return chatStatsService.getStats(myUsername, peer);
+    return chatStatsService.getStats(myUsername, peer, trackMilestone);
   }
 
   private UserEntity requireAuthUser(String authHeader) {

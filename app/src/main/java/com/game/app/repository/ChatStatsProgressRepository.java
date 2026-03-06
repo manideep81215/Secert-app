@@ -8,5 +8,8 @@ import com.game.app.model.ChatStatsProgressEntity;
 
 public interface ChatStatsProgressRepository extends JpaRepository<ChatStatsProgressEntity, Long> {
 
-  Optional<ChatStatsProgressEntity> findByUserLowAndUserHigh(String userLow, String userHigh);
+  Optional<ChatStatsProgressEntity> findByUserLowAndUserHighAndViewerUsername(
+      String userLow,
+      String userHigh,
+      String viewerUsername);
 }

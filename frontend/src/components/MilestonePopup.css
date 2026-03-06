@@ -101,6 +101,7 @@
   position: relative;
   z-index: 2;
   font-size: 3.5rem;
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Twemoji Mozilla", sans-serif;
   line-height: 1;
   margin-bottom: 0.8rem;
   display: block;
@@ -202,4 +203,186 @@
 
 .ms-btn:active {
   transform: scale(0.98);
+}
+/* Add these special styles to your existing MilestonePopup.css */
+
+/* Special 9192 Milestone Card Enhancement */
+.ms-card.ms-special {
+  animation: ms-special-pulse 2s ease-in-out infinite;
+}
+
+@keyframes ms-special-pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+}
+
+/* Special Emoji Animation */
+.ms-emoji-special {
+  animation: ms-emoji-heartbeat 1.5s ease-in-out infinite !important;
+}
+
+@keyframes ms-emoji-heartbeat {
+  0%, 100% {
+    transform: scale(1);
+  }
+  10% {
+    transform: scale(1.15);
+  }
+  20% {
+    transform: scale(1);
+  }
+  30% {
+    transform: scale(1.15);
+  }
+  40% {
+    transform: scale(1);
+  }
+}
+
+/* Special Message with Romantic Styling */
+.ms-message-special {
+  font-size: 1.1rem !important;
+  line-height: 1.8 !important;
+  font-weight: 500 !important;
+  background: linear-gradient(135deg, #ff1493, #ff69b4, #ff1493);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: ms-gradient-shift 3s ease-in-out infinite;
+}
+
+@keyframes ms-gradient-shift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+/* Special Button with Enhanced Gradient */
+.ms-btn-special {
+  animation: ms-btn-glow 2s ease-in-out infinite !important;
+  background-size: 200% 200% !important;
+  font-size: 1.1rem !important;
+  padding: 14px 32px !important;
+  letter-spacing: 0.5px !important;
+}
+
+@keyframes ms-btn-glow {
+  0%, 100% {
+    box-shadow: 0 6px 20px rgba(255, 20, 147, 0.6), 0 0 30px rgba(255, 105, 180, 0.4);
+    background-position: 0% 50%;
+  }
+  50% {
+    box-shadow: 0 8px 30px rgba(255, 20, 147, 0.8), 0 0 50px rgba(255, 105, 180, 0.6);
+    background-position: 100% 50%;
+  }
+}
+
+/* Enhanced Particles for Special Milestone */
+.ms-special .ms-particle {
+  animation: ms-particle-float 1.5s ease-out forwards, ms-particle-spin 2s linear infinite !important;
+}
+
+@keyframes ms-particle-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Special Ring Enhancement */
+.ms-special .ms-ring {
+  border-width: 3px !important;
+  animation: ms-ring-pulse 1.8s cubic-bezier(0, 0, 0.2, 1) infinite !important;
+}
+
+@keyframes ms-ring-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.3);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+/* Special Glow Enhancement */
+.ms-special .ms-card-glow {
+  animation: ms-glow-pulse 2s ease-in-out infinite;
+}
+
+@keyframes ms-glow-pulse {
+  0%, 100% {
+    opacity: 0.8;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Special Counter Number */
+.ms-special .ms-counter-num {
+  animation: ms-number-shine 2s linear infinite;
+  background: linear-gradient(90deg, 
+    currentColor 0%, 
+    rgba(255, 255, 255, 0.8) 50%, 
+    currentColor 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+@keyframes ms-number-shine {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* Add floating hearts background */
+.ms-special::before {
+  content: "💖";
+  position: absolute;
+  top: 10%;
+  left: 10%;
+  font-size: 2rem;
+  opacity: 0.2;
+  animation: ms-float-heart 4s ease-in-out infinite;
+}
+
+.ms-special::after {
+  content: "💑";
+  position: absolute;
+  bottom: 15%;
+  right: 10%;
+  font-size: 2rem;
+  opacity: 0.2;
+  animation: ms-float-heart 4s ease-in-out infinite 2s;
+}
+
+@keyframes ms-float-heart {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 0.2;
+  }
+  50% {
+    transform: translateY(-20px) rotate(10deg);
+    opacity: 0.4;
+  }
 }

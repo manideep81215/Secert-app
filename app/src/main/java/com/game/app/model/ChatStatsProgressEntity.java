@@ -15,7 +15,7 @@ import jakarta.persistence.UniqueConstraint;
 @Entity
 @Table(
     name = "chat_stats_progress",
-    uniqueConstraints = @UniqueConstraint(columnNames = { "user_low", "user_high" }))
+    uniqueConstraints = @UniqueConstraint(columnNames = { "user_low", "user_high", "viewer_username" }))
 public class ChatStatsProgressEntity {
 
   @Id
@@ -27,6 +27,9 @@ public class ChatStatsProgressEntity {
 
   @Column(name = "user_high", nullable = false, length = 60)
   private String userHigh;
+
+  @Column(name = "viewer_username", length = 60)
+  private String viewerUsername;
 
   @Column(name = "last_message_total", nullable = false)
   private long lastMessageTotal = 0L;
@@ -68,6 +71,14 @@ public class ChatStatsProgressEntity {
 
   public long getLastMessageTotal() {
     return lastMessageTotal;
+  }
+
+  public String getViewerUsername() {
+    return viewerUsername;
+  }
+
+  public void setViewerUsername(String viewerUsername) {
+    this.viewerUsername = viewerUsername;
   }
 
   public void setLastMessageTotal(long lastMessageTotal) {

@@ -99,6 +99,7 @@ function ChatPageNew() {
   const [conversationReloadTick, setConversationReloadTick] = useState(0)
   const [usersReloadTick, setUsersReloadTick] = useState(0)
   const [lastSentMessageId, setLastSentMessageId] = useState(0)
+  const [milestoneTriggerTick, setMilestoneTriggerTick] = useState(0)
   const [headerStats, setHeaderStats] = useState({ todayMessages: 0, yesterdayMessages: 0, dailyAverage: 0 })
   const [inputValue, setInputValue] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
@@ -2051,6 +2052,7 @@ function ChatPageNew() {
                 }
                 return [...prev, incoming]
               })
+              setMilestoneTriggerTick((prev) => prev + 1)
               setUnreadMap((prev) => ({ ...prev, [toUserKey(fromUsername)]: false }))
             } else {
               setUnreadMap((prev) => ({ ...prev, [toUserKey(fromUsername)]: true }))
@@ -2101,6 +2103,7 @@ function ChatPageNew() {
 
             if (ack?.success && ackMessageId > 0) {
               setLastSentMessageId(ackMessageId)
+              setMilestoneTriggerTick((prev) => prev + 1)
             }
 
             setMessages((prev) =>
@@ -3860,7 +3863,7 @@ function ChatPageNew() {
     >
       <LoveReminder />
       <MonthlyRecap token={flow.token} peerUsername={selectedUser?.username} />
-      <MilestonePopup token={flow.token} peerUsername={selectedUser?.username} triggerCheck={lastSentMessageId} />
+      <MilestonePopup token={flow.token} peerUsername={selectedUser?.username} triggerCheck={milestoneTriggerTick} />
       <ChatUsersPanel
         filteredUsers={filteredUsers}
         selectedUserId={selectedUser?.id || null}
