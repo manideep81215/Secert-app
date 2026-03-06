@@ -4,6 +4,7 @@ import { Client } from '@stomp/stompjs'
 import SockJS from 'sockjs-client'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Haptics, ImpactStyle } from '@capacitor/haptics'
+import { Camera, CameraResultType, CameraSource } from '@capacitor/camera'
 import { getMe } from '../services/authApi'
 import { getChatStats, getConversation, getConversationSummaries, uploadMedia } from '../services/messagesApi'
 import { getAllUsers } from '../services/usersApi'
@@ -1512,7 +1513,7 @@ function ChatPageNew() {
       return
     }
     if (!flow.verified) {
-      navigate('/verify')
+      navigate('/profile')
     }
   }, [flow.username, flow.token, flow.role, flow.verified, navigate])
 
@@ -3608,6 +3609,108 @@ function ChatPageNew() {
     }
     return null
   }
+
+  const handleCameraPhotoCapture = async () => {
+    const isNativeRuntime = isNativeCapacitorRuntime()
+    if (!isNativeRuntime) {
+      cameraPhotoInputRef.current?.click()
+      return
+    }
+
+    try {
+      const photo = await Camera.getPhoto({
+        source: CameraSource.Camera,
+        resultType: CameraResultType.Uri,
+        quality: 90,
+        saveToGallery: false,
+        correctOrientation: true,
+      })
+      const webPath = String(photo?.webPath || '').trim()
+      if (!webPath) return
+      const response = await fetch(webPath)
+      if (!response.ok) throw new Error(`camera-fetch-failed-${response.status}`)
+      const blob = await response.blob()
+      const rawFormat = String(photo?.format || '').trim().toLowerCase()
+      const extension = rawFormat || 'jpg'
+      const fileType = blob.type || `image/${extension === 'jpg' ? 'jpeg' : extension}`
+      const file = new File([blob], `camera-${Date.now()}.${extension}`, {
+        type: fileType,
+        lastModified: Date.now(),
+      })
+      await sendMediaFile(file, 'photo')
+    } catch (error) {
+      const code = String(error?.message || '').toLowerCase()
+      const cancelled = code.includes('cancel') || code.includes('user cancelled')
+      if (!cancelled) {
+        notify.error('Unable to open camera.')
+      }
+    }
+  }
+
+  const handleCameraVideoCapture = async () => {
+    const isNativeRuntime = isNativeCapacitorRuntime()
+    if (!isNativeRuntime) {
+      cameraVideoInputRef.current?.click()
+      return
+    }
+
+    const mediaCaptureApi = window?.navigator?.device?.capture
+    if (!mediaCaptureApi?.captureVideo) {
+      cameraVideoInputRef.current?.click()
+      return
+    }
+
+    try {
+      const capturedFiles = await new Promise((resolve, reject) => {
+        mediaCaptureApi.captureVideo(
+          (files) => resolve(Array.isArray(files) ? files : []),
+          (error) => reject(error),
+          { limit: 1, duration: 120, quality: 1 }
+        )
+      })
+      const captured = Array.isArray(capturedFiles) ? capturedFiles[0] : null
+      if (!captured) return
+
+      const localPath = String(
+        captured.fullPath ||
+        captured.localURL ||
+        captured.path ||
+        ''
+      ).trim()
+      if (!localPath) throw new Error('video-capture-empty-path')
+
+      const resolvedPath = window?.Capacitor?.convertFileSrc
+        ? window.Capacitor.convertFileSrc(localPath)
+        : localPath
+      const response = await fetch(resolvedPath)
+      if (!response.ok) throw new Error(`video-capture-fetch-failed-${response.status}`)
+      const blob = await response.blob()
+
+      const originalName = String(captured.name || '').trim()
+      const fallbackExt = blob.type.includes('webm') ? 'webm' : 'mp4'
+      const nameHasExt = /\.[a-z0-9]+$/i.test(originalName)
+      const outputName = originalName
+        ? (nameHasExt ? originalName : `${originalName}.${fallbackExt}`)
+        : `camera-video-${Date.now()}.${fallbackExt}`
+      const outputType = blob.type || (fallbackExt === 'webm' ? 'video/webm' : 'video/mp4')
+      const file = new File([blob], outputName, {
+        type: outputType,
+        lastModified: Date.now(),
+      })
+      await sendMediaFile(file, 'video')
+    } catch (error) {
+      const code = Number(error?.code || 0)
+      const rawMessage = String(error?.message || error || '').toLowerCase()
+      const cancelled = (
+        code === 3 ||
+        rawMessage.includes('cancel') ||
+        rawMessage.includes('no media files')
+      )
+      if (!cancelled) {
+        notify.error('Unable to capture video.')
+      }
+    }
+  }
   const renderReplyContent = (reply, scope = 'bubble') => {
     if (!reply) return null
     const replyType = String(reply.type || '').toLowerCase()
@@ -4104,10 +4207,10 @@ function ChatPageNew() {
                   <button className="attach-item" onClick={() => { mediaInputRef.current?.click(); setShowAttachMenu(false) }} title="Send Photo" aria-label="Send photo">
                     <PhotoAttachIcon className="attach-icon attach-icon-photo" /> Photo
                   </button>
-                  <button className="attach-item" onClick={() => { cameraPhotoInputRef.current?.click(); setShowAttachMenu(false) }} title="Capture photo" aria-label="Capture photo">
+                  <button className="attach-item" onClick={() => { handleCameraPhotoCapture(); setShowAttachMenu(false) }} title="Capture photo" aria-label="Capture photo">
                     <CameraAttachIcon className="attach-icon attach-icon-camera" /> Camera Photo
                   </button>
-                  <button className="attach-item" onClick={() => { cameraVideoInputRef.current?.click(); setShowAttachMenu(false) }} title="Capture video" aria-label="Capture video">
+                  <button className="attach-item" onClick={() => { handleCameraVideoCapture(); setShowAttachMenu(false) }} title="Capture video" aria-label="Capture video">
                     <CameraAttachIcon className="attach-icon attach-icon-camera" /> Camera Video
                   </button>
                   <button className="attach-item" onClick={() => { fileInputRef.current?.click(); setShowAttachMenu(false) }} title="Send File" aria-label="Send file">

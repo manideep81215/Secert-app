@@ -9,7 +9,6 @@ import RpsGamePage from './pages/RpsGamePage'
 import CoinGamePage from './pages/CoinGamePage'
 import TttGamePage from './pages/TttGamePage'
 import SnakeLadderGamePage from './pages/SnakeLadderGamePage'
-import VerifyPage from './pages/VerifyPage'
 import ChatPageNew from './pages/ChatPageNew'
 import ChatInfoPage from './pages/ChatInfoPage'
 import RecapPage from './pages/RecapPage'
@@ -50,7 +49,6 @@ function App() {
     location.pathname === '/auth' ||
     location.pathname.startsWith('/games') ||
     location.pathname === '/profile' ||
-    location.pathname === '/verify' ||
     location.pathname === '/users' ||
     location.pathname.startsWith('/chat') ||
     location.pathname === '/timers'
@@ -226,7 +224,6 @@ function App() {
           const orderedBackMap = {
             '/chat': '/users',
             '/users': '/profile',
-            '/verify': '/profile',
             '/timers': '/chat',
             '/profile': '/games',
           }
@@ -447,7 +444,7 @@ function App() {
           <Route path="/games/coin" element={isAuthenticated ? <CoinGamePage /> : <Navigate to="/auth" replace />} />
           <Route path="/games/ttt" element={isAuthenticated ? <TttGamePage /> : <Navigate to="/auth" replace />} />
           <Route path="/games/snake-ladder" element={isAuthenticated ? <SnakeLadderGamePage /> : <Navigate to="/auth" replace />} />
-          <Route path="/verify" element={isAuthenticated ? <VerifyPage /> : <Navigate to="/auth" replace />} />
+          <Route path="/verify" element={isAuthenticated ? <Navigate to="/profile" replace /> : <Navigate to="/auth" replace />} />
           <Route path="/users" element={isAuthenticated ? <Navigate to="/chat" replace state={{ openUsersList: true }} /> : <Navigate to="/auth" replace />} />
           <Route path="/chat" element={isAuthenticated ? <ChatPageNew /> : <Navigate to="/auth" replace />} />
           <Route path="/chat/recap" element={isAuthenticated ? <RecapPage /> : <Navigate to="/auth" replace />} />

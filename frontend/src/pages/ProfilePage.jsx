@@ -16,6 +16,20 @@ import './ProfilePage.css'
 
 const BIOMETRIC_VERIFIED_KEY_PREFIX = 'verify_biometric_ok_v1:'
 const getBiometricVerifiedKey = (username) => `${BIOMETRIC_VERIFIED_KEY_PREFIX}${String(username || '').trim().toLowerCase()}`
+const FingerprintIcon = ({ className = '' }) => (
+  <svg className={className} viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+    <g fill="none" stroke="currentColor" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 25c0-10 8-18 18-18s18 8 18 18" />
+      <path d="M9 30c0-13 10-23 23-23s23 10 23 23" />
+      <path d="M19 32v7c0 7-3 13-8 18" />
+      <path d="M27 27v16c0 7-3 13-8 17" />
+      <path d="M35 27v20c0 6-2 11-6 15" />
+      <path d="M43 31v10c0 8-3 15-8 20" />
+      <path d="M51 34v7c0 10-4 18-10 24" />
+      <path d="M23 53c-1 2-3 4-5 6" />
+    </g>
+  </svg>
+)
 
 function ProfilePage() {
   const navigate = useNavigate()
@@ -30,7 +44,6 @@ function ProfilePage() {
   const longPressTimerRef = useRef(null)
   const longPressTriggeredRef = useRef(false)
   const suppressNextClickRef = useRef(false)
-  const autoBiometricTriedRef = useRef(false)
   const wins = flow.wins || { rps: 0, coin: 0, ttt: 0 }
   const totalWins = useMemo(() => wins.rps + wins.coin + wins.ttt, [wins])
   const previousPage = location.state?.from || '/games'
@@ -265,31 +278,25 @@ function ProfilePage() {
   useEffect(() => {
     let cancelled = false
 
-    const runAutoBiometric = async () => {
+    const loadBiometricAvailability = async () => {
       if (!showSecretKeyModal || isFirstTime || !isNativePlatform || !flow.username || !flow.token) {
         if (!cancelled) setIsBiometricAvailable(false)
         return
       }
-      if (autoBiometricTriedRef.current) return
-
       try {
         const availability = await BiometricAuth.checkBiometry()
         if (cancelled) return
-        const available = Boolean(availability?.isAvailable)
-        setIsBiometricAvailable(available)
-        if (!available) return
-        autoBiometricTriedRef.current = true
-        await triggerBiometricVerify({ skipAvailabilityCheck: true })
+        setIsBiometricAvailable(Boolean(availability?.isAvailable))
       } catch {
         if (!cancelled) setIsBiometricAvailable(false)
       }
     }
 
-    void runAutoBiometric()
+    void loadBiometricAvailability()
     return () => {
       cancelled = true
     }
-  }, [flow.token, flow.username, isFirstTime, isNativePlatform, showSecretKeyModal, triggerBiometricVerify])
+  }, [flow.token, flow.username, isFirstTime, isNativePlatform, showSecretKeyModal])
 
   return (
     <section className="profile-page">
@@ -377,17 +384,14 @@ function ProfilePage() {
               <button
                 type="button"
                 onClick={() => {
-                  autoBiometricTriedRef.current = true
                   void triggerBiometricVerify({ manual: true })
                 }}
                 disabled={isLoading || isBiometricLoading}
                 className="modal-btn modal-btn-secondary"
+                title={isBiometricLoading ? 'Checking biometric...' : 'Use biometric'}
+                aria-label={isBiometricLoading ? 'Checking biometric' : 'Use biometric'}
               >
-                {isBiometricLoading
-                  ? 'Checking biometric...'
-                  : (isBiometricAvailable
-                      ? 'Use Fingerprint / Face / Screen Lock'
-                      : 'Check Fingerprint / Face / Screen Lock')}
+                <FingerprintIcon className={`modal-biometric-icon ${isBiometricAvailable ? 'available' : 'unavailable'}`} />
               </button>
             ) : null}
             <div className="modal-buttons">
@@ -402,7 +406,6 @@ function ProfilePage() {
                 onClick={() => {
                   setShowSecretKeyModal(false)
                   setSecretKey('')
-                  autoBiometricTriedRef.current = false
                 }}
                 disabled={isLoading}
                 className="modal-btn modal-btn-secondary"

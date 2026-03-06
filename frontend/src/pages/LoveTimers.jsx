@@ -2,6 +2,7 @@
 import { useNavigate } from 'react-router-dom'
 
 const FIRST_TALK  = new Date('2022-11-28T00:00:00')
+const TALKED_UNTIL = new Date('2023-03-24T00:00:00')
 const FOUND_AGAIN = new Date('2025-03-11T00:00:00')
 const LOVE_START  = new Date('2025-10-07T00:00:00')
 const LOVE_TIMERS_SECRET_CODE = String(import.meta.env.VITE_LOVE_TIMERS_SECRET_CODE || '9192').trim()
@@ -159,7 +160,7 @@ function StatsBar() {
     { label: 'Since First Hello', value: getElapsed(FIRST_TALK).totalDays.toLocaleString(),  icon: '\uD83D\uDCAC', color: '#c084fc' },
     { label: 'Since Reunion',     value: getElapsed(FOUND_AGAIN).totalDays.toLocaleString(), icon: '\uD83D\uDD01', color: '#ff8fab' },
     { label: 'Days In Love',      value: getElapsed(LOVE_START).totalDays.toLocaleString(),  icon: '\u2764\uFE0F', color: '#ff6b9d' },
-    { label: 'Days Apart',        value: getDaysBetween(FIRST_TALK, FOUND_AGAIN).toLocaleString(), icon: '\uD83C\uDF19', color: '#60a5fa' },
+    { label: 'Days Apart',        value: getDaysBetween(TALKED_UNTIL, FOUND_AGAIN).toLocaleString(), icon: '\uD83C\uDF19', color: '#60a5fa' },
   ]
 
   return (
@@ -487,7 +488,7 @@ export default function LoveTimers() {
                   since={FIRST_TALK}
                 />
 
-                <GapCard from={FIRST_TALK} to={FOUND_AGAIN} label="time apart" />
+                <GapCard from={TALKED_UNTIL} to={FOUND_AGAIN} label="time apart" />
 
                 <TimerCard
                   index={1}

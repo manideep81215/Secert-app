@@ -374,6 +374,20 @@
   box-shadow: 0 2px 0 rgba(180, 160, 140, 0.2);
 }
 
+.modal-biometric-icon {
+  width: 1.55rem;
+  height: 1.55rem;
+  display: block;
+}
+
+.modal-biometric-icon.available {
+  color: #2d5a2e;
+}
+
+.modal-biometric-icon.unavailable {
+  color: #6f6257;
+}
+
 @media (max-width: 480px) {
   .modal-content {
     padding: 1.2rem 1rem;
