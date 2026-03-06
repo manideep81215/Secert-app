@@ -2,16 +2,6 @@
   "appId": "com.simpgames.quest",
   "appName": "Simp Games Quest",
   "webDir": "dist",
-  "server": {
-    "url": "https://simp-games-quest.vercel.app",
-    "androidScheme": "https",
-    "cleartext": false,
-    "allowNavigation": [
-      "https://simp-games-quest.vercel.app",
-      "https://secert-app.onrender.com",
-      "wss://secert-app.onrender.com"
-    ]
-  },
   "plugins": {
     "CapacitorHttp": {
       "enabled": true

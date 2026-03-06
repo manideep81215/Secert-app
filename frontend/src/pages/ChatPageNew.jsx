@@ -298,7 +298,14 @@ function ChatPageNew() {
         mimeType: row?.mimeType || null,
         reaction: decodeReaction(row?.reaction),
         replyingTo: row?.replyText
-          ? { text: row.replyText, senderName: row.replySenderName || row.senderName }
+          ? {
+              text: row.replyText,
+              senderName: row.replySenderName || row.senderName,
+              type: row.replyType || null,
+              mediaUrl: normalizeMediaUrl(row.replyMediaUrl || null),
+              mimeType: row.replyMimeType || null,
+              fileName: row.replyFileName || null,
+            }
           : (row?.replyingTo || null),
         senderName: formatUsername(row?.senderName),
         messageId: row?.id || row?.messageId || null,
@@ -452,6 +459,23 @@ function ChatPageNew() {
     if (messageType === 'voice') return 'Sent a voice message'
     if (messageType === 'file') return fileNameValue ? `Sent file: ${fileNameValue}` : 'Sent a file'
     return textValue || 'New message'
+  }
+  const toReplyText = (reply) => {
+    if (!reply) return ''
+    const raw = String(reply.text || '').trim()
+    if (raw) return raw
+    return getMessagePreview(reply.type || null, '', reply.fileName || null)
+  }
+  const buildReplyPayload = (reply) => {
+    if (!reply) return null
+    return {
+      text: toReplyText(reply),
+      senderName: reply.senderName || '',
+      type: reply.type || null,
+      mediaUrl: normalizeMediaUrl(reply.mediaUrl || null),
+      mimeType: reply.mimeType || null,
+      fileName: reply.fileName || null,
+    }
   }
   const summarizeConversationForList = (rows) => {
     if (!Array.isArray(rows) || !rows.length) {
@@ -1972,7 +1996,16 @@ function ChatPageNew() {
               mediaUrl: normalizeMediaUrl(data?.mediaUrl || null),
               mimeType: data?.mimeType || null,
               reaction: decodeReaction(data?.reaction),
-              replyingTo: data?.replyingTo || (data?.replyText ? { text: data.replyText, senderName: data?.replySenderName || fromUsername } : null),
+              replyingTo: data?.replyingTo || (data?.replyText
+                ? {
+                    text: data.replyText,
+                    senderName: data?.replySenderName || fromUsername,
+                    type: data?.replyType || null,
+                    mediaUrl: normalizeMediaUrl(data?.replyMediaUrl || null),
+                    mimeType: data?.replyMimeType || null,
+                    fileName: data?.replyFileName || null,
+                  }
+                : null),
               createdAt: incomingCreatedAt || null,
               clientCreatedAt: incomingCreatedAt || Date.now(),
               timestamp: getTimeLabel(),
@@ -2366,9 +2399,13 @@ function ChatPageNew() {
   }
 
   const shouldSuppressChatNotification = (fromUsername) => {
-    if (location.pathname !== '/chat') return false
-    // App-level notifications handle chat-route delivery.
-    return true
+    void fromUsername
+    const activePath = typeof window !== 'undefined' ? window.location.pathname : location.pathname
+    if (activePath === '/chat') {
+      // Chat screen handles live updates directly; suppress system notifications here.
+      return true
+    }
+    return false
   }
 
   useEffect(() => {
@@ -2792,9 +2829,13 @@ function ChatPageNew() {
           fromUsername: flow.username,
           tempId,
           type: 'text',
-          replyingTo: replyingTo ? { text: replyingTo.text, senderName: replyingTo.senderName } : null,
-          replyText: replyingTo?.text || null,
+          replyingTo: buildReplyPayload(replyingTo),
+          replyText: toReplyText(replyingTo) || null,
           replySenderName: replyingTo?.senderName || null,
+          replyType: replyingTo?.type || null,
+          replyMediaUrl: normalizeMediaUrl(replyingTo?.mediaUrl || null),
+          replyMimeType: replyingTo?.mimeType || null,
+          replyFileName: replyingTo?.fileName || null,
         }),
       })
       sendAckTimeoutsRef.current[tempId] = setTimeout(() => {
@@ -3032,9 +3073,13 @@ function ChatPageNew() {
           fileName: uploadedFileName,
           mediaUrl: uploadedUrl,
           mimeType: uploadedMime,
-          replyingTo: currentReply ? { text: currentReply.text, senderName: currentReply.senderName } : null,
-          replyText: currentReply?.text || null,
+          replyingTo: buildReplyPayload(currentReply),
+          replyText: toReplyText(currentReply) || null,
           replySenderName: currentReply?.senderName || null,
+          replyType: currentReply?.type || null,
+          replyMediaUrl: normalizeMediaUrl(currentReply?.mediaUrl || null),
+          replyMimeType: currentReply?.mimeType || null,
+          replyFileName: currentReply?.fileName || null,
         }),
       })
       sendAckTimeoutsRef.current[tempId] = setTimeout(() => {
@@ -3226,9 +3271,13 @@ function ChatPageNew() {
         fileName: message.fileName || null,
         mediaUrl,
         mimeType: message.mimeType || null,
-        replyingTo: message.replyingTo ? { text: message.replyingTo.text, senderName: message.replyingTo.senderName } : null,
-        replyText: message.replyingTo?.text || null,
+        replyingTo: buildReplyPayload(message.replyingTo),
+        replyText: toReplyText(message.replyingTo) || null,
         replySenderName: message.replyingTo?.senderName || null,
+        replyType: message.replyingTo?.type || null,
+        replyMediaUrl: normalizeMediaUrl(message.replyingTo?.mediaUrl || null),
+        replyMimeType: message.replyingTo?.mimeType || null,
+        replyFileName: message.replyingTo?.fileName || null,
       }),
     })
     sendAckTimeoutsRef.current[nextTempId] = setTimeout(() => {
@@ -3553,6 +3602,33 @@ function ChatPageNew() {
     }
     return null
   }
+  const renderReplyContent = (reply, scope = 'bubble') => {
+    if (!reply) return null
+    const replyType = String(reply.type || '').toLowerCase()
+    const replyMediaUrl = normalizeMediaUrl(reply.mediaUrl || null)
+    const canPreviewMedia = (replyType === 'image' || replyType === 'video') && Boolean(replyMediaUrl)
+
+    if (!canPreviewMedia) {
+      return <>{renderTextWithLinks(toReplyText(reply))}</>
+    }
+
+    const videoThumb = replyType === 'video' ? (videoThumbMap[replyMediaUrl] || null) : null
+    return (
+      <span className={`reply-media-preview ${scope}`}>
+        <span className={`reply-media-thumb ${replyType}`}>
+          {replyType === 'image' ? (
+            <img src={replyMediaUrl} alt="Replied media" loading="lazy" />
+          ) : (
+            <>
+              {videoThumb ? <img src={videoThumb} alt="Replied video" loading="lazy" /> : <span className="reply-video-fallback">{icons.video}</span>}
+              <span className="reply-video-pill">Video</span>
+            </>
+          )}
+        </span>
+        <span className="reply-media-caption">{replyType === 'image' ? 'Photo' : 'Video'}</span>
+      </span>
+    )
+  }
 
   const handleSelectUserFromPanel = (user) => {
     setSelectedUser(user)
@@ -3759,7 +3835,7 @@ function ChatPageNew() {
                   {message.replyingTo && (
                     <div className="message-reply-context">
                       <div className="reply-label">Replying to {message.replyingTo.senderName ? `@${formatUsername(message.replyingTo.senderName)}` : 'message'}:</div>
-                      <div className="reply-text">{renderTextWithLinks(message.replyingTo.text)}</div>
+                      <div className="reply-text">{renderReplyContent(message.replyingTo, 'bubble')}</div>
                     </div>
                   )}
                   {renderMessageMedia(message)}
@@ -3842,7 +3918,7 @@ function ChatPageNew() {
                     {message.replyingTo && (
                       <div className="message-reply-context">
                         <div className="reply-label">Replying to {message.replyingTo.senderName ? `@${formatUsername(message.replyingTo.senderName)}` : 'message'}:</div>
-                        <div className="reply-text">{renderTextWithLinks(message.replyingTo.text)}</div>
+                        <div className="reply-text">{renderReplyContent(message.replyingTo, 'bubble')}</div>
                       </div>
                     )}
                     {renderMessageMedia(message)}
@@ -3958,7 +4034,7 @@ function ChatPageNew() {
                 >
                   <div className="reply-info">
                     <span className="reply-label">Replying to @{formatUsername(replyingTo.senderName)}:</span>
-                    <span className="reply-msg">{replyingTo.text}</span>
+                    <span className="reply-msg">{renderReplyContent(replyingTo, 'composer')}</span>
                   </div>
                   <button className="btn-cancel-reply" onClick={() => setReplyingTo(null)}>X</button>
                 </motion.div>
@@ -3988,7 +4064,7 @@ function ChatPageNew() {
             <div className="reply-preview reply-preview-inline">
               <div className="reply-info">
                 <span className="reply-label">Replying to @{formatUsername(replyingTo.senderName)}:</span>
-                <span className="reply-msg">{replyingTo.text}</span>
+                <span className="reply-msg">{renderReplyContent(replyingTo, 'composer')}</span>
               </div>
               <button className="btn-cancel-reply" onClick={() => setReplyingTo(null)}>X</button>
             </div>

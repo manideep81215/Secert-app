@@ -609,6 +609,66 @@
   opacity: 0.9;
   font-style: italic;
 }
+.reply-media-preview {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-style: normal;
+  max-width: 100%;
+}
+
+.reply-media-thumb {
+  position: relative;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 0.4rem;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.32);
+}
+
+.reply-media-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.reply-video-fallback {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  font-size: 0.9rem;
+}
+
+.reply-video-pill {
+  position: absolute;
+  right: 0.15rem;
+  bottom: 0.15rem;
+  font-size: 0.52rem;
+  line-height: 1;
+  background: rgba(0, 0, 0, 0.66);
+  color: #fff;
+  border-radius: 0.28rem;
+  padding: 0.12rem 0.2rem;
+}
+
+.reply-media-caption {
+  font-size: 0.78rem;
+  opacity: 0.92;
+  white-space: nowrap;
+}
+
+.reply-media-preview.composer .reply-media-thumb {
+  width: 2rem;
+  height: 2rem;
+}
+
+.reply-media-preview.composer .reply-media-caption {
+  font-size: 0.82rem;
+}
 
 .message-text {
   font-size: 0.95rem;
@@ -2713,5 +2773,70 @@
   /* Android native footer needs extra bottom gutter to clear gesture/nav bar. */
   .chat-container[data-native="true"][data-android="true"]:not(.keyboard-open):not(.mobile-users-open) .input-area {
     padding-bottom: max(0.55rem, env(safe-area-inset-bottom)) !important;
+  }
+}
+
+/* Compact native header: reduce top bar height in Capacitor APK. */
+@media (max-width: 920px) {
+  .chat-container[data-native="true"]:not(.mobile-users-open) .chat-header {
+    padding: calc(0.2rem + var(--chat-safe-top, 0px)) 0.6rem 0.2rem !important;
+    min-height: 0 !important;
+  }
+
+  .chat-container[data-native="true"]:not(.mobile-users-open) .chat-header-left {
+    gap: 0.42rem !important;
+    min-width: 0;
+  }
+
+  .chat-container[data-native="true"]:not(.mobile-users-open) .chat-header-actions {
+    gap: 0.3rem !important;
+  }
+
+  .chat-container[data-native="true"]:not(.mobile-users-open) .btn-back-mobile {
+    width: 1.72rem !important;
+    height: 1.72rem !important;
+    margin-right: 0.35rem !important;
+    font-size: 1.05rem !important;
+  }
+
+  .chat-container[data-native="true"]:not(.mobile-users-open) .chat-user-avatar {
+    width: 1.9rem !important;
+    height: 1.9rem !important;
+    font-size: 1.08rem !important;
+    border-width: 2px !important;
+  }
+
+  .chat-container[data-native="true"]:not(.mobile-users-open) .chat-user-name {
+    font-size: 0.88rem !important;
+    line-height: 1.04 !important;
+  }
+
+  .chat-container[data-native="true"]:not(.mobile-users-open) .chat-user-status {
+    font-size: 0.68rem !important;
+    line-height: 1 !important;
+  }
+
+  .chat-container[data-native="true"]:not(.mobile-users-open) .chat-user-info {
+    gap: 0.02rem !important;
+  }
+
+  .chat-container[data-native="true"]:not(.mobile-users-open) .love-chip {
+    transform: scale(0.9);
+    transform-origin: left top;
+    margin-top: 0.04rem !important;
+  }
+
+  .chat-container[data-native="true"]:not(.mobile-users-open) .btn-user-details,
+  .chat-container[data-native="true"]:not(.mobile-users-open) .btn-home-game,
+  .chat-container[data-native="true"]:not(.mobile-users-open) .btn-chat-reload {
+    width: 1.92rem !important;
+    height: 1.92rem !important;
+    font-size: 0.9rem !important;
+    border-bottom-width: 3px !important;
+  }
+
+  .chat-container[data-native="true"]:not(.mobile-users-open) .timer-icon-image {
+    width: 1.05rem !important;
+    height: 1.05rem !important;
   }
 }
