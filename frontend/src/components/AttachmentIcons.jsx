@@ -23,6 +23,30 @@ export function PhotoAttachIcon({ className = '', size = 20 }) {
   )
 }
 
+export function CameraAttachIcon({ className = '', size = 20 }) {
+  return (
+    <svg
+      className={className}
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M3.2 8.4h17.6c0.7 0 1.2 0.5 1.2 1.2v8.8c0 1.6-1.3 2.8-2.8 2.8H4.8c-1.6 0-2.8-1.3-2.8-2.8V9.6c0-0.7 0.5-1.2 1.2-1.2Z" fill="#49B3E3" />
+      <path d="M7.1 6.5c0.2-0.8 0.9-1.3 1.7-1.3h6.3c0.8 0 1.5 0.5 1.7 1.3l0.2 0.9h1.9c1.1 0 2 0.9 2 2H3c0-1.1 0.9-2 2-2h1.9l0.2-0.9Z" fill="#F2B35C" />
+      <circle cx="12" cy="14.2" r="4.7" fill="#E9EDF2" />
+      <circle cx="12" cy="14.2" r="3.4" fill="#5B6770" />
+      <circle cx="12" cy="14.2" r="1.5" fill="#27313A" />
+      <rect x="15.6" y="6.2" width="4.1" height="2.1" rx="0.7" fill="#E9EDF2" />
+      <path d="M3 11.4h3.3" stroke="#2B7BA3" strokeWidth="1.3" strokeLinecap="round" />
+      <path d="M17.7 11.4H21" stroke="#2B7BA3" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 export function FileAttachIcon({ className = '', size = 20 }) {
   return (
     <svg

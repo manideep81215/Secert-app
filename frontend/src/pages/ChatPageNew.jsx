@@ -8,7 +8,7 @@ import { getMe } from '../services/authApi'
 import { getChatStats, getConversation, getConversationSummaries, uploadMedia } from '../services/messagesApi'
 import { getAllUsers } from '../services/usersApi'
 import BackIcon from '../components/BackIcon'
-import { FileAttachIcon, PhotoAttachIcon } from '../components/AttachmentIcons'
+import { CameraAttachIcon, FileAttachIcon, PhotoAttachIcon } from '../components/AttachmentIcons'
 import LoveReminder from '../components/LoveReminder'
 import MonthlyRecap from '../components/MonthlyRecap'
 import MilestonePopup from '../components/MilestonePopup'
@@ -139,6 +139,7 @@ function ChatPageNew() {
   const nextConversationPageRef = useRef(1)
   const loadingOlderMessagesRef = useRef(false)
   const mediaInputRef = useRef(null)
+  const cameraInputRef = useRef(null)
   const fileInputRef = useRef(null)
   const messagesAreaRef = useRef(null)
   const messagesEndRef = useRef(null)
@@ -3447,7 +3448,11 @@ function ChatPageNew() {
     const isOutgoing = state.message?.sender === 'user'
     const reachedReplySwipe = isOutgoing ? (dx < -56 && Math.abs(dy) < 34) : (dx > 56 && Math.abs(dy) < 34)
     if (!state.swiped && reachedReplySwipe) {
-      Haptics.impact({ style: ImpactStyle.Light }).catch(() => {})
+      Haptics.impact({ style: ImpactStyle.Light }).catch(() => {
+        if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+          navigator.vibrate(18)
+        }
+      })
       setReplyingTo(state.message)
       setActiveMessageActionsKey(null)
       swipeTapSuppressUntilRef.current = Date.now() + 420
@@ -4098,6 +4103,9 @@ function ChatPageNew() {
                   <button className="attach-item" onClick={() => { mediaInputRef.current?.click(); setShowAttachMenu(false) }} title="Send Photo" aria-label="Send photo">
                     <PhotoAttachIcon className="attach-icon attach-icon-photo" /> Photo
                   </button>
+                  <button className="attach-item" onClick={() => { cameraInputRef.current?.click(); setShowAttachMenu(false) }} title="Open camera" aria-label="Open camera">
+                    <CameraAttachIcon className="attach-icon attach-icon-camera" /> Camera
+                  </button>
                   <button className="attach-item" onClick={() => { fileInputRef.current?.click(); setShowAttachMenu(false) }} title="Send File" aria-label="Send file">
                     <FileAttachIcon className="attach-icon attach-icon-file" /> File
                   </button>
@@ -4160,6 +4168,14 @@ function ChatPageNew() {
             style={{ display: 'none' }}
             onChange={(event) => handleFileUpload(event, 'file')}
             accept="*/*"
+          />
+          <input
+            type="file"
+            ref={cameraInputRef}
+            style={{ display: 'none' }}
+            onChange={(event) => handleFileUpload(event, 'photo')}
+            accept="image/*,video/*"
+            capture="environment"
           />
         </motion.div>
       </div>

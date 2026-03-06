@@ -1197,6 +1197,11 @@
   height: 1.05rem;
 }
 
+.attach-icon-camera {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
 .message-input-shell {
   position: relative;
   flex: 1;

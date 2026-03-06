@@ -161,19 +161,20 @@
 }
 
 .verify-biometric-btn {
-  width: fit-content;
+  width: 3.6rem;
+  height: 3.6rem;
   margin: 0 auto;
   border: 2px solid #8d6e63;
   border-bottom: 4px solid #5d4037;
-  border-radius: 12px;
+  border-radius: 999px;
   background: linear-gradient(180deg, #cfe6a9 0%, #99bd63 100%);
   color: #2f221d;
-  font-family: 'Fredoka One', cursive;
-  font-size: 0.97rem;
-  padding: 0.58rem 1.2rem;
+  padding: 0;
   cursor: pointer;
   transition: transform 0.1s ease, box-shadow 0.1s ease, opacity 0.1s ease;
   box-shadow: 0 4px 0 #5d4037;
+  display: grid;
+  place-items: center;
 }
 
 .verify-biometric-btn:active {
@@ -184,4 +185,14 @@
 .verify-biometric-btn:disabled {
   opacity: 0.72;
   cursor: not-allowed;
+}
+
+.verify-biometric-icon {
+  width: 2.2rem;
+  height: 2.2rem;
+  color: #1e3a58;
+}
+
+.verify-biometric-icon.unavailable {
+  opacity: 0.6;
 }

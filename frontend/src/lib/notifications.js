@@ -40,6 +40,8 @@ async function ensureNativeNotificationSetup(localNotifications) {
         importance: 5,
         visibility: 1,
         sound: NATIVE_CHAT_SOUND,
+        vibration: true,
+        lights: true,
       })
     } catch {
       // Ignore channel creation failures on unsupported/older devices.

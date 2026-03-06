@@ -7,7 +7,14 @@ function getComputerChoiceAudio() {
   if (computerChoiceAudio) return computerChoiceAudio
   const audio = new Audio(computerChoiceSoundUrl)
   audio.preload = 'auto'
+  audio.playsInline = true
+  audio.muted = false
   audio.volume = 0.9
+  try {
+    audio.load()
+  } catch {
+    // Ignore eager preload failures.
+  }
   computerChoiceAudio = audio
   return computerChoiceAudio
 }
@@ -23,8 +30,18 @@ export function playComputerChoiceSound() {
   const playPromise = audio.play()
   if (playPromise?.catch) {
     playPromise.catch(() => {
-      // Ignore autoplay/runtime audio failures.
+      // Fallback: create a fresh audio instance for stricter Android WebViews.
+      try {
+        const fallback = new Audio(computerChoiceSoundUrl)
+        fallback.preload = 'auto'
+        fallback.playsInline = true
+        fallback.muted = false
+        fallback.volume = 0.9
+        const fallbackPromise = fallback.play()
+        fallbackPromise?.catch?.(() => {})
+      } catch {
+        // Ignore autoplay/runtime audio failures.
+      }
     })
   }
 }
-

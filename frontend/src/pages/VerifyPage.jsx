@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import { Capacitor } from '@capacitor/core'
@@ -14,6 +14,21 @@ const BIOMETRIC_VERIFIED_KEY_PREFIX = 'verify_biometric_ok_v1:'
 
 const getBiometricVerifiedKey = (username) => `${BIOMETRIC_VERIFIED_KEY_PREFIX}${String(username || '').trim().toLowerCase()}`
 
+const FingerprintIcon = ({ className = '' }) => (
+  <svg className={className} viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+    <g fill="none" stroke="currentColor" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 25c0-10 8-18 18-18s18 8 18 18" />
+      <path d="M9 30c0-13 10-23 23-23s23 10 23 23" />
+      <path d="M19 32v7c0 7-3 13-8 18" />
+      <path d="M27 27v16c0 7-3 13-8 17" />
+      <path d="M35 27v20c0 6-2 11-6 15" />
+      <path d="M43 31v10c0 8-3 15-8 20" />
+      <path d="M51 34v7c0 10-4 18-10 24" />
+      <path d="M23 53c-1 2-3 4-5 6" />
+    </g>
+  </svg>
+)
+
 function VerifyPage() {
   const navigate = useNavigate()
   const [flow, setFlow] = useFlowState()
@@ -21,7 +36,6 @@ function VerifyPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [isBiometricLoading, setIsBiometricLoading] = useState(false)
   const [isBiometricAvailable, setIsBiometricAvailable] = useState(false)
-  const autoBiometricTriedRef = useRef(false)
   const isNativePlatform = Capacitor.isNativePlatform()
 
   const handleUnauthorized = () => {
@@ -89,30 +103,25 @@ function VerifyPage() {
   useEffect(() => {
     let cancelled = false
 
-    const runAutoBiometric = async () => {
+    const loadBiometricAvailability = async () => {
       if (!isNativePlatform || !flow.username || !flow.token) {
         if (!cancelled) setIsBiometricAvailable(false)
         return
       }
-
       try {
-        if (autoBiometricTriedRef.current) return
         const availability = await BiometricAuth.checkBiometry()
         if (cancelled) return
         setIsBiometricAvailable(Boolean(availability?.isAvailable))
-        autoBiometricTriedRef.current = true
-        await triggerBiometricVerify({ skipAvailabilityCheck: true })
       } catch {
         if (!cancelled) setIsBiometricAvailable(false)
       }
     }
 
-    void runAutoBiometric()
-
+    void loadBiometricAvailability()
     return () => {
       cancelled = true
     }
-  }, [flow.token, flow.username, isNativePlatform, triggerBiometricVerify])
+  }, [flow.token, flow.username, isNativePlatform])
 
   const verifyPin = async (event) => {
     event.preventDefault()
@@ -179,17 +188,12 @@ function VerifyPage() {
             <button
               type="button"
               className="verify-biometric-btn"
-              onClick={() => {
-                autoBiometricTriedRef.current = true
-                void triggerBiometricVerify({ manual: true })
-              }}
+              onClick={() => { void triggerBiometricVerify({ manual: true }) }}
               disabled={isLoading || isBiometricLoading}
+              title={isBiometricLoading ? 'Checking biometric...' : 'Use biometric'}
+              aria-label={isBiometricLoading ? 'Checking biometric' : 'Use biometric'}
             >
-              {isBiometricLoading
-                ? 'Checking biometric...'
-                : (isBiometricAvailable
-                    ? 'Use Fingerprint / Face / Screen Lock'
-                    : 'Check Fingerprint / Face / Screen Lock')}
+              <FingerprintIcon className={`verify-biometric-icon ${isBiometricAvailable ? 'available' : 'unavailable'}`} />
             </button>
           </>
         ) : null}
