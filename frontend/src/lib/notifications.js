@@ -10,6 +10,14 @@ let nativeNotificationSetupDone = false
 let nativeActionListenerAttached = false
 let lastNotifyMeta = { key: '', at: 0 }
 
+function isChatRouteActive() {
+  if (typeof window === 'undefined') return false
+  const hashPath = String(window.location.hash || '').replace(/^#/, '')
+  const pathname = String(window.location.pathname || '')
+  const normalizedHash = hashPath.startsWith('/') ? hashPath : `/${hashPath}`
+  return pathname.startsWith('/chat') || normalizedHash.startsWith('/chat')
+}
+
 function shouldSkipDuplicateNotification(title, body) {
   const key = `${String(title || '').trim()}::${String(body || '').trim()}`
   const now = Date.now()
@@ -170,6 +178,7 @@ export function getNotificationBlockedHelp() {
 }
 
 export async function pushNotify(title, body) {
+  if (isChatRouteActive()) return false
   if (shouldSkipDuplicateNotification(title, body)) return false
 
   if (isCapacitorNative()) {

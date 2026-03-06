@@ -20,6 +20,14 @@ function isNativeMobile() {
   }
 }
 
+function isChatRouteActive() {
+  if (typeof window === 'undefined') return false
+  const hashPath = String(window.location.hash || '').replace(/^#/, '')
+  const pathname = String(window.location.pathname || '')
+  const normalizedHash = hashPath.startsWith('/') ? hashPath : `/${hashPath}`
+  return pathname.startsWith('/chat') || normalizedHash.startsWith('/chat')
+}
+
 function readStoredMobileToken() {
   if (typeof window === 'undefined') return ''
   try {
@@ -76,7 +84,10 @@ function attachListeners() {
   })
 
   PushNotifications.addListener('pushNotificationReceived', () => {
-    // Keep delivered notifications visible to avoid dropping alerts while app is active.
+    if (!isChatRouteActive()) return
+    clearDeliveredNativePushNotifications().catch(() => {
+      // Ignore notification tray cleanup failures.
+    })
   })
 
   PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
