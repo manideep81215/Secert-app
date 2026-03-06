@@ -139,7 +139,8 @@ function ChatPageNew() {
   const nextConversationPageRef = useRef(1)
   const loadingOlderMessagesRef = useRef(false)
   const mediaInputRef = useRef(null)
-  const cameraInputRef = useRef(null)
+  const cameraPhotoInputRef = useRef(null)
+  const cameraVideoInputRef = useRef(null)
   const fileInputRef = useRef(null)
   const messagesAreaRef = useRef(null)
   const messagesEndRef = useRef(null)
@@ -4103,8 +4104,11 @@ function ChatPageNew() {
                   <button className="attach-item" onClick={() => { mediaInputRef.current?.click(); setShowAttachMenu(false) }} title="Send Photo" aria-label="Send photo">
                     <PhotoAttachIcon className="attach-icon attach-icon-photo" /> Photo
                   </button>
-                  <button className="attach-item" onClick={() => { cameraInputRef.current?.click(); setShowAttachMenu(false) }} title="Open camera" aria-label="Open camera">
-                    <CameraAttachIcon className="attach-icon attach-icon-camera" /> Camera
+                  <button className="attach-item" onClick={() => { cameraPhotoInputRef.current?.click(); setShowAttachMenu(false) }} title="Capture photo" aria-label="Capture photo">
+                    <CameraAttachIcon className="attach-icon attach-icon-camera" /> Camera Photo
+                  </button>
+                  <button className="attach-item" onClick={() => { cameraVideoInputRef.current?.click(); setShowAttachMenu(false) }} title="Capture video" aria-label="Capture video">
+                    <CameraAttachIcon className="attach-icon attach-icon-camera" /> Camera Video
                   </button>
                   <button className="attach-item" onClick={() => { fileInputRef.current?.click(); setShowAttachMenu(false) }} title="Send File" aria-label="Send file">
                     <FileAttachIcon className="attach-icon attach-icon-file" /> File
@@ -4171,11 +4175,19 @@ function ChatPageNew() {
           />
           <input
             type="file"
-            ref={cameraInputRef}
+            ref={cameraPhotoInputRef}
             style={{ display: 'none' }}
             onChange={(event) => handleFileUpload(event, 'photo')}
-            accept="image/*,video/*"
+            accept="image/*"
             capture="environment"
+          />
+          <input
+            type="file"
+            ref={cameraVideoInputRef}
+            style={{ display: 'none' }}
+            onChange={(event) => handleFileUpload(event, 'photo')}
+            accept="video/*"
+            capture="camcorder"
           />
         </motion.div>
       </div>
