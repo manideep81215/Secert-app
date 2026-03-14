@@ -36,6 +36,66 @@ function formatRecapPeriodLabel(startValue, endValue) {
   return `${startLabel} - ${endLabel}`
 }
 
+function PeriodSection({
+  title,
+  messages,
+  streak,
+  photos,
+  videos,
+  voices,
+  talkDays,
+  totalDays,
+  progressLabel,
+}) {
+  const safeTotalDays = Math.max(1, Number(totalDays || 1))
+  const safeTalkDays = Number(talkDays || 0)
+  const talkProgress = Math.min(100, Math.round((safeTalkDays / safeTotalDays) * 100))
+
+  return (
+    <section className="recap-section">
+      <div className="recap-section-title">{title}</div>
+      <div className="recap-big-grid">
+        <div className="recap-big-card">
+          <div className="recap-big-icon">{'\uD83D\uDCAC'}</div>
+          <div className="recap-big-number recap-pink">{Number(messages || 0).toLocaleString()}</div>
+          <div className="recap-big-label">messages</div>
+        </div>
+        <div className="recap-big-card">
+          <div className="recap-big-icon">{'\uD83D\uDD25'}</div>
+          <div className="recap-big-number recap-amber">{Number(streak || 0)}</div>
+          <div className="recap-big-label">day streak</div>
+        </div>
+        <div className="recap-big-card">
+          <div className="recap-big-icon">{'\uD83D\uDCF8'}</div>
+          <div className="recap-big-number recap-violet">{Number(photos || 0)}</div>
+          <div className="recap-big-label">photos</div>
+        </div>
+        <div className="recap-big-card">
+          <div className="recap-big-icon">{'\uD83C\uDFAC'}</div>
+          <div className="recap-big-number recap-blue">{Number(videos || 0)}</div>
+          <div className="recap-big-label">videos</div>
+        </div>
+        <div className="recap-big-card">
+          <div className="recap-big-icon">{'\uD83C\uDFA4'}</div>
+          <div className="recap-big-number recap-green">{Number(voices || 0)}</div>
+          <div className="recap-big-label">voice notes</div>
+        </div>
+        <div className="recap-big-card">
+          <div className="recap-big-icon">{'\uD83D\uDCC5'}</div>
+          <div className="recap-big-number recap-amber">{`${safeTalkDays}/${safeTotalDays}`}</div>
+          <div className="recap-big-label">days talked</div>
+        </div>
+      </div>
+      <div className="recap-progress-wrap" aria-label="Talked-days progress">
+        <div className="recap-progress-label">{progressLabel}</div>
+        <div className="recap-progress-track">
+          <div className="recap-progress-fill" style={{ width: `${talkProgress}%` }} />
+        </div>
+      </div>
+    </section>
+  )
+}
+
 function RecapPage() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -105,10 +165,8 @@ function RecapPage() {
   const timeline = Array.isArray(stats?.monthlyTimeline) ? stats.monthlyTimeline : []
   const monthlyBars = timeline.slice(0, 12).reverse()
   const maxBarMessages = Math.max(1, ...monthlyBars.map((row) => Number(row?.messages || 0)))
-  const recapTalkDays = Number(stats?.recapTalkDays || 0)
-  const recapTotalDays = Math.max(1, Number(stats?.recapDaysInMonth || 1))
-  const talkProgress = Math.min(100, Math.round((recapTalkDays / recapTotalDays) * 100))
-  const recapLabel = formatRecapPeriodLabel(stats?.recapPeriodStart, stats?.recapPeriodEnd)
+  const previousPeriodLabel = formatRecapPeriodLabel(stats?.recapPeriodStart, stats?.recapPeriodEnd)
+  const currentPeriodLabel = formatRecapPeriodLabel(stats?.currentPeriodStart, stats?.currentPeriodEnd)
 
   return (
     <div className="recap-page">
@@ -119,47 +177,29 @@ function RecapPage() {
           <div className="recap-page-sub">with @{peerUsername}</div>
         </div>
 
-        <section className="recap-section">
-          <div className="recap-section-title">{recapLabel}</div>
-          <div className="recap-big-grid">
-            <div className="recap-big-card">
-              <div className="recap-big-icon">{'\uD83D\uDCAC'}</div>
-              <div className="recap-big-number recap-pink">{Number(stats?.recapMessages || 0).toLocaleString()}</div>
-              <div className="recap-big-label">messages</div>
-            </div>
-            <div className="recap-big-card">
-              <div className="recap-big-icon">{'\uD83D\uDD25'}</div>
-              <div className="recap-big-number recap-amber">{Number(stats?.daysTrackedStreak || 0)}</div>
-              <div className="recap-big-label">day streak</div>
-            </div>
-            <div className="recap-big-card">
-              <div className="recap-big-icon">{'\uD83D\uDCF8'}</div>
-              <div className="recap-big-number recap-violet">{Number(stats?.recapPhotos || 0)}</div>
-              <div className="recap-big-label">photos</div>
-            </div>
-            <div className="recap-big-card">
-              <div className="recap-big-icon">{'\uD83C\uDFAC'}</div>
-              <div className="recap-big-number recap-blue">{Number(stats?.recapVideos || 0)}</div>
-              <div className="recap-big-label">videos</div>
-            </div>
-            <div className="recap-big-card">
-              <div className="recap-big-icon">{'\uD83C\uDFA4'}</div>
-              <div className="recap-big-number recap-green">{Number(stats?.recapVoices || 0)}</div>
-              <div className="recap-big-label">voice notes</div>
-            </div>
-            <div className="recap-big-card">
-              <div className="recap-big-icon">{'\uD83D\uDCC5'}</div>
-              <div className="recap-big-number recap-amber">{`${recapTalkDays}/${recapTotalDays}`}</div>
-              <div className="recap-big-label">days talked</div>
-            </div>
-          </div>
-          <div className="recap-progress-wrap" aria-label="Talked-days progress">
-            <div className="recap-progress-label">{`${recapTalkDays}/${recapTotalDays} days talked in this recap cycle \uD83D\uDD25`}</div>
-            <div className="recap-progress-track">
-              <div className="recap-progress-fill" style={{ width: `${talkProgress}%` }} />
-            </div>
-          </div>
-        </section>
+        <PeriodSection
+          title={previousPeriodLabel}
+          messages={stats?.recapMessages}
+          streak={stats?.longestStreak}
+          photos={stats?.recapPhotos}
+          videos={stats?.recapVideos}
+          voices={stats?.recapVoices}
+          talkDays={stats?.recapTalkDays}
+          totalDays={stats?.recapDaysInMonth}
+          progressLabel={`${Number(stats?.recapTalkDays || 0)}/${Math.max(1, Number(stats?.recapDaysInMonth || 1))} days talked in ${previousPeriodLabel} \uD83D\uDD25`}
+        />
+
+        <PeriodSection
+          title={currentPeriodLabel}
+          messages={stats?.currentMessages}
+          streak={stats?.daysTrackedStreak}
+          photos={stats?.currentPhotos}
+          videos={stats?.currentVideos}
+          voices={stats?.currentVoices}
+          talkDays={stats?.currentTalkDays}
+          totalDays={stats?.currentDaysInPeriod}
+          progressLabel={`${Number(stats?.currentTalkDays || 0)}/${Math.max(1, Number(stats?.currentDaysInPeriod || 1))} days talked in ${currentPeriodLabel} \uD83D\uDD25`}
+        />
 
         <section className="recap-section">
           <div className="recap-section-title">All Time Together</div>
