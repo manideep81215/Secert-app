@@ -191,6 +191,7 @@ function ChatPageNew() {
   const offlineSinceRef = useRef({})
   const checkOpenTimerRef = useRef(null)
   const countedCheckVisitKeyRef = useRef('')
+  const readReceiptTimerRef = useRef(null)
   const maxViewportHeightRef = useRef(0)
   const keyboardSettleUntilRef = useRef(0)
   const syncKeyboardLayoutRef = useRef(() => {})
@@ -1912,7 +1913,20 @@ function ChatPageNew() {
     if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
     const latestIncoming = getLatestIncomingCreatedAt(selectedUser.username)
     if (!latestIncoming) return
-    publishReadReceipt(selectedUser.username, latestIncoming)
+    if (readReceiptTimerRef.current) {
+      clearTimeout(readReceiptTimerRef.current)
+      readReceiptTimerRef.current = null
+    }
+    readReceiptTimerRef.current = window.setTimeout(() => {
+      publishReadReceipt(selectedUser.username, latestIncoming)
+      readReceiptTimerRef.current = null
+    }, 1300)
+    return () => {
+      if (readReceiptTimerRef.current) {
+        clearTimeout(readReceiptTimerRef.current)
+        readReceiptTimerRef.current = null
+      }
+    }
   }, [messages, selectedUser?.username, socket?.connected])
 
   useEffect(() => {
@@ -1937,7 +1951,7 @@ function ChatPageNew() {
       } catch {
         // Ignore check-open ping failures to keep chat usable.
       }
-    }, 3000)
+    }, 1000)
 
     return () => {
       if (checkOpenTimerRef.current) {

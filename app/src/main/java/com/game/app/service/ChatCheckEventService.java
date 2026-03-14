@@ -13,7 +13,7 @@ import com.game.app.repository.ChatCheckEventRepository;
 
 @Service
 public class ChatCheckEventService {
-  private static final Duration OFFLINE_GAP_REQUIRED = Duration.ofMinutes(7);
+  private static final Duration OFFLINE_GAP_REQUIRED = Duration.ofMinutes(5);
   private static final Duration CHECK_DEBOUNCE = Duration.ofMinutes(5);
 
   private final ChatCheckEventRepository chatCheckEventRepository;
