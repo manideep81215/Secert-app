@@ -8,36 +8,31 @@ function CheckedForYouPopup({ checkerUsername, checkCount, onDismiss }) {
       setVisible(false)
       return undefined
     }
-    const timerId = window.setTimeout(() => setVisible(true), 70)
-    return () => window.clearTimeout(timerId)
-  }, [checkerUsername, checkCount])
+    setVisible(true)
+    const timer = window.setTimeout(() => {
+      setVisible(false)
+      window.setTimeout(() => onDismiss?.(), 300)
+    }, 4000)
+    return () => window.clearTimeout(timer)
+  }, [checkerUsername, checkCount, onDismiss])
 
   if (!checkerUsername || !checkCount) return null
 
-  const handleDismiss = () => {
+  const handleClick = () => {
     setVisible(false)
-    window.setTimeout(() => {
-      onDismiss?.()
-    }, 260)
+    window.setTimeout(() => onDismiss?.(), 300)
   }
 
   return (
-    <div className="checked-modal-overlay" role="dialog" aria-modal="true" aria-label="Checked for you">
-      <div className={`checked-modal-card ${visible ? 'checked-modal-visible' : ''}`}>
-        <div className="checked-modal-glow" />
-        <div className="checked-modal-icon" aria-hidden="true">👀</div>
-        <div className="checked-modal-kicker">Someone kept coming back</div>
-        <div className="checked-modal-title">@{checkerUsername} checked for you</div>
-        <div className="checked-modal-count">
-          {checkCount} {checkCount === 1 ? 'time' : 'times'}
-        </div>
-        <div className="checked-modal-message">
-          They opened your chat again and again before finally replying.
-        </div>
-        <button type="button" className="checked-modal-button" onClick={handleDismiss}>
-          Aww, okay
-        </button>
-      </div>
+    <div
+      className={`checked-toast ${visible ? 'checked-toast-visible' : ''}`}
+      onClick={handleClick}
+    >
+      <span className="checked-toast-eye">👀</span>
+      <span className="checked-toast-text">
+        <strong>@{checkerUsername}</strong> checked for you{' '}
+        <strong>{checkCount} {checkCount === 1 ? 'time' : 'times'}</strong>
+      </span>
     </div>
   )
 }

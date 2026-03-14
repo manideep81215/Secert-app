@@ -72,6 +72,14 @@ public class ChatCheckEventService {
     event.setConsumed(false);
     event.setNotified(false);
     chatCheckEventRepository.save(event);
+    messagingTemplate.convertAndSendToUser(
+        senderUsername,
+        "/queue/check-count-notices",
+        new CheckCountNoticePayload(
+            "CHECK_COUNT_NOTIFY",
+            receiverUsername,
+            event.getCheckCount(),
+            now.toEpochMilli()));
     return true;
   }
 

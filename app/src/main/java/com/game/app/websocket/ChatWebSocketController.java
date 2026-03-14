@@ -269,7 +269,6 @@ public class ChatWebSocketController {
 
     ReadReceiptPayload event = new ReadReceiptPayload(normalizedReader, normalizedPeer, readAt);
     messagingTemplate.convertAndSendToUser(normalizedPeer, "/queue/read-receipts", event);
-    chatCheckEventService.notifySenderIfNeeded(normalizedPeer, normalizedReader, Instant.ofEpochMilli(readAt));
   }
 
   @MessageMapping("/chat.react")
