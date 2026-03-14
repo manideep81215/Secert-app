@@ -147,11 +147,10 @@ public class ChatCheckEventService {
     if (event == null) {
       return;
     }
-    event.setCheckCount(0);
-    event.setLastCheckedAt(null);
-    event.setNotified(false);
-    event.setConsumed(true);
-    event.setActive(false);
+    // Dismissing the toast should only acknowledge the current notice, not reset the running count.
+    // The count is reset only when a new outgoing-message cycle starts.
+    event.setNotified(true);
+    event.setConsumed(false);
     chatCheckEventRepository.save(event);
   }
 

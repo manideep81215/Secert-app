@@ -25,6 +25,17 @@ function formatDateLabel(value) {
   return date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
 }
 
+function formatRecapPeriodLabel(startValue, endValue) {
+  const startDate = startValue ? new Date(startValue) : null
+  const endDate = endValue ? new Date(endValue) : null
+  if (!startDate || !endDate || Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+    return 'Recap Period'
+  }
+  const startLabel = startDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  const endLabel = endDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  return `${startLabel} - ${endLabel}`
+}
+
 function RecapPage() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -94,9 +105,10 @@ function RecapPage() {
   const timeline = Array.isArray(stats?.monthlyTimeline) ? stats.monthlyTimeline : []
   const monthlyBars = timeline.slice(0, 12).reverse()
   const maxBarMessages = Math.max(1, ...monthlyBars.map((row) => Number(row?.messages || 0)))
-  const thisMonthTalkDays = Number(stats?.thisMonthTalkDays || 0)
-  const thisMonthTotalDays = Math.max(1, Number(stats?.daysInMonth || 1))
-  const talkProgress = Math.min(100, Math.round((thisMonthTalkDays / thisMonthTotalDays) * 100))
+  const recapTalkDays = Number(stats?.recapTalkDays || 0)
+  const recapTotalDays = Math.max(1, Number(stats?.recapDaysInMonth || 1))
+  const talkProgress = Math.min(100, Math.round((recapTalkDays / recapTotalDays) * 100))
+  const recapLabel = formatRecapPeriodLabel(stats?.recapPeriodStart, stats?.recapPeriodEnd)
 
   return (
     <div className="recap-page">
@@ -108,11 +120,11 @@ function RecapPage() {
         </div>
 
         <section className="recap-section">
-          <div className="recap-section-title">This Month</div>
+          <div className="recap-section-title">{recapLabel}</div>
           <div className="recap-big-grid">
             <div className="recap-big-card">
               <div className="recap-big-icon">{'\uD83D\uDCAC'}</div>
-              <div className="recap-big-number recap-pink">{Number(stats?.thisMonthMessages || 0).toLocaleString()}</div>
+              <div className="recap-big-number recap-pink">{Number(stats?.recapMessages || 0).toLocaleString()}</div>
               <div className="recap-big-label">messages</div>
             </div>
             <div className="recap-big-card">
@@ -122,27 +134,27 @@ function RecapPage() {
             </div>
             <div className="recap-big-card">
               <div className="recap-big-icon">{'\uD83D\uDCF8'}</div>
-              <div className="recap-big-number recap-violet">{Number(stats?.thisMonthPhotos || 0)}</div>
+              <div className="recap-big-number recap-violet">{Number(stats?.recapPhotos || 0)}</div>
               <div className="recap-big-label">photos</div>
             </div>
             <div className="recap-big-card">
               <div className="recap-big-icon">{'\uD83C\uDFAC'}</div>
-              <div className="recap-big-number recap-blue">{Number(stats?.thisMonthVideos || 0)}</div>
+              <div className="recap-big-number recap-blue">{Number(stats?.recapVideos || 0)}</div>
               <div className="recap-big-label">videos</div>
             </div>
             <div className="recap-big-card">
               <div className="recap-big-icon">{'\uD83C\uDFA4'}</div>
-              <div className="recap-big-number recap-green">{Number(stats?.thisMonthVoices || 0)}</div>
+              <div className="recap-big-number recap-green">{Number(stats?.recapVoices || 0)}</div>
               <div className="recap-big-label">voice notes</div>
             </div>
             <div className="recap-big-card">
               <div className="recap-big-icon">{'\uD83D\uDCC5'}</div>
-              <div className="recap-big-number recap-amber">{`${thisMonthTalkDays}/${thisMonthTotalDays}`}</div>
+              <div className="recap-big-number recap-amber">{`${recapTalkDays}/${recapTotalDays}`}</div>
               <div className="recap-big-label">days talked</div>
             </div>
           </div>
           <div className="recap-progress-wrap" aria-label="Talked-days progress">
-            <div className="recap-progress-label">{`${thisMonthTalkDays}/${thisMonthTotalDays} days talked this month \uD83D\uDD25`}</div>
+            <div className="recap-progress-label">{`${recapTalkDays}/${recapTotalDays} days talked in this recap cycle \uD83D\uDD25`}</div>
             <div className="recap-progress-track">
               <div className="recap-progress-fill" style={{ width: `${talkProgress}%` }} />
             </div>

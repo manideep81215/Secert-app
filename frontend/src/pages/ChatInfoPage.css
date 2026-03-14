@@ -142,6 +142,18 @@
   font-weight: 700;
 }
 
+.chat-info-recap-button {
+  border: 1px solid #b87ec9;
+  border-radius: 0.95rem;
+  background: linear-gradient(135deg, #3e1d62 0%, #5d2787 100%);
+  color: #ffe7fb;
+  padding: 0.9rem 1rem;
+  font-size: 0.92rem;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 10px 24px rgba(72, 27, 112, 0.22);
+}
+
 .chat-info-section {
   display: flex;
   flex-direction: column;

@@ -259,6 +259,13 @@ function ChatInfoPage() {
     })
   }
 
+  const openFullRecap = () => {
+    if (!selectedUser?.username) return
+    navigate(`/chat/recap?peer=${encodeURIComponent(selectedUser.username)}`, {
+      state: { peerUsername: selectedUser.username },
+    })
+  }
+
   const requestNotificationAccess = async () => {
     const granted = await ensureNotificationPermission(true)
     const current = granted ? 'granted' : getNotificationPermissionState()
@@ -753,6 +760,10 @@ function ChatInfoPage() {
             <span className="chat-info-action-label">Back</span>
           </button>
         </div>
+
+        <button type="button" className="chat-info-recap-button" onClick={openFullRecap}>
+          View Full Recap
+        </button>
 
         {showPushDebug && (
           <div className="push-debug-panel info-push-debug-panel">

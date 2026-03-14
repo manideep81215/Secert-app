@@ -6,20 +6,32 @@ import './MonthlyRecap.css'
 const DISMISS_KEY_PREFIX = 'monthly_recap_dismissed_v1:'
 const CLOSE_ANIMATION_MS = 380
 
-function getMonthKey(value) {
-  const year = value.getFullYear()
-  const month = String(value.getMonth() + 1).padStart(2, '0')
-  return `${year}-${month}`
+function getRecapCycleKey(value) {
+  const endDate = value.getDate() >= 13
+    ? new Date(value.getFullYear(), value.getMonth(), 13)
+    : new Date(value.getFullYear(), value.getMonth() - 1, 13)
+  const year = endDate.getFullYear()
+  const month = String(endDate.getMonth() + 1).padStart(2, '0')
+  const day = String(endDate.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
-function formatRecapMonthLabel(monthKey, fallbackDate) {
-  if (monthKey && /^\d{4}-\d{2}$/.test(monthKey)) {
-    const [year, month] = monthKey.split('-').map(Number)
-    return new Date(year, month - 1, 1).toLocaleString(undefined, { month: 'long' })
+function formatRecapPeriodLabel(startValue, endValue, fallbackDate) {
+  const startDate = startValue ? new Date(startValue) : null
+  const endDate = endValue ? new Date(endValue) : null
+  if (startDate && endDate && !Number.isNaN(startDate.getTime()) && !Number.isNaN(endDate.getTime())) {
+    const startLabel = startDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    const endLabel = endDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    return `${startLabel} - ${endLabel}`
   }
 
-  const previousMonth = new Date(fallbackDate.getFullYear(), fallbackDate.getMonth() - 1, 1)
-  return previousMonth.toLocaleString(undefined, { month: 'long' })
+  const fallbackEnd = fallbackDate.getDate() >= 13
+    ? new Date(fallbackDate.getFullYear(), fallbackDate.getMonth(), 13)
+    : new Date(fallbackDate.getFullYear(), fallbackDate.getMonth() - 1, 13)
+  const fallbackStart = new Date(fallbackEnd.getFullYear(), fallbackEnd.getMonth() - 1, 13)
+  const startLabel = fallbackStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  const endLabel = fallbackEnd.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  return `${startLabel} - ${endLabel}`
 }
 
 function StatRow({ emoji, label, value, delay, color }) {
@@ -48,7 +60,7 @@ function MonthlyRecap({ token, peerUsername, forceShow = false }) {
   const [visible, setVisible] = useState(false)
 
   const now = useMemo(() => new Date(), [])
-  const dismissKey = `${DISMISS_KEY_PREFIX}${getMonthKey(now)}`
+  const dismissKey = `${DISMISS_KEY_PREFIX}${getRecapCycleKey(now)}`
 
   useEffect(() => {
     if (!token || !peerUsername) return
@@ -99,13 +111,29 @@ function MonthlyRecap({ token, peerUsername, forceShow = false }) {
 
   if (!show || !stats) return null
 
-  const monthLabel = formatRecapMonthLabel(stats?.recapMonth, now)
   const recapMessages = Number(stats?.recapMessages || 0)
   const recapPhotos = Number(stats?.recapPhotos || 0)
   const recapVideos = Number(stats?.recapVideos || 0)
   const recapVoices = Number(stats?.recapVoices || 0)
   const recapTalkDays = Number(stats?.recapTalkDays || 0)
   const recapDaysInMonth = Math.max(1, Number(stats?.recapDaysInMonth || 1))
+  const hasLastMonthRecap = (
+    recapMessages > 0 ||
+    recapPhotos > 0 ||
+    recapVideos > 0 ||
+    recapVoices > 0 ||
+    recapTalkDays > 0
+  )
+  const monthLabel = formatRecapPeriodLabel(stats?.recapPeriodStart, stats?.recapPeriodEnd, now)
+  const statSectionLabel = 'Recap Period'
+  const displayMessages = hasLastMonthRecap ? recapMessages : Number(stats?.thisMonthMessages || 0)
+  const displayPhotos = hasLastMonthRecap ? recapPhotos : Number(stats?.thisMonthPhotos || 0)
+  const displayVideos = hasLastMonthRecap ? recapVideos : Number(stats?.thisMonthVideos || 0)
+  const displayVoices = hasLastMonthRecap ? recapVoices : Number(stats?.thisMonthVoices || 0)
+  const displayTalkDays = hasLastMonthRecap ? recapTalkDays : Number(stats?.thisMonthTalkDays || 0)
+  const displayDaysInMonth = hasLastMonthRecap
+    ? recapDaysInMonth
+    : Math.max(1, Number(stats?.daysInMonth || 1))
   const longestStreak = Number(stats?.longestStreak || 0)
 
   return (
@@ -122,17 +150,17 @@ function MonthlyRecap({ token, peerUsername, forceShow = false }) {
         <div className="mr-divider" />
 
         <div className="mr-stats">
-          <div className="mr-section-label">Last Month</div>
-          <StatRow emoji={'\uD83D\uDCAC'} label="Messages sent" value={recapMessages} delay={120} color="#ff8fab" />
-          <StatRow emoji={'\uD83D\uDCF8'} label="Photos shared" value={recapPhotos} delay={200} color="#c084fc" />
-          <StatRow emoji={'\uD83C\uDFAC'} label="Videos shared" value={recapVideos} delay={280} color="#60a5fa" />
-          <StatRow emoji={'\uD83C\uDFA4'} label="Voice notes" value={recapVoices} delay={360} color="#34d399" />
+          <div className="mr-section-label">{statSectionLabel}</div>
+          <StatRow emoji={'\uD83D\uDCAC'} label="Messages sent" value={displayMessages} delay={120} color="#ff8fab" />
+          <StatRow emoji={'\uD83D\uDCF8'} label="Photos shared" value={displayPhotos} delay={200} color="#c084fc" />
+          <StatRow emoji={'\uD83C\uDFAC'} label="Videos shared" value={displayVideos} delay={280} color="#60a5fa" />
+          <StatRow emoji={'\uD83C\uDFA4'} label="Voice notes" value={displayVoices} delay={360} color="#34d399" />
         </div>
 
         <div className="mr-streak-banner">
           <div className="mr-streak-icon" aria-hidden="true">{'\uD83D\uDD25'}</div>
           <div className="mr-streak-text">
-            <div className="mr-streak-title">{`${recapTalkDays}/${recapDaysInMonth} days talked in ${monthLabel}`}</div>
+            <div className="mr-streak-title">{`${displayTalkDays}/${displayDaysInMonth} days talked in ${monthLabel}`}</div>
             <div className="mr-streak-sub">Longest streak ever: {longestStreak} days</div>
           </div>
         </div>

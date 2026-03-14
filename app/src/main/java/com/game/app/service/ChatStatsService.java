@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -49,7 +50,7 @@ public class ChatStatsService {
     LocalDate today = LocalDate.now(zoneId);
     LocalDate yesterday = today.minusDays(1);
     YearMonth currentMonth = YearMonth.from(today);
-    YearMonth previousMonth = currentMonth.minusMonths(1);
+    RecapPeriod recapPeriod = calculateRecapPeriod(today);
 
     List<ChatAnalyticsDailyEntity> dailyRows = chatAnalyticsDailyRepository
         .findByUserLowAndUserHighOrderByTalkDateAsc(low, high);
@@ -102,7 +103,7 @@ public class ChatStatsService {
         thisMonthVoices += dayVoices;
       }
 
-      if (previousMonth.equals(month)) {
+      if (!talkDate.isBefore(recapPeriod.startDate()) && talkDate.isBefore(recapPeriod.endDateExclusive())) {
         recapMessages += dayMessages;
         recapPhotos += dayPhotos;
         recapVideos += dayVideos;
@@ -121,7 +122,8 @@ public class ChatStatsService {
     List<LocalDate> talkDates = new ArrayList<>(talkDatesSet);
     long dailyAverage = !talkDates.isEmpty() ? totalMessages / talkDates.size() : 0L;
     int thisMonthTalkDays = countMonthTalkDays(talkDates, currentMonth);
-    int recapTalkDays = countMonthTalkDays(talkDates, previousMonth);
+    int recapTalkDays = countTalkDaysInRange(talkDates, recapPeriod.startDate(), recapPeriod.endDateExclusive());
+    int recapDaysInPeriod = Math.max(1, (int) ChronoUnit.DAYS.between(recapPeriod.startDate(), recapPeriod.endDateExclusive()));
 
     StreakResult streakResult = calculateStreak(talkDates, today);
     MilestoneResult milestoneResult = trackMilestone
@@ -147,13 +149,14 @@ public class ChatStatsService {
         dailyAverage,
         thisMonthTalkDays,
         currentMonth.lengthOfMonth(),
-        String.format("%04d-%02d", previousMonth.getYear(), previousMonth.getMonthValue()),
+        recapPeriod.startDate().toString(),
+        recapPeriod.endDateExclusive().toString(),
         recapMessages,
         recapPhotos,
         recapVideos,
         recapVoices,
         recapTalkDays,
-        previousMonth.lengthOfMonth(),
+        recapDaysInPeriod,
         mapTimeline(monthlyCounts));
   }
 
@@ -205,6 +208,24 @@ public class ChatStatsService {
     return (int) talkDates.stream().filter((date) -> YearMonth.from(date).equals(month)).distinct().count();
   }
 
+  private int countTalkDaysInRange(List<LocalDate> talkDates, LocalDate startInclusive, LocalDate endExclusive) {
+    if (talkDates == null || talkDates.isEmpty()) {
+      return 0;
+    }
+    return (int) talkDates.stream()
+        .filter((date) -> !date.isBefore(startInclusive) && date.isBefore(endExclusive))
+        .distinct()
+        .count();
+  }
+
+  private RecapPeriod calculateRecapPeriod(LocalDate today) {
+    LocalDate endDateExclusive = today.getDayOfMonth() >= 13
+        ? LocalDate.of(today.getYear(), today.getMonth(), 13)
+        : LocalDate.of(today.minusMonths(1).getYear(), today.minusMonths(1).getMonth(), 13);
+    LocalDate startDate = endDateExclusive.minusMonths(1);
+    return new RecapPeriod(startDate, endDateExclusive);
+  }
+
   private MilestoneResult checkMilestone(long previousTotal, long totalMessages) {
     long reached = totalMessages >= MESSAGE_MILESTONE_STEP
         ? (totalMessages / MESSAGE_MILESTONE_STEP) * MESSAGE_MILESTONE_STEP
@@ -249,6 +270,9 @@ public class ChatStatsService {
   private record MilestoneResult(long reachedMilestone, boolean justHit) {
   }
 
+  private record RecapPeriod(LocalDate startDate, LocalDate endDateExclusive) {
+  }
+
   public record MonthCountDto(String month, long messages) {
   }
 
@@ -271,7 +295,8 @@ public class ChatStatsService {
       long dailyAverage,
       int thisMonthTalkDays,
       int daysInMonth,
-      String recapMonth,
+      String recapPeriodStart,
+      String recapPeriodEnd,
       long recapMessages,
       long recapPhotos,
       long recapVideos,
