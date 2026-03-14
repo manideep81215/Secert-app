@@ -26,6 +26,7 @@ import com.game.app.repository.ChatMessageRepository;
 import com.game.app.repository.ChatReadReceiptRepository;
 import com.game.app.repository.UserRepository;
 import com.game.app.service.ChatAnalyticsService;
+import com.game.app.service.ChatCheckEventService;
 import com.game.app.service.PushNotificationService;
 
 @Controller
@@ -38,6 +39,7 @@ public class ChatWebSocketController {
   private final ChatReadReceiptRepository chatReadReceiptRepository;
   private final UserRepository userRepository;
   private final ChatAnalyticsService chatAnalyticsService;
+  private final ChatCheckEventService chatCheckEventService;
   private final PushNotificationService pushNotificationService;
   private final boolean notifyWhenOnline;
   private final long presenceTimeoutMs;
@@ -52,6 +54,7 @@ public class ChatWebSocketController {
       ChatReadReceiptRepository chatReadReceiptRepository,
       UserRepository userRepository,
       ChatAnalyticsService chatAnalyticsService,
+      ChatCheckEventService chatCheckEventService,
       PushNotificationService pushNotificationService,
       @Value("${app.push.notify-when-online:true}") boolean notifyWhenOnline,
       @Value("${app.chat.presence-timeout-ms:65000}") long presenceTimeoutMs) {
@@ -61,6 +64,7 @@ public class ChatWebSocketController {
     this.chatReadReceiptRepository = chatReadReceiptRepository;
     this.userRepository = userRepository;
     this.chatAnalyticsService = chatAnalyticsService;
+    this.chatCheckEventService = chatCheckEventService;
     this.pushNotificationService = pushNotificationService;
     this.notifyWhenOnline = notifyWhenOnline;
     this.presenceTimeoutMs = Math.max(15000L, presenceTimeoutMs);
@@ -112,6 +116,13 @@ public class ChatWebSocketController {
     entity.setReplyText(payload.replyingTo() != null ? payload.replyingTo().text() : payload.replyText());
     entity.setReplySenderName(payload.replyingTo() != null ? payload.replyingTo().senderName() : payload.replySenderName());
     entity = chatMessageRepository.save(entity);
+    Instant receiverOfflineAt = isUserConnected(normalizedTo) && isPresenceAlive(normalizedTo, Instant.now().toEpochMilli())
+        ? null
+        : resolveOfflineTimestamp(normalizedTo);
+    chatCheckEventService.trackOutgoingMessage(normalizedFrom, normalizedTo, receiverOfflineAt);
+    if (payload.replyingTo() != null) {
+      chatCheckEventService.notifySenderIfNeeded(normalizedTo, normalizedFrom, entity.getCreatedAt());
+    }
     try {
       chatAnalyticsService.recordMessage(normalizedFrom, normalizedTo, payload.type(), entity.getCreatedAt());
     } catch (Exception ignored) {
@@ -466,7 +477,16 @@ public class ChatWebSocketController {
       return;
     }
     lastSeenMap.put(normalizedUsername, lastSeenAt);
+    chatCheckEventService.markUserOffline(normalizedUsername, Instant.ofEpochMilli(lastSeenAt));
     broadcastUserStatus(normalizedUsername, "offline", lastSeenAt);
+  }
+
+  private Instant resolveOfflineTimestamp(String normalizedUsername) {
+    Long lastSeenAt = lastSeenMap.get(normalizedUsername);
+    if (lastSeenAt != null && lastSeenAt > 0) {
+      return Instant.ofEpochMilli(lastSeenAt);
+    }
+    return Instant.now();
   }
 
   private boolean hasOtherActiveSessions(String normalizedUsername, String disconnectedSessionId) {

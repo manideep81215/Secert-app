@@ -112,3 +112,22 @@ export async function getChatStats(token, peerUsername, options = {}) {
   })
   return data || null
 }
+
+export async function reportChatOpen(token, openerUsername, conversationWithUsername) {
+  const { data } = await chatStatsClient.post('/check-open', {
+    openerUsername,
+    conversationWithUsername,
+  }, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  })
+  return data || { counted: false }
+}
+
+export async function consumeCheckNotice(token, senderUsername, checkerUsername) {
+  await chatStatsClient.post('/check-open/consume', {
+    senderUsername,
+    checkerUsername,
+  }, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  })
+}

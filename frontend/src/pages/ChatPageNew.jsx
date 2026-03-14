@@ -7,7 +7,14 @@ import { Haptics, ImpactStyle } from '@capacitor/haptics'
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera'
 import { Filesystem } from '@capacitor/filesystem'
 import { getMe } from '../services/authApi'
-import { getChatStats, getConversation, getConversationSummaries, uploadMedia } from '../services/messagesApi'
+import {
+  consumeCheckNotice,
+  getChatStats,
+  getConversation,
+  getConversationSummaries,
+  reportChatOpen,
+  uploadMedia,
+} from '../services/messagesApi'
 import { getAllUsers } from '../services/usersApi'
 import BackIcon from '../components/BackIcon'
 import { CameraAttachIcon, FileAttachIcon, PhotoAttachIcon } from '../components/AttachmentIcons'
@@ -15,6 +22,7 @@ import LoveReminder from '../components/LoveReminder'
 import MonthlyRecap from '../components/MonthlyRecap'
 import MilestonePopup from '../components/MilestonePopup'
 import LovePercentageChip from '../components/LovePercentageChip'
+import CheckedForYouPopup from '../components/CheckedForYouPopup'
 import timerLoveBirdsIcon from '../assets/in-love.png'
 import ChatUsersPanel from './ChatUsersPanel'
 import {
@@ -135,6 +143,7 @@ function ChatPageNew() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [pendingDeleteMessage, setPendingDeleteMessage] = useState(null)
   const [videoThumbMap, setVideoThumbMap] = useState({})
+  const [checkPopup, setCheckPopup] = useState({ username: null, count: 0 })
   const [notificationPermission, setNotificationPermission] = useState(
     getNotificationPermissionState()
   )
@@ -180,6 +189,8 @@ function ChatPageNew() {
   const wsErrorTimerRef = useRef(null)
   const lastAutoRefreshAtRef = useRef(0)
   const offlineSinceRef = useRef({})
+  const checkOpenTimerRef = useRef(null)
+  const countedCheckVisitKeyRef = useRef('')
   const maxViewportHeightRef = useRef(0)
   const keyboardSettleUntilRef = useRef(0)
   const syncKeyboardLayoutRef = useRef(() => {})
@@ -1905,6 +1916,42 @@ function ChatPageNew() {
   }, [messages, selectedUser?.username, socket?.connected])
 
   useEffect(() => {
+    if (checkOpenTimerRef.current) {
+      clearTimeout(checkOpenTimerRef.current)
+      checkOpenTimerRef.current = null
+    }
+    if (!selectedUser?.username || !(flow.token || '').trim() || !(flow.username || '').trim()) return undefined
+    if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return undefined
+
+    const openerUsername = (flow.username || '').trim()
+    const conversationWithUsername = (selectedUser.username || '').trim()
+    const visitKey = `${toUserKey(openerUsername)}::${toUserKey(conversationWithUsername)}`
+    if (countedCheckVisitKeyRef.current === visitKey) return undefined
+
+    checkOpenTimerRef.current = window.setTimeout(async () => {
+      try {
+        const result = await reportChatOpen(flow.token, openerUsername, conversationWithUsername)
+        if (result?.counted) {
+          countedCheckVisitKeyRef.current = visitKey
+        }
+      } catch {
+        // Ignore check-open ping failures to keep chat usable.
+      }
+    }, 3000)
+
+    return () => {
+      if (checkOpenTimerRef.current) {
+        clearTimeout(checkOpenTimerRef.current)
+        checkOpenTimerRef.current = null
+      }
+    }
+  }, [selectedUser?.username, flow.token, flow.username, location.key])
+
+  useEffect(() => {
+    countedCheckVisitKeyRef.current = ''
+  }, [selectedUser?.username])
+
+  useEffect(() => {
     const authToken = (flow.token || '').trim()
     const authUsername = (flow.username || '').trim()
     if (!authToken || !authUsername) return
@@ -2239,6 +2286,18 @@ function ChatPageNew() {
             )))
           } catch (error) {
             console.error('Failed parsing message reaction payload', error)
+          }
+        })
+
+        client.subscribe('/user/queue/check-count-notices', (frame) => {
+          try {
+            const event = JSON.parse(frame.body)
+            const checkerUsername = String(event?.checkerUsername || '').trim()
+            const checkCount = Number(event?.checkCount || 0)
+            if (!checkerUsername || checkCount <= 0) return
+            setCheckPopup({ username: checkerUsername, count: checkCount })
+          } catch (error) {
+            console.error('Failed parsing check-count notice payload', error)
           }
         })
       },
@@ -2707,6 +2766,17 @@ function ChatPageNew() {
     setUsersReloadTick(Date.now())
     setConversationReloadTick(Date.now())
     window.setTimeout(() => setIsManualRefreshing(false), 900)
+  }
+
+  const handleDismissCheckPopup = async () => {
+    const checkerUsername = (checkPopup.username || '').trim()
+    setCheckPopup({ username: null, count: 0 })
+    if (!checkerUsername || !(flow.token || '').trim() || !(flow.username || '').trim()) return
+    try {
+      await consumeCheckNotice(flow.token, flow.username, checkerUsername)
+    } catch {
+      // Ignore dismiss persistence failures.
+    }
   }
 
   useEffect(() => {
@@ -4452,6 +4522,12 @@ function ChatPageNew() {
         )}
       </AnimatePresence>
 
+      <CheckedForYouPopup
+        checkerUsername={checkPopup.username}
+        checkCount={checkPopup.count}
+        onDismiss={handleDismissCheckPopup}
+      />
+ 
 </div>
   )
 }
