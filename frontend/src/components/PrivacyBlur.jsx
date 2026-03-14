@@ -78,8 +78,6 @@ export default function PrivacyBlur() {
           position: fixed;
           inset: 0;
           z-index: 99999;
-          backdrop-filter: blur(24px);
-          -webkit-backdrop-filter: blur(24px);
           background: rgba(8, 6, 16, 0.55);
           display: flex;
           flex-direction: column;

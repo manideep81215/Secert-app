@@ -8,8 +8,6 @@
   place-items: center;
   padding: 1rem;
   background: rgba(3, 2, 10, 0.82);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
   animation: ms-in 0.3s ease forwards;
 }
 

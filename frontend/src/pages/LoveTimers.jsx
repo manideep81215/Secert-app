@@ -269,7 +269,7 @@ export default function LoveTimers() {
           color:rgba(255,255,255,.7);
           border-radius:999px;padding:.4rem 1rem;
           font-size:.82rem;font-family:'DM Sans',sans-serif;
-          cursor:pointer;backdrop-filter:blur(8px);
+          cursor:pointer;
           transition:all .2s ease;
         }
         .os-back:hover{background:rgba(255,255,255,.13);color:#fff}
