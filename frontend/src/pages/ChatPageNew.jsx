@@ -1913,20 +1913,7 @@ function ChatPageNew() {
     if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
     const latestIncoming = getLatestIncomingCreatedAt(selectedUser.username)
     if (!latestIncoming) return
-    if (readReceiptTimerRef.current) {
-      clearTimeout(readReceiptTimerRef.current)
-      readReceiptTimerRef.current = null
-    }
-    readReceiptTimerRef.current = window.setTimeout(() => {
-      publishReadReceipt(selectedUser.username, latestIncoming)
-      readReceiptTimerRef.current = null
-    }, 1300)
-    return () => {
-      if (readReceiptTimerRef.current) {
-        clearTimeout(readReceiptTimerRef.current)
-        readReceiptTimerRef.current = null
-      }
-    }
+    publishReadReceipt(selectedUser.username, latestIncoming)
   }, [messages, selectedUser?.username, socket?.connected])
 
   useEffect(() => {
