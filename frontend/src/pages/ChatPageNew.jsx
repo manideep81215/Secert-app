@@ -1927,16 +1927,19 @@ function ChatPageNew() {
     const openerUsername = (flow.username || '').trim()
     const conversationWithUsername = (selectedUser.username || '').trim()
     const visitKey = `${toUserKey(openerUsername)}::${toUserKey(conversationWithUsername)}`
+    console.log('VISIT KEY CHECK:', countedCheckVisitKeyRef.current, '===', visitKey)
     if (countedCheckVisitKeyRef.current === visitKey) return undefined
 
     checkOpenTimerRef.current = window.setTimeout(async () => {
       try {
+        console.log('FIRING CHECK-OPEN PING for:', conversationWithUsername)
         const result = await reportChatOpen(flow.token, openerUsername, conversationWithUsername)
+        console.log('CHECK-OPEN RESULT:', result)
         if (result?.counted) {
           countedCheckVisitKeyRef.current = visitKey
         }
-      } catch {
-        // Ignore check-open ping failures to keep chat usable.
+      } catch (err) {
+        console.error('CHECK-OPEN ERROR:', err)
       }
     }, 1000)
 
