@@ -120,9 +120,6 @@ public class ChatWebSocketController {
         ? null
         : resolveOfflineTimestamp(normalizedTo);
     chatCheckEventService.trackOutgoingMessage(normalizedFrom, normalizedTo, receiverOfflineAt);
-    if (payload.replyingTo() != null) {
-      chatCheckEventService.notifySenderIfNeeded(normalizedTo, normalizedFrom, entity.getCreatedAt());
-    }
     try {
       chatAnalyticsService.recordMessage(normalizedFrom, normalizedTo, payload.type(), entity.getCreatedAt());
     } catch (Exception ignored) {
@@ -392,6 +389,7 @@ public class ChatWebSocketController {
     }
     syncOnlineUsersFor(normalized);
     syncReadReceiptsFor(normalized);
+    chatCheckEventService.pushPendingNoticesFor(normalized);
   }
 
   @MessageMapping("/user.offline")

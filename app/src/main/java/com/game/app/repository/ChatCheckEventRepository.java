@@ -12,4 +12,6 @@ public interface ChatCheckEventRepository extends JpaRepository<ChatCheckEventEn
   Optional<ChatCheckEventEntity> findBySenderUsernameAndReceiverUsername(String senderUsername, String receiverUsername);
 
   List<ChatCheckEventEntity> findByReceiverUsername(String receiverUsername);
+
+  List<ChatCheckEventEntity> findByReceiverUsernameAndActiveTrue(String receiverUsername);
 }

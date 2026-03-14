@@ -13,8 +13,8 @@ import com.game.app.repository.ChatCheckEventRepository;
 
 @Service
 public class ChatCheckEventService {
-  private static final Duration OFFLINE_GAP_REQUIRED = Duration.ofMinutes(5);
-  private static final Duration CHECK_DEBOUNCE = Duration.ofMinutes(5);
+  private static final Duration OFFLINE_GAP_REQUIRED = Duration.ofSeconds(30);
+  private static final Duration CHECK_DEBOUNCE = Duration.ofSeconds(30);
 
   private final ChatCheckEventRepository chatCheckEventRepository;
   private final SimpMessagingTemplate messagingTemplate;
@@ -73,14 +73,34 @@ public class ChatCheckEventService {
     event.setNotified(false);
     chatCheckEventRepository.save(event);
     messagingTemplate.convertAndSendToUser(
-        senderUsername,
+        receiverUsername,
         "/queue/check-count-notices",
         new CheckCountNoticePayload(
             "CHECK_COUNT_NOTIFY",
-            receiverUsername,
+            senderUsername,
             event.getCheckCount(),
             now.toEpochMilli()));
     return true;
+  }
+
+  @Transactional
+  public void pushPendingNoticesFor(String receiverUsername) {
+    List<ChatCheckEventEntity> rows = chatCheckEventRepository.findByReceiverUsernameAndActiveTrue(receiverUsername);
+    for (ChatCheckEventEntity event : rows) {
+      if (event.getCheckCount() <= 0 || event.isNotified()) {
+        continue;
+      }
+      messagingTemplate.convertAndSendToUser(
+          receiverUsername,
+          "/queue/check-count-notices",
+          new CheckCountNoticePayload(
+              "CHECK_COUNT_NOTIFY",
+              event.getSenderUsername(),
+              event.getCheckCount(),
+              Instant.now().toEpochMilli()));
+      event.setNotified(true);
+      chatCheckEventRepository.save(event);
+    }
   }
 
   @Transactional

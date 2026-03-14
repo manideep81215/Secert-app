@@ -45,7 +45,7 @@ public class ChatCheckEventController {
     if (!normalizeUsername(me.getUsername()).equals(opener)) {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Cannot report another user's chat open");
     }
-    boolean counted = chatCheckEventService.recordQualifiedOpen(conversationWith, opener, Instant.now());
+    boolean counted = chatCheckEventService.recordQualifiedOpen(opener, conversationWith, Instant.now());
     return ResponseEntity.ok(new CheckOpenResponse(counted));
   }
 
@@ -54,15 +54,15 @@ public class ChatCheckEventController {
       @RequestHeader(value = "Authorization", required = false) String authHeader,
       @RequestBody ConsumeCheckRequest request) {
     UserEntity me = requireAuthUser(authHeader);
-    String sender = normalizeUsername(request.senderUsername());
+    String receiver = normalizeUsername(request.senderUsername());
     String checker = normalizeUsername(request.checkerUsername());
-    if (!normalizeUsername(me.getUsername()).equals(sender)) {
+    if (!normalizeUsername(me.getUsername()).equals(receiver)) {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Cannot consume another user's notice");
     }
     if (checker.isBlank()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Checker username is required");
     }
-    chatCheckEventService.consume(sender, checker);
+    chatCheckEventService.consume(checker, receiver);
     return ResponseEntity.ok().build();
   }
 
