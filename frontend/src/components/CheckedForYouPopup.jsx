@@ -1,27 +1,44 @@
-import { motion, AnimatePresence } from 'framer-motion'
+import { useEffect, useState } from 'react'
 
 function CheckedForYouPopup({ checkerUsername, checkCount, onDismiss }) {
+  const [visible, setVisible] = useState(false)
+
+  useEffect(() => {
+    if (!checkerUsername || !checkCount) {
+      setVisible(false)
+      return undefined
+    }
+    const timerId = window.setTimeout(() => setVisible(true), 70)
+    return () => window.clearTimeout(timerId)
+  }, [checkerUsername, checkCount])
+
   if (!checkerUsername || !checkCount) return null
 
+  const handleDismiss = () => {
+    setVisible(false)
+    window.setTimeout(() => {
+      onDismiss?.()
+    }, 260)
+  }
+
   return (
-    <AnimatePresence>
-      <motion.button
-        type="button"
-        className="checked-popup"
-        initial={{ opacity: 0, y: 18, scale: 0.96 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 12, scale: 0.98 }}
-        transition={{ duration: 0.22, ease: 'easeOut' }}
-        onClick={onDismiss}
-      >
-        <span className="checked-popup-eye" aria-hidden="true">👀</span>
-        <span className="checked-popup-copy">
-          <strong>@{checkerUsername}</strong> checked for you{' '}
-          <strong>{checkCount} {checkCount === 1 ? 'time' : 'times'}</strong>
-        </span>
-        <span className="checked-popup-hint">tap to dismiss</span>
-      </motion.button>
-    </AnimatePresence>
+    <div className="checked-modal-overlay" role="dialog" aria-modal="true" aria-label="Checked for you">
+      <div className={`checked-modal-card ${visible ? 'checked-modal-visible' : ''}`}>
+        <div className="checked-modal-glow" />
+        <div className="checked-modal-icon" aria-hidden="true">👀</div>
+        <div className="checked-modal-kicker">Someone kept coming back</div>
+        <div className="checked-modal-title">@{checkerUsername} checked for you</div>
+        <div className="checked-modal-count">
+          {checkCount} {checkCount === 1 ? 'time' : 'times'}
+        </div>
+        <div className="checked-modal-message">
+          They opened your chat again and again before finally replying.
+        </div>
+        <button type="button" className="checked-modal-button" onClick={handleDismiss}>
+          Aww, okay
+        </button>
+      </div>
+    </div>
   )
 }
 
