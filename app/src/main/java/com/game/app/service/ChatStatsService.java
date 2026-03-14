@@ -11,7 +11,6 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -226,30 +225,8 @@ public class ChatStatsService {
     ChatStatsProgressEntity state = chatStatsProgressRepository
         .findByUserLowAndUserHighAndViewerUsername(low, high, viewer)
         .orElse(null);
-
-    if (state == null) {
-      ChatStatsProgressEntity created = new ChatStatsProgressEntity();
-      created.setUserLow(low);
-      created.setUserHigh(high);
-      created.setViewerUsername(viewer);
-      created.setLastMessageTotal(totalMessages);
-      try {
-        chatStatsProgressRepository.saveAndFlush(created);
-        return totalMessages;
-      } catch (DataIntegrityViolationException ignored) {
-        state = chatStatsProgressRepository
-            .findByUserLowAndUserHighAndViewerUsername(low, high, viewer)
-            .orElse(null);
-      }
-    }
-
-    if (state == null) {
-      return totalMessages;
-    }
-
-    long previous = state.getLastMessageTotal();
-    state.setLastMessageTotal(totalMessages);
-    chatStatsProgressRepository.save(state);
+    long previous = state != null ? state.getLastMessageTotal() : totalMessages;
+    chatStatsProgressRepository.upsert(low, high, viewer, totalMessages);
     return previous;
   }
 

@@ -2305,6 +2305,7 @@ function ChatPageNew() {
 
         client.subscribe('/user/queue/check-count-notices', (frame) => {
           try {
+            console.log('CHECK NOTICE RAW:', frame.body)
             const event = JSON.parse(frame.body)
             const checkerUsername = String(event?.checkerUsername || '').trim()
             const checkCount = Number(event?.checkCount || 0)
