@@ -641,17 +641,20 @@ function ChatPageNew() {
     if (!reply) return ''
     const targetMessageId = Number(reply.messageId || 0)
     const replyText = String(reply.text || '').trim()
-    const replyType = String(reply.type || '').trim().toLowerCase()
+    const replyType = String(reply.type || 'text').trim().toLowerCase()
     const replyMediaUrl = normalizeMediaUrl(reply.mediaUrl || null)
     const replyFileName = String(reply.fileName || '').trim()
     const replySenderName = toUserKey(reply.senderName || '')
+    let textOnlyFallbackKey = ''
+    let senderTextFallbackKey = ''
     for (let index = messagesRef.current.length - 1; index >= 0; index -= 1) {
       const message = messagesRef.current[index]
       if (!message) continue
       if (targetMessageId > 0 && Number(message.messageId || 0) === targetMessageId) {
         return getMessageUiKey(message, index)
       }
-      const sameType = String(message.type || '').trim().toLowerCase() === replyType
+      const messageType = String(message.type || 'text').trim().toLowerCase()
+      const sameType = messageType === replyType
       const sameMedia = normalizeMediaUrl(message.mediaUrl || null) === replyMediaUrl
       const sameFile = String(message.fileName || '').trim() === replyFileName
       const sameText = String(message.text || '').trim() === replyText
@@ -659,8 +662,14 @@ function ChatPageNew() {
       if (sameSender && ((sameMedia && sameType) || (sameFile && sameType) || sameText)) {
         return getMessageUiKey(message, index)
       }
+      if (!senderTextFallbackKey && sameText && sameSender) {
+        senderTextFallbackKey = getMessageUiKey(message, index)
+      }
+      if (!textOnlyFallbackKey && sameText) {
+        textOnlyFallbackKey = getMessageUiKey(message, index)
+      }
     }
-    return ''
+    return senderTextFallbackKey || textOnlyFallbackKey || ''
   }
   const highlightMessageKey = (messageKey) => {
     if (!messageKey) return

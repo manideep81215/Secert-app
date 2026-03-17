@@ -142,7 +142,7 @@ public class ChatPushMessagingService extends FirebaseMessagingService {
     }
   }
 
-  private static int buildNotificationId(String peerUsername, String url, String title) {
+  static int buildNotificationId(String peerUsername, String url, String title) {
     String seed = !safeTrim(peerUsername).isEmpty() ? peerUsername : (!safeTrim(url).isEmpty() ? url : title);
     return Math.max(1001, Math.abs(seed.hashCode()));
   }

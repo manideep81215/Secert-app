@@ -26,6 +26,7 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
         buildConfigField "String", "CHAT_API_BASE_URL", "\"${apiBaseUrl.replace('\\', '\\\\').replace('\"', '\\\"')}\""
+        resValue "string", "chat_api_base_url", "${'\"'}${apiBaseUrl.replace('\\', '\\\\').replace('\"', '\\\"')}${'\"'}"
     }
     buildTypes {
         release {

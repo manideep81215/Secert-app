@@ -45,23 +45,27 @@ public class NotificationReplyReceiver extends BroadcastReceiver {
     String pushToken = safeTrim(intent.getStringExtra(EXTRA_PUSH_TOKEN));
     String chatUrl = safeTrim(intent.getStringExtra(EXTRA_URL));
     String senderLabel = safeTrim(intent.getStringExtra(EXTRA_SENDER_LABEL));
+    if (notificationId == 0) {
+      notificationId = ChatPushMessagingService.buildNotificationId(toUsername, chatUrl, senderLabel);
+    }
+    final int resolvedNotificationId = notificationId;
 
     NotificationManager notificationManager = context.getSystemService(NotificationManager.class);
-    if (notificationManager != null && notificationId != 0) {
-      notificationManager.notify(notificationId, buildStatusNotification(context, senderLabel, chatUrl, "Sending reply..."));
+    if (notificationManager != null && resolvedNotificationId != 0) {
+      replaceNotification(notificationManager, resolvedNotificationId, buildStatusNotification(context, senderLabel, chatUrl, "Sending reply..."));
     }
 
     PendingResult pendingResult = goAsync();
     Context appContext = context.getApplicationContext();
     new Thread(() -> {
       try {
-        ReplyResult result = postReply(pushToken, toUsername, message);
+        ReplyResult result = postReply(appContext, pushToken, toUsername, message);
         NotificationManager manager = appContext.getSystemService(NotificationManager.class);
         if (manager != null) {
           if (result.success()) {
-            manager.notify(notificationId, buildStatusNotification(appContext, senderLabel, chatUrl, "Reply sent"));
+            replaceNotification(manager, resolvedNotificationId, buildStatusNotification(appContext, senderLabel, chatUrl, "Reply sent"));
           } else {
-            manager.notify(notificationId, buildStatusNotification(appContext, senderLabel, chatUrl, result.userMessage()));
+            replaceNotification(manager, resolvedNotificationId, buildStatusNotification(appContext, senderLabel, chatUrl, result.userMessage()));
           }
         }
       } finally {
@@ -70,11 +74,11 @@ public class NotificationReplyReceiver extends BroadcastReceiver {
     }).start();
   }
 
-  private ReplyResult postReply(String pushToken, String toUsername, String message) {
+  private ReplyResult postReply(Context context, String pushToken, String toUsername, String message) {
     if (pushToken.isEmpty() || toUsername.isEmpty() || message.isEmpty()) {
       return new ReplyResult(false, "Reply failed. Missing notification data.");
     }
-    String apiBase = safeTrim(BuildConfig.CHAT_API_BASE_URL);
+    String apiBase = resolveApiBaseUrl(context);
     if (apiBase.isEmpty()) {
       return new ReplyResult(false, "Reply failed. App server URL is missing.");
     }
@@ -156,6 +160,36 @@ public class NotificationReplyReceiver extends BroadcastReceiver {
       builder.setContentIntent(openIntent);
     }
     return builder.build();
+  }
+
+  private void replaceNotification(NotificationManager notificationManager, int notificationId, android.app.Notification notification) {
+    if (notificationManager == null || notificationId == 0 || notification == null) return;
+    notificationManager.cancel(notificationId);
+    notificationManager.notify(notificationId, notification);
+  }
+
+  private String resolveApiBaseUrl(Context context) {
+    String apiBase = safeTrim(BuildConfig.CHAT_API_BASE_URL);
+    if (!apiBase.isEmpty()) {
+      return trimTrailingSlash(apiBase);
+    }
+    try {
+      String fallback = context == null ? "" : safeTrim(context.getString(R.string.chat_api_base_url));
+      if (!fallback.isEmpty()) {
+        return trimTrailingSlash(fallback);
+      }
+    } catch (Exception ignored) {
+      // Resource fallback is best-effort.
+    }
+    return "";
+  }
+
+  private String trimTrailingSlash(String value) {
+    String normalized = safeTrim(value);
+    while (normalized.endsWith("/")) {
+      normalized = normalized.substring(0, normalized.length() - 1).trim();
+    }
+    return normalized;
   }
 
   private String safeTrim(String value) {
