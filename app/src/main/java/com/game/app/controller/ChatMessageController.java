@@ -281,6 +281,7 @@ public class ChatMessageController {
             null,
             null,
             null,
+            null,
             createdAt.toEpochMilli(),
             entity.isEdited(),
             entity.getEditedAt() != null ? entity.getEditedAt().toEpochMilli() : null));
