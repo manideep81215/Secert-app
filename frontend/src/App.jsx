@@ -45,6 +45,7 @@ function App() {
   const [isAppInstalled, setIsAppInstalled] = useState(false)
   const [showIosInstallHelp, setShowIosInstallHelp] = useState(false)
   const refreshTimerRef = useRef(null)
+  const shouldShowPrivacyBlur = !location.pathname.startsWith('/chat')
   const isFullBleedRoute =
     location.pathname === '/auth' ||
     location.pathname.startsWith('/games') ||
@@ -434,7 +435,7 @@ function App() {
 
   return (
     <div className={`app-wrap container-fluid ${isFullBleedRoute ? 'app-auth-route p-0' : 'py-4 px-3 px-md-4'}`}>
-      <PrivacyBlur />
+      {shouldShowPrivacyBlur && <PrivacyBlur />}
       <div className={isFullBleedRoute ? 'app-auth-max' : 'mx-auto app-max'}>
         <Routes>
           <Route path="/" element={<Navigate to={isAuthenticated ? '/games' : '/auth'} replace />} />
@@ -484,6 +485,7 @@ function App() {
         limit={1}
         pauseOnFocusLoss={false}
         closeButton={false}
+        closeOnClick
         containerClassName="app-toast-container"
         toastClassName="app-toast"
         bodyClassName="app-toast-body"

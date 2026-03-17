@@ -1,11 +1,27 @@
 apply plugin: 'com.android.application'
 
-def envProps = new Properties()
-def envFile = rootProject.file('../../.env')
-if (envFile.exists()) {
-    envFile.withInputStream { stream -> envProps.load(stream) }
+def readEnvValue = { key ->
+    def envCandidates = [
+        rootProject.file('../.env'),
+        rootProject.file('../../frontend/.env'),
+        rootProject.file('../../.env')
+    ]
+    for (def envFile : envCandidates) {
+        if (!envFile.exists()) {
+            continue
+        }
+        for (def rawLine : envFile.readLines('UTF-8')) {
+            def line = String.valueOf(rawLine ?: '').trim()
+            if (!line || line.startsWith('#') || !line.startsWith("${key}=")) {
+                continue
+            }
+            return line.substring(key.length() + 1).trim()
+        }
+    }
+    return ''
 }
-def apiBaseUrl = (envProps.getProperty('VITE_API_BASE_URL', '') ?: '').trim()
+
+def apiBaseUrl = readEnvValue('VITE_API_BASE_URL')
 
 android {
     namespace "com.simpgames.quest"
