@@ -4026,7 +4026,7 @@ function ChatPageNew() {
             </>
           )}
         </span>
-        <span className="reply-media-caption">{reply.fileName || (replyType === 'image' ? 'Photo' : 'Video')}</span>
+        <span className="reply-media-caption">{replyType === 'image' ? 'Photo' : 'Video'}</span>
       </span>
     )
     if (!canJumpToReply) return mediaContent
