@@ -12,6 +12,8 @@ import androidx.core.app.RemoteInput;
 
 import org.json.JSONObject;
 
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -24,6 +26,8 @@ public class NotificationReplyReceiver extends BroadcastReceiver {
   public static final String EXTRA_URL = "chat_url";
   public static final String EXTRA_SENDER_LABEL = "sender_label";
   public static final String EXTRA_REPLY_KEY = "notification_reply_text";
+  private static final int CONNECT_TIMEOUT_MS = 20000;
+  private static final int READ_TIMEOUT_MS = 25000;
 
   @Override
   public void onReceive(Context context, Intent intent) {
@@ -51,13 +55,13 @@ public class NotificationReplyReceiver extends BroadcastReceiver {
     Context appContext = context.getApplicationContext();
     new Thread(() -> {
       try {
-        boolean success = postReply(pushToken, toUsername, message);
+        ReplyResult result = postReply(pushToken, toUsername, message);
         NotificationManager manager = appContext.getSystemService(NotificationManager.class);
         if (manager != null) {
-          if (success) {
+          if (result.success()) {
             manager.notify(notificationId, buildStatusNotification(appContext, senderLabel, chatUrl, "Reply sent"));
           } else {
-            manager.notify(notificationId, buildStatusNotification(appContext, senderLabel, chatUrl, "Reply failed. Tap to continue in chat."));
+            manager.notify(notificationId, buildStatusNotification(appContext, senderLabel, chatUrl, result.userMessage()));
           }
         }
       } finally {
@@ -66,23 +70,25 @@ public class NotificationReplyReceiver extends BroadcastReceiver {
     }).start();
   }
 
-  private boolean postReply(String pushToken, String toUsername, String message) {
+  private ReplyResult postReply(String pushToken, String toUsername, String message) {
     if (pushToken.isEmpty() || toUsername.isEmpty() || message.isEmpty()) {
-      return false;
+      return new ReplyResult(false, "Reply failed. Missing notification data.");
     }
     String apiBase = safeTrim(BuildConfig.CHAT_API_BASE_URL);
     if (apiBase.isEmpty()) {
-      return false;
+      return new ReplyResult(false, "Reply failed. App server URL is missing.");
     }
     HttpURLConnection connection = null;
     try {
       URL endpoint = new URL(apiBase + "/api/app/messages/notification-reply");
       connection = (HttpURLConnection) endpoint.openConnection();
       connection.setRequestMethod("POST");
-      connection.setConnectTimeout(12000);
-      connection.setReadTimeout(12000);
+      connection.setConnectTimeout(CONNECT_TIMEOUT_MS);
+      connection.setReadTimeout(READ_TIMEOUT_MS);
       connection.setDoOutput(true);
+      connection.setDoInput(true);
       connection.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+      connection.setRequestProperty("Accept", "application/json");
 
       JSONObject body = new JSONObject();
       body.put("mobilePushToken", pushToken);
@@ -94,14 +100,43 @@ public class NotificationReplyReceiver extends BroadcastReceiver {
         output.write(payload);
       }
       int responseCode = connection.getResponseCode();
-      return responseCode >= 200 && responseCode < 300;
-    } catch (Exception ignored) {
-      return false;
+      if (responseCode >= 200 && responseCode < 300) {
+        return new ReplyResult(true, "Reply sent");
+      }
+      String errorBody = readStream(connection.getErrorStream());
+      String detail = !errorBody.isEmpty() ? errorBody : ("HTTP " + responseCode);
+      return new ReplyResult(false, "Reply failed: " + trimForNotification(detail));
+    } catch (Exception error) {
+      String detail = safeTrim(error.getMessage());
+      if (detail.isEmpty()) {
+        detail = "network error";
+      }
+      return new ReplyResult(false, "Reply failed: " + trimForNotification(detail));
     } finally {
       if (connection != null) {
         connection.disconnect();
       }
     }
+  }
+
+  private String readStream(InputStream stream) {
+    if (stream == null) return "";
+    try (InputStream input = stream; ByteArrayOutputStream buffer = new ByteArrayOutputStream()) {
+      byte[] chunk = new byte[1024];
+      int read;
+      while ((read = input.read(chunk)) != -1) {
+        buffer.write(chunk, 0, read);
+      }
+      return buffer.toString(StandardCharsets.UTF_8);
+    } catch (Exception ignored) {
+      return "";
+    }
+  }
+
+  private String trimForNotification(String value) {
+    String raw = safeTrim(value).replace('\n', ' ').replace('\r', ' ');
+    if (raw.length() <= 72) return raw;
+    return raw.substring(0, 69) + "...";
   }
 
   private NotificationCompat.Builder newBaseBuilder(Context context, String senderLabel, String statusText) {
@@ -125,5 +160,8 @@ public class NotificationReplyReceiver extends BroadcastReceiver {
 
   private String safeTrim(String value) {
     return value == null ? "" : value.trim();
+  }
+
+  private record ReplyResult(boolean success, String userMessage) {
   }
 }

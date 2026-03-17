@@ -506,25 +506,23 @@
 }
 
 .scroll-to-latest-btn {
-  position: sticky;
-  align-self: flex-end;
+  position: absolute;
+  right: 1rem;
   bottom: 1rem;
-  margin-top: auto;
-  margin-right: 0.35rem;
-  width: 2.7rem;
-  height: 2.7rem;
+  width: 3rem;
+  height: 3rem;
   border: none;
   border-radius: 999px;
   background: linear-gradient(135deg, #f59f00 0%, #f76707 100%);
   color: #fffdf5;
-  font-size: 1.35rem;
+  font-size: 1.15rem;
   font-weight: 900;
   line-height: 1;
   display: grid;
   place-items: center;
   cursor: pointer;
   box-shadow: 0 14px 26px rgba(166, 90, 8, 0.28);
-  z-index: 4;
+  z-index: 6;
 }
 
 .scroll-to-latest-btn:hover {
@@ -534,6 +532,15 @@
 .scroll-to-latest-btn:focus-visible {
   outline: 2px solid rgba(255, 244, 214, 0.95);
   outline-offset: 2px;
+}
+
+@media (max-width: 920px) {
+  .scroll-to-latest-btn {
+    right: 0.8rem;
+    bottom: 0.8rem;
+    width: 2.75rem;
+    height: 2.75rem;
+  }
 }
 
 .message {

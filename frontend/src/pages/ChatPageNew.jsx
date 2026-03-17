@@ -4408,7 +4408,7 @@ function ChatPageNew() {
                 aria-label="Jump to latest message"
                 title="Latest message"
               >
-                ↓
+                {'\u2193'}
               </motion.button>
             )}
           </AnimatePresence>
