@@ -615,16 +615,26 @@ function ChatPageNew() {
     }
     delete messageNodeMapRef.current[messageKey]
   }
-  const updateScrollToLatestVisibility = () => {
+  const getDistanceFromLatest = () => {
     const listEl = messagesAreaRef.current
-    if (!listEl) {
-      setShowScrollToLatest(false)
-      return
+    if (listEl) {
+      const top = Number(listEl.scrollTop || 0)
+      const height = Number(listEl.clientHeight || 0)
+      const full = Number(listEl.scrollHeight || 0)
+      const listDistance = Math.max(0, full - (top + height))
+      if (full > height + 8) {
+        return listDistance
+      }
     }
-    const top = Number(listEl.scrollTop || 0)
-    const height = Number(listEl.clientHeight || 0)
-    const full = Number(listEl.scrollHeight || 0)
-    const distanceFromBottom = Math.max(0, full - (top + height))
+    if (typeof window === 'undefined') return 0
+    const doc = window.document?.documentElement
+    const full = Number(doc?.scrollHeight || 0)
+    const top = Number(window.scrollY || window.pageYOffset || 0)
+    const height = Number(window.innerHeight || 0)
+    return Math.max(0, full - (top + height))
+  }
+  const updateScrollToLatestVisibility = () => {
+    const distanceFromBottom = getDistanceFromLatest()
     setShowScrollToLatest(distanceFromBottom > AUTO_SCROLL_BOTTOM_THRESHOLD)
   }
   const findReplyTargetKey = (reply) => {
@@ -1966,6 +1976,17 @@ function ChatPageNew() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined
+    const syncVisibility = () => updateScrollToLatestVisibility()
+    window.addEventListener('scroll', syncVisibility, { passive: true })
+    window.addEventListener('resize', syncVisibility)
+    return () => {
+      window.removeEventListener('scroll', syncVisibility)
+      window.removeEventListener('resize', syncVisibility)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined
     if (!isMobileView) return undefined
     if (!isNativeCapacitorRuntime()) return undefined
     const viewport = window.visualViewport
@@ -2679,10 +2700,13 @@ function ChatPageNew() {
       } catch {
         listEl.scrollTop = listEl.scrollHeight
       }
+      if (typeof window !== 'undefined') {
+        window.requestAnimationFrame(() => updateScrollToLatestVisibility())
+      }
       return
     }
     // Fallback only if list ref is temporarily unavailable.
-    messagesEndRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' })
+    messagesEndRef.current?.scrollIntoView({ behavior, block: 'end' })
   }
 
   useEffect(() => {
@@ -3063,11 +3087,11 @@ function ChatPageNew() {
     setReactionTray(null)
 
     const listEl = messagesAreaRef.current
-    if (!listEl) return
-    const top = Number(listEl.scrollTop || 0)
-    const height = Number(listEl.clientHeight || 0)
-    const full = Number(listEl.scrollHeight || 0)
-    const distanceFromBottom = Math.max(0, full - (top + height))
+    if (!listEl) {
+      updateScrollToLatestVisibility()
+      return
+    }
+    const distanceFromBottom = getDistanceFromLatest()
     shouldAutoScrollToBottomRef.current = distanceFromBottom <= AUTO_SCROLL_BOTTOM_THRESHOLD
     setShowScrollToLatest(distanceFromBottom > AUTO_SCROLL_BOTTOM_THRESHOLD)
 

@@ -44,19 +44,19 @@
 }
 
 .app-toast-container.Toastify__toast-container {
-  --app-toast-width: min(320px, calc(100vw - 24px));
+  --app-toast-width: min(88vw, 260px);
   width: var(--app-toast-width) !important;
   max-width: var(--app-toast-width) !important;
   padding: 0;
-  top: 12px !important;
-  right: 12px !important;
+  top: 16px !important;
+  right: 16px !important;
   left: auto !important;
   margin: 0 !important;
 }
 
 .app-toast-container.Toastify__toast-container--top-right {
-  top: 12px !important;
-  right: 12px !important;
+  top: 16px !important;
+  right: 16px !important;
   left: auto !important;
   transform: none !important;
 }
@@ -70,11 +70,11 @@
   background: linear-gradient(135deg, #170a24 0%, #241133 52%, #101d30 100%) !important;
   color: #f7f9ff !important;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-  padding: 8px 12px !important;
+  padding: 10px 14px !important;
 }
 
 .app-toast .Toastify__toast-icon {
-  margin-inline-end: 0.45rem;
+  margin-inline-end: 0.2rem;
   width: auto;
 }
 
@@ -82,15 +82,16 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2rem;
-  height: 2rem;
-  border-radius: 999px;
-  background: #16c985;
-  color: #ffffff;
-  font-size: 1.25rem;
+  width: auto;
+  height: auto;
+  border-radius: 0;
+  background: transparent;
+  color: rgba(255, 247, 251, 0.9);
+  font-size: 18px;
   font-weight: 700;
   line-height: 1;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+  box-shadow: none;
+  flex-shrink: 0;
 }
 
 .app-toast-body {
@@ -104,36 +105,34 @@
 
 @media only screen and (max-width: 480px) {
   .app-toast-container.Toastify__toast-container {
-    --app-toast-width: min(260px, calc(100vw - 20px));
+    --app-toast-width: min(88vw, 260px);
     width: var(--app-toast-width) !important;
     max-width: var(--app-toast-width) !important;
-    top: 10px !important;
-    right: 10px !important;
+    top: 16px !important;
+    right: 16px !important;
     left: auto !important;
     transform: none !important;
     margin: 0 !important;
   }
 
   .app-toast-container.Toastify__toast-container--top-right {
-    top: 10px !important;
-    right: 10px !important;
+    top: 16px !important;
+    right: 16px !important;
   }
 
   .app-toast {
     width: 100% !important;
     margin: 0 !important;
-    border-radius: 12px !important;
-    padding: 7px 10px !important;
+    border-radius: 14px !important;
+    padding: 10px 14px !important;
   }
 
   .app-toast .Toastify__toast-icon {
-    margin-inline-end: 0.35rem;
+    margin-inline-end: 0.2rem;
   }
 
   .app-toast-check {
-    width: 1.55rem;
-    height: 1.55rem;
-    font-size: 1rem;
+    font-size: 18px;
   }
 
   .app-toast-body {

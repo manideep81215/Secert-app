@@ -506,9 +506,9 @@
 }
 
 .scroll-to-latest-btn {
-  position: absolute;
-  right: 1rem;
-  bottom: 1rem;
+  position: fixed;
+  right: 1.2rem;
+  bottom: 5.4rem;
   width: 3rem;
   height: 3rem;
   border: none;
@@ -537,7 +537,7 @@
 @media (max-width: 920px) {
   .scroll-to-latest-btn {
     right: 0.8rem;
-    bottom: 0.8rem;
+    bottom: 5rem;
     width: 2.75rem;
     height: 2.75rem;
   }
@@ -2098,18 +2098,20 @@
 .chat-container .chat-header {
   background: linear-gradient(180deg, #f5deb6 0%, #ebd0a2 100%);
   border-bottom: 2px solid #b79361;
-  padding: calc(0.45rem + var(--chat-safe-top, 0px)) 0.8rem 0.45rem;
+  padding: calc(0.22rem + var(--chat-safe-top, 0px)) 0.7rem 0.22rem;
 }
 
 .chat-container .chat-user-name {
   color: #4d2e1a;
+  font-size: 0.92rem;
+  line-height: 1.05;
 }
 
 .chat-container .btn-user-details {
   background: linear-gradient(180deg, #8bc34a, #4f8f41);
-  width: 1.9rem;
-  height: 1.9rem;
-  font-size: 1rem;
+  width: 1.72rem;
+  height: 1.72rem;
+  font-size: 0.88rem;
 }
 
 .chat-container .timer-icon-image {
@@ -2120,23 +2122,46 @@
 .chat-container .btn-home-game {
   background: linear-gradient(to bottom, var(--btn-orange-top), var(--btn-orange-bot));
   border-bottom: 4px solid var(--btn-shadow);
-  width: 1.9rem;
-  height: 1.9rem;
-  font-size: 0.92rem;
+  width: 1.72rem;
+  height: 1.72rem;
+  font-size: 0.82rem;
 }
 
 .chat-container .btn-chat-reload {
   background: linear-gradient(to bottom, var(--btn-orange-top), var(--btn-orange-bot));
   border-bottom: 4px solid var(--btn-shadow);
-  width: 1.9rem;
-  height: 1.9rem;
-  font-size: 0.88rem;
+  width: 1.72rem;
+  height: 1.72rem;
+  font-size: 0.8rem;
 }
 
 .chat-container .btn-delete-chat {
-  width: 1.9rem;
-  height: 1.9rem;
-  font-size: 0.92rem;
+  width: 1.72rem;
+  height: 1.72rem;
+  font-size: 0.82rem;
+}
+
+.chat-container .chat-header-left {
+  gap: 0.48rem;
+}
+
+.chat-container .chat-header-actions {
+  gap: 0.35rem;
+}
+
+.chat-container .chat-user-avatar {
+  width: 2.45rem;
+  height: 2.45rem;
+  font-size: 2rem;
+}
+
+.chat-container .chat-user-status {
+  font-size: 0.72rem;
+  line-height: 1;
+}
+
+.chat-container .chat-user-info {
+  gap: 0.1rem;
 }
 
 .chat-container .message.user .message-content {
