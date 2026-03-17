@@ -44,6 +44,7 @@ public class ChatPushMessagingService extends FirebaseMessagingService {
     ensureNotificationChannel();
 
     int notificationId = buildNotificationId(peerUsername, url, title);
+    NotificationReplyStore.save(this, notificationId, peerUsername, pushToken, url, title);
     PendingIntent openIntent = createOpenChatPendingIntent(this, url);
 
     NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)

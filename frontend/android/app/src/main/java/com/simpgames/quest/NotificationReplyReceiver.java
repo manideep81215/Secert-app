@@ -48,24 +48,41 @@ public class NotificationReplyReceiver extends BroadcastReceiver {
     if (notificationId == 0) {
       notificationId = ChatPushMessagingService.buildNotificationId(toUsername, chatUrl, senderLabel);
     }
+    if (toUsername.isEmpty()) {
+      toUsername = NotificationReplyStore.getToUsername(context, notificationId);
+    }
+    if (pushToken.isEmpty()) {
+      pushToken = NotificationReplyStore.getPushToken(context, notificationId);
+    }
+    if (chatUrl.isEmpty()) {
+      chatUrl = NotificationReplyStore.getChatUrl(context, notificationId);
+    }
+    if (senderLabel.isEmpty()) {
+      senderLabel = NotificationReplyStore.getSenderLabel(context, notificationId);
+    }
     final int resolvedNotificationId = notificationId;
+    final String resolvedToUsername = toUsername;
+    final String resolvedPushToken = pushToken;
+    final String resolvedChatUrl = chatUrl;
+    final String resolvedSenderLabel = senderLabel;
 
     NotificationManager notificationManager = context.getSystemService(NotificationManager.class);
     if (notificationManager != null && resolvedNotificationId != 0) {
-      replaceNotification(notificationManager, resolvedNotificationId, buildStatusNotification(context, senderLabel, chatUrl, "Sending reply..."));
+      replaceNotification(notificationManager, resolvedNotificationId, buildStatusNotification(context, resolvedSenderLabel, resolvedChatUrl, "Sending reply..."));
     }
 
     PendingResult pendingResult = goAsync();
     Context appContext = context.getApplicationContext();
     new Thread(() -> {
       try {
-        ReplyResult result = postReply(appContext, pushToken, toUsername, message);
+        ReplyResult result = postReply(appContext, resolvedPushToken, resolvedToUsername, message);
         NotificationManager manager = appContext.getSystemService(NotificationManager.class);
         if (manager != null) {
           if (result.success()) {
-            replaceNotification(manager, resolvedNotificationId, buildStatusNotification(appContext, senderLabel, chatUrl, "Reply sent"));
+            NotificationReplyStore.clear(appContext, resolvedNotificationId);
+            replaceNotification(manager, resolvedNotificationId, buildStatusNotification(appContext, resolvedSenderLabel, resolvedChatUrl, "Reply sent"));
           } else {
-            replaceNotification(manager, resolvedNotificationId, buildStatusNotification(appContext, senderLabel, chatUrl, result.userMessage()));
+            replaceNotification(manager, resolvedNotificationId, buildStatusNotification(appContext, resolvedSenderLabel, resolvedChatUrl, result.userMessage()));
           }
         }
       } finally {

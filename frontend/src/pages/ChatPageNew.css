@@ -2294,7 +2294,7 @@
 }
 
 .chat-container .message-content {
-  max-width: min(72%, 560px);
+  max-width: min(85%, 560px);
   padding: 0.55rem 0.75rem;
 }
 
