@@ -44,7 +44,7 @@
 }
 
 .app-toast-container.Toastify__toast-container {
-  --app-toast-width: min(88vw, 260px);
+  --app-toast-width: min(260px, calc(100vw - 32px));
   width: var(--app-toast-width) !important;
   max-width: var(--app-toast-width) !important;
   padding: 0;
@@ -64,6 +64,7 @@
 .app-toast {
   margin: 0 !important;
   width: 100% !important;
+  max-width: var(--app-toast-width) !important;
   min-height: 0;
   border-radius: 14px !important;
   border: 1px solid rgba(255, 160, 196, 0.2);
@@ -105,7 +106,7 @@
 
 @media only screen and (max-width: 480px) {
   .app-toast-container.Toastify__toast-container {
-    --app-toast-width: min(88vw, 260px);
+    --app-toast-width: min(260px, calc(100vw - 32px));
     width: var(--app-toast-width) !important;
     max-width: var(--app-toast-width) !important;
     top: 16px !important;
