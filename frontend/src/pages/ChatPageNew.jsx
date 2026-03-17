@@ -3560,6 +3560,11 @@ function ChatPageNew() {
     scrollToMessageKey(targetKey, 'smooth')
   }
 
+  const blockReplyReferenceGesture = (event) => {
+    if (!event) return
+    event.stopPropagation()
+  }
+
   const handleDeleteMessage = (message) => {
     if (!selectedUser || !message) return
     setPendingDeleteMessage(message)
@@ -4030,7 +4035,14 @@ function ChatPageNew() {
       const plainContent = <>{renderTextWithLinks(toReplyText(reply))}</>
       if (!canJumpToReply) return plainContent
       return (
-        <button type="button" className="reply-reference-button" onClick={(event) => handleReplyReferenceJump(event, reply)}>
+        <button
+          type="button"
+          className="reply-reference-button"
+          onPointerDown={blockReplyReferenceGesture}
+          onTouchStart={blockReplyReferenceGesture}
+          onMouseDown={blockReplyReferenceGesture}
+          onClick={(event) => handleReplyReferenceJump(event, reply)}
+        >
           {plainContent}
         </button>
       )
@@ -4064,7 +4076,14 @@ function ChatPageNew() {
     )
     if (!canJumpToReply) return mediaContent
     return (
-      <button type="button" className="reply-reference-button" onClick={(event) => handleReplyReferenceJump(event, reply)}>
+      <button
+        type="button"
+        className="reply-reference-button"
+        onPointerDown={blockReplyReferenceGesture}
+        onTouchStart={blockReplyReferenceGesture}
+        onMouseDown={blockReplyReferenceGesture}
+        onClick={(event) => handleReplyReferenceJump(event, reply)}
+      >
         {mediaContent}
       </button>
     )
