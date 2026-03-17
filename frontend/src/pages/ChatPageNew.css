@@ -1862,11 +1862,11 @@
   }
 
   .message-content {
-    max-width: calc(100% - 10px);
+    max-width: calc(100% - 14px);
   }
 
   .chat-container .message-content {
-    max-width: calc(100% - 10px);
+    max-width: calc(100% - 14px);
   }
 
   .chat-container .message-content.has-media {
