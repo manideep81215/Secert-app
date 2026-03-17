@@ -505,6 +505,37 @@
   padding: 0.2rem 0.55rem;
 }
 
+.scroll-to-latest-btn {
+  position: sticky;
+  align-self: flex-end;
+  bottom: 1rem;
+  margin-top: auto;
+  margin-right: 0.35rem;
+  width: 2.7rem;
+  height: 2.7rem;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #f59f00 0%, #f76707 100%);
+  color: #fffdf5;
+  font-size: 1.35rem;
+  font-weight: 900;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow: 0 14px 26px rgba(166, 90, 8, 0.28);
+  z-index: 4;
+}
+
+.scroll-to-latest-btn:hover {
+  transform: translateY(-1px);
+}
+
+.scroll-to-latest-btn:focus-visible {
+  outline: 2px solid rgba(255, 244, 214, 0.95);
+  outline-offset: 2px;
+}
+
 .message {
   display: flex;
   align-items: flex-end;
@@ -513,6 +544,11 @@
   cursor: grab;
   width: 100%;
   touch-action: pan-y;
+}
+
+.message.highlighted .message-content {
+  box-shadow: 0 0 0 3px rgba(255, 191, 71, 0.85), 0 14px 28px rgba(130, 88, 26, 0.18);
+  transition: box-shadow 0.28s ease;
 }
 
 .message:active {
@@ -609,6 +645,28 @@
   opacity: 0.9;
   font-style: italic;
 }
+
+.reply-reference-button {
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.reply-reference-button:hover {
+  opacity: 0.92;
+}
+
+.reply-reference-button:focus-visible {
+  outline: 2px solid rgba(77, 121, 255, 0.7);
+  outline-offset: 3px;
+  border-radius: 12px;
+}
+
 .reply-media-preview {
   display: inline-flex;
   align-items: center;

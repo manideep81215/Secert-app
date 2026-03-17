@@ -143,6 +143,8 @@ function ChatPageNew() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [pendingDeleteMessage, setPendingDeleteMessage] = useState(null)
   const [videoThumbMap, setVideoThumbMap] = useState({})
+  const [showScrollToLatest, setShowScrollToLatest] = useState(false)
+  const [highlightedMessageKey, setHighlightedMessageKey] = useState('')
   const [checkPopup, setCheckPopup] = useState({ username: null, count: 0 })
   const [notificationPermission, setNotificationPermission] = useState(
     getNotificationPermissionState()
@@ -196,6 +198,10 @@ function ChatPageNew() {
   const keyboardSettleUntilRef = useRef(0)
   const syncKeyboardLayoutRef = useRef(() => {})
   const conversationCacheRef = useRef({})
+  const messagesRef = useRef([])
+  const hasOlderMessagesRef = useRef(false)
+  const messageNodeMapRef = useRef({})
+  const highlightClearTimerRef = useRef(null)
   const CLEAR_CUTOFFS_KEY = 'chat_clear_cutoffs_v1'
   const USERS_CACHE_KEY_PREFIX = 'chat_users_cache_v1:'
   const CONVERSATION_CACHE_KEY_PREFIX = 'chat_conversation_cache_v1:'
@@ -318,6 +324,7 @@ function ChatPageNew() {
           ? {
               text: row.replyText,
               senderName: row.replySenderName || row.senderName,
+              messageId: row.replyMessageId || null,
               type: row.replyType || null,
               mediaUrl: normalizeMediaUrl(row.replyMediaUrl || null),
               mimeType: row.replyMimeType || null,
@@ -488,6 +495,7 @@ function ChatPageNew() {
     return {
       text: toReplyText(reply),
       senderName: reply.senderName || '',
+      messageId: reply.messageId || null,
       type: reply.type || null,
       mediaUrl: normalizeMediaUrl(reply.mediaUrl || null),
       mimeType: reply.mimeType || null,
@@ -599,6 +607,74 @@ function ChatPageNew() {
   }
   const isSameMessage = (message, key) => getMessageEditKey(message) === key
   const getMessageUiKey = (message, index) => getMessageEditKey(message) || `${index}-${message?.createdAt || message?.timestamp || 'x'}-${message?.sender || 'u'}`
+  const setMessageNodeRef = (messageKey, node) => {
+    if (!messageKey) return
+    if (node) {
+      messageNodeMapRef.current[messageKey] = node
+      return
+    }
+    delete messageNodeMapRef.current[messageKey]
+  }
+  const updateScrollToLatestVisibility = () => {
+    const listEl = messagesAreaRef.current
+    if (!listEl) {
+      setShowScrollToLatest(false)
+      return
+    }
+    const top = Number(listEl.scrollTop || 0)
+    const height = Number(listEl.clientHeight || 0)
+    const full = Number(listEl.scrollHeight || 0)
+    const distanceFromBottom = Math.max(0, full - (top + height))
+    setShowScrollToLatest(distanceFromBottom > AUTO_SCROLL_BOTTOM_THRESHOLD)
+  }
+  const findReplyTargetKey = (reply) => {
+    if (!reply) return ''
+    const targetMessageId = Number(reply.messageId || 0)
+    const replyText = String(reply.text || '').trim()
+    const replyType = String(reply.type || '').trim().toLowerCase()
+    const replyMediaUrl = normalizeMediaUrl(reply.mediaUrl || null)
+    const replyFileName = String(reply.fileName || '').trim()
+    const replySenderName = toUserKey(reply.senderName || '')
+    for (let index = messagesRef.current.length - 1; index >= 0; index -= 1) {
+      const message = messagesRef.current[index]
+      if (!message) continue
+      if (targetMessageId > 0 && Number(message.messageId || 0) === targetMessageId) {
+        return getMessageUiKey(message, index)
+      }
+      const sameType = String(message.type || '').trim().toLowerCase() === replyType
+      const sameMedia = normalizeMediaUrl(message.mediaUrl || null) === replyMediaUrl
+      const sameFile = String(message.fileName || '').trim() === replyFileName
+      const sameText = String(message.text || '').trim() === replyText
+      const sameSender = toUserKey(message.senderName || '') === replySenderName
+      if (sameSender && ((sameMedia && sameType) || (sameFile && sameType) || sameText)) {
+        return getMessageUiKey(message, index)
+      }
+    }
+    return ''
+  }
+  const highlightMessageKey = (messageKey) => {
+    if (!messageKey) return
+    if (highlightClearTimerRef.current) {
+      clearTimeout(highlightClearTimerRef.current)
+    }
+    setHighlightedMessageKey(messageKey)
+    highlightClearTimerRef.current = setTimeout(() => {
+      setHighlightedMessageKey((current) => (current === messageKey ? '' : current))
+      highlightClearTimerRef.current = null
+    }, 1800)
+  }
+  const scrollToMessageKey = (messageKey, behavior = 'smooth') => {
+    if (!messageKey) return false
+    const node = messageNodeMapRef.current[messageKey]
+    if (!node) return false
+    try {
+      node.scrollIntoView({ behavior, block: 'center' })
+    } catch {
+      node.scrollIntoView()
+    }
+    highlightMessageKey(messageKey)
+    return true
+  }
   const prependOlderMessages = (olderRows, currentRows) => {
     if (!Array.isArray(olderRows) || !olderRows.length) return currentRows || []
     if (!Array.isArray(currentRows) || !currentRows.length) return olderRows
@@ -945,6 +1021,14 @@ function ChatPageNew() {
   useEffect(() => {
     selectedUserRef.current = selectedUser
   }, [selectedUser])
+
+  useEffect(() => {
+    messagesRef.current = messages || []
+  }, [messages])
+
+  useEffect(() => {
+    hasOlderMessagesRef.current = Boolean(hasOlderMessages)
+  }, [hasOlderMessages])
 
   useEffect(() => {
     statusMapRef.current = statusMap || {}
@@ -1659,6 +1743,7 @@ function ChatPageNew() {
       shouldAutoScrollToBottomRef.current = true
       setMessages([])
       setHasOlderMessages(false)
+      hasOlderMessagesRef.current = false
       setIsLoadingOlderMessages(false)
       loadingOlderMessagesRef.current = false
       nextConversationPageRef.current = 1
@@ -1675,6 +1760,7 @@ function ChatPageNew() {
     setIsLoadingOlderMessages(false)
     loadingOlderMessagesRef.current = false
     setHasOlderMessages(Boolean(cachedRows?.length >= CONVERSATION_PAGE_SIZE))
+    hasOlderMessagesRef.current = Boolean(cachedRows?.length >= CONVERSATION_PAGE_SIZE)
     nextConversationPageRef.current = 1
     if (Array.isArray(cachedRows) && cachedRows.length) {
       setMessages((prev) => {
@@ -1708,6 +1794,7 @@ function ChatPageNew() {
           return [...normalized, ...pendingUploads]
         })
         setHasOlderMessages(Boolean(result?.hasMore))
+        hasOlderMessagesRef.current = Boolean(result?.hasMore)
         nextConversationPageRef.current = 1
         const latestIncoming = normalized
           .filter((msg) => msg.sender === 'other')
@@ -1758,7 +1845,7 @@ function ChatPageNew() {
 
   const loadOlderMessages = async () => {
     if (!selectedUser || !flow.token) return
-    if (!hasOlderMessages || loadingOlderMessagesRef.current) return
+    if (!hasOlderMessagesRef.current || loadingOlderMessagesRef.current) return
 
     const targetUsername = selectedUser.username
     const targetKey = toUserKey(targetUsername)
@@ -1781,15 +1868,17 @@ function ChatPageNew() {
       const olderRows = normalizeConversationRows(result?.messages || [], clearCutoff)
       setMessages((prev) => prependOlderMessages(olderRows, prev))
       setHasOlderMessages(Boolean(result?.hasMore))
+      hasOlderMessagesRef.current = Boolean(result?.hasMore)
       nextConversationPageRef.current = pageToLoad + 1
 
-      if (listEl) {
-        window.requestAnimationFrame(() => {
-          const updatedHeight = Number(listEl.scrollHeight || 0)
-          const delta = Math.max(0, updatedHeight - previousScrollHeight)
-          listEl.scrollTop = previousScrollTop + delta
-        })
-      }
+        if (listEl) {
+          window.requestAnimationFrame(() => {
+            const updatedHeight = Number(listEl.scrollHeight || 0)
+            const delta = Math.max(0, updatedHeight - previousScrollHeight)
+            listEl.scrollTop = previousScrollTop + delta
+            updateScrollToLatestVisibility()
+          })
+        }
     } catch {
       notify.warn('Failed to load older messages. Scroll up to retry.')
     } finally {
@@ -1867,6 +1956,13 @@ function ChatPageNew() {
     if (!shouldAutoScrollToBottomRef.current) return
     scrollMessagesToBottom('auto')
   }, [messages])
+
+  useEffect(() => {
+    const rafId = window.requestAnimationFrame(() => {
+      updateScrollToLatestVisibility()
+    })
+    return () => window.cancelAnimationFrame(rafId)
+  }, [messages, selectedUser?.username])
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined
@@ -2056,6 +2152,7 @@ function ChatPageNew() {
                 ? {
                     text: data.replyText,
                     senderName: data?.replySenderName || fromUsername,
+                    messageId: data?.replyMessageId || null,
                     type: data?.replyType || null,
                     mediaUrl: normalizeMediaUrl(data?.replyMediaUrl || null),
                     mimeType: data?.replyMimeType || null,
@@ -2573,6 +2670,8 @@ function ChatPageNew() {
 
   const scrollMessagesToBottom = (behavior = 'auto') => {
     shouldAutoScrollToBottomRef.current = true
+    setHighlightedMessageKey('')
+    setShowScrollToLatest(false)
     const listEl = messagesAreaRef.current
     if (listEl) {
       try {
@@ -2608,6 +2707,13 @@ function ChatPageNew() {
       URL.revokeObjectURL(pendingImagePreview.url)
     }
   }, [pendingImagePreview?.url])
+
+  useEffect(() => () => {
+    if (highlightClearTimerRef.current) {
+      clearTimeout(highlightClearTimerRef.current)
+      highlightClearTimerRef.current = null
+    }
+  }, [])
 
   const publishTyping = (typing, force = false, targetUsername = null) => {
     const toUsername = (targetUsername || selectedUser?.username || '').trim()
@@ -2914,6 +3020,7 @@ function ChatPageNew() {
           replyingTo: buildReplyPayload(replyingTo),
           replyText: toReplyText(replyingTo) || null,
           replySenderName: replyingTo?.senderName || null,
+          replyMessageId: replyingTo?.messageId || null,
           replyType: replyingTo?.type || null,
           replyMediaUrl: normalizeMediaUrl(replyingTo?.mediaUrl || null),
           replyMimeType: replyingTo?.mimeType || null,
@@ -2962,6 +3069,7 @@ function ChatPageNew() {
     const full = Number(listEl.scrollHeight || 0)
     const distanceFromBottom = Math.max(0, full - (top + height))
     shouldAutoScrollToBottomRef.current = distanceFromBottom <= AUTO_SCROLL_BOTTOM_THRESHOLD
+    setShowScrollToLatest(distanceFromBottom > AUTO_SCROLL_BOTTOM_THRESHOLD)
 
     if (!hasOlderMessages || isLoadingOlderMessages) return
     if (Number(listEl.scrollTop || 0) <= CONVERSATION_SCROLL_TOP_THRESHOLD) {
@@ -3158,6 +3266,7 @@ function ChatPageNew() {
           replyingTo: buildReplyPayload(currentReply),
           replyText: toReplyText(currentReply) || null,
           replySenderName: currentReply?.senderName || null,
+          replyMessageId: currentReply?.messageId || null,
           replyType: currentReply?.type || null,
           replyMediaUrl: normalizeMediaUrl(currentReply?.mediaUrl || null),
           replyMimeType: currentReply?.mimeType || null,
@@ -3356,6 +3465,7 @@ function ChatPageNew() {
         replyingTo: buildReplyPayload(message.replyingTo),
         replyText: toReplyText(message.replyingTo) || null,
         replySenderName: message.replyingTo?.senderName || null,
+        replyMessageId: message.replyingTo?.messageId || null,
         replyType: message.replyingTo?.type || null,
         replyMediaUrl: normalizeMediaUrl(message.replyingTo?.mediaUrl || null),
         replyMimeType: message.replyingTo?.mimeType || null,
@@ -3391,6 +3501,30 @@ function ChatPageNew() {
     setEditingMessage(null)
     setReplyingTo(message)
     setActiveMessageActionsKey(null)
+  }
+
+  const handleReplyReferenceJump = async (event, reply) => {
+    event.preventDefault()
+    event.stopPropagation()
+    if (!reply || !selectedUser) return
+
+    let targetKey = findReplyTargetKey(reply)
+    let attempts = MISSED_SCAN_PAGE_LIMIT
+
+    while (!targetKey && hasOlderMessagesRef.current && attempts > 0) {
+      attempts -= 1
+      await loadOlderMessages()
+      await new Promise((resolve) => window.requestAnimationFrame(resolve))
+      targetKey = findReplyTargetKey(reply)
+    }
+
+    if (!targetKey) {
+      notify.info('Original message could not be found in this chat.')
+      return
+    }
+
+    shouldAutoScrollToBottomRef.current = false
+    scrollToMessageKey(targetKey, 'smooth')
   }
 
   const handleDeleteMessage = (message) => {
@@ -3855,26 +3989,51 @@ function ChatPageNew() {
     const replyType = String(reply.type || '').toLowerCase()
     const replyMediaUrl = normalizeMediaUrl(reply.mediaUrl || null)
     const canPreviewMedia = (replyType === 'image' || replyType === 'video') && Boolean(replyMediaUrl)
+    const canJumpToReply = scope === 'bubble' && Boolean(
+      reply.messageId || reply.text || reply.mediaUrl || reply.fileName
+    )
 
     if (!canPreviewMedia) {
-      return <>{renderTextWithLinks(toReplyText(reply))}</>
+      const plainContent = <>{renderTextWithLinks(toReplyText(reply))}</>
+      if (!canJumpToReply) return plainContent
+      return (
+        <button type="button" className="reply-reference-button" onClick={(event) => handleReplyReferenceJump(event, reply)}>
+          {plainContent}
+        </button>
+      )
     }
 
     const videoThumb = replyType === 'video' ? (videoThumbMap[replyMediaUrl] || null) : null
-    return (
+    const mediaContent = (
       <span className={`reply-media-preview ${scope}`}>
         <span className={`reply-media-thumb ${replyType}`}>
           {replyType === 'image' ? (
-            <img src={replyMediaUrl} alt="Replied media" loading="lazy" />
+            <img
+              src={replyMediaUrl}
+              alt={reply.fileName || toReplyText(reply) || 'Replied image'}
+              loading="lazy"
+            />
           ) : (
             <>
-              {videoThumb ? <img src={videoThumb} alt="Replied video" loading="lazy" /> : <span className="reply-video-fallback">{icons.video}</span>}
+              {videoThumb ? (
+                <img
+                  src={videoThumb}
+                  alt={reply.fileName || toReplyText(reply) || 'Replied video'}
+                  loading="lazy"
+                />
+              ) : <span className="reply-video-fallback">{icons.video}</span>}
               <span className="reply-video-pill">Video</span>
             </>
           )}
         </span>
-        <span className="reply-media-caption">{replyType === 'image' ? 'Photo' : 'Video'}</span>
+        <span className="reply-media-caption">{reply.fileName || (replyType === 'image' ? 'Photo' : 'Video')}</span>
       </span>
+    )
+    if (!canJumpToReply) return mediaContent
+    return (
+      <button type="button" className="reply-reference-button" onClick={(event) => handleReplyReferenceJump(event, reply)}>
+        {mediaContent}
+      </button>
     )
   }
 
@@ -4059,7 +4218,8 @@ function ChatPageNew() {
               return (
               <div
                 key={messageKey}
-                className={`message ${message.sender}`}
+                className={`message ${message.sender} ${highlightedMessageKey === messageKey ? 'highlighted' : ''}`}
+                ref={(node) => setMessageNodeRef(messageKey, node)}
                 draggable={!isTouchDevice}
                 onDragStart={(event) => handleDragStart(event, message)}
                 onDragEnd={handleDragEnd}
@@ -4141,7 +4301,8 @@ function ChatPageNew() {
                 return (
                 <motion.div
                   key={messageKey}
-                  className={`message ${message.sender}`}
+                  className={`message ${message.sender} ${highlightedMessageKey === messageKey ? 'highlighted' : ''}`}
+                  ref={(node) => setMessageNodeRef(messageKey, node)}
                   draggable={!isTouchDevice}
                   onDragStart={(event) => handleDragStart(event, message)}
                   onDragEnd={handleDragEnd}
@@ -4232,6 +4393,23 @@ function ChatPageNew() {
                   <span />
                 </div>
               </motion.div>
+            )}
+          </AnimatePresence>
+          <AnimatePresence>
+            {selectedUser && showScrollToLatest && (
+              <motion.button
+                type="button"
+                className="scroll-to-latest-btn"
+                initial={{ opacity: 0, y: 18, scale: 0.92 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 18, scale: 0.92 }}
+                transition={{ duration: 0.18 }}
+                onClick={() => scrollMessagesToBottom('smooth')}
+                aria-label="Jump to latest message"
+                title="Latest message"
+              >
+                ↓
+              </motion.button>
             )}
           </AnimatePresence>
           <div ref={messagesEndRef} />

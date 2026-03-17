@@ -1,5 +1,12 @@
 apply plugin: 'com.android.application'
 
+def envProps = new Properties()
+def envFile = rootProject.file('../../.env')
+if (envFile.exists()) {
+    envFile.withInputStream { stream -> envProps.load(stream) }
+}
+def apiBaseUrl = (envProps.getProperty('VITE_API_BASE_URL', '') ?: '').trim()
+
 android {
     namespace "com.simpgames.quest"
     compileSdk rootProject.ext.compileSdkVersion
@@ -15,6 +22,7 @@ android {
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
+        buildConfigField "String", "CHAT_API_BASE_URL", "\"${apiBaseUrl.replace('\\', '\\\\').replace('\"', '\\\"')}\""
     }
     buildTypes {
         release {

@@ -52,6 +52,22 @@ public class ChatMessageEntity {
   @Column(length = 60)
   private String replySenderName;
 
+  @Column
+  private Long replyMessageId;
+
+  @Column(length = 20)
+  private String replyType;
+
+  @Lob
+  @Column(columnDefinition = "LONGTEXT")
+  private String replyMediaUrl;
+
+  @Column(length = 120)
+  private String replyMimeType;
+
+  @Column(length = 255)
+  private String replyFileName;
+
   @Column(nullable = false, updatable = false)
   private Instant createdAt;
 
@@ -150,6 +166,46 @@ public class ChatMessageEntity {
 
   public void setReplySenderName(String replySenderName) {
     this.replySenderName = replySenderName;
+  }
+
+  public Long getReplyMessageId() {
+    return replyMessageId;
+  }
+
+  public void setReplyMessageId(Long replyMessageId) {
+    this.replyMessageId = replyMessageId;
+  }
+
+  public String getReplyType() {
+    return replyType;
+  }
+
+  public void setReplyType(String replyType) {
+    this.replyType = replyType;
+  }
+
+  public String getReplyMediaUrl() {
+    return replyMediaUrl;
+  }
+
+  public void setReplyMediaUrl(String replyMediaUrl) {
+    this.replyMediaUrl = replyMediaUrl;
+  }
+
+  public String getReplyMimeType() {
+    return replyMimeType;
+  }
+
+  public void setReplyMimeType(String replyMimeType) {
+    this.replyMimeType = replyMimeType;
+  }
+
+  public String getReplyFileName() {
+    return replyFileName;
+  }
+
+  public void setReplyFileName(String replyFileName) {
+    this.replyFileName = replyFileName;
   }
 
   public Instant getCreatedAt() {

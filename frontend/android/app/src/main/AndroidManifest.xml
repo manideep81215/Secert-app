@@ -36,6 +36,18 @@
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
 
+        <service
+            android:name=".ChatPushMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <receiver
+            android:name=".NotificationReplyReceiver"
+            android:exported="false" />
+
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
             android:resource="@drawable/ic_stat_simp_games" />

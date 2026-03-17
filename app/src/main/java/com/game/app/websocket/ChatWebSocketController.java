@@ -115,6 +115,11 @@ public class ChatWebSocketController {
     entity.setMimeType(payload.mimeType());
     entity.setReplyText(payload.replyingTo() != null ? payload.replyingTo().text() : payload.replyText());
     entity.setReplySenderName(payload.replyingTo() != null ? payload.replyingTo().senderName() : payload.replySenderName());
+    entity.setReplyMessageId(payload.replyingTo() != null ? payload.replyingTo().messageId() : payload.replyMessageId());
+    entity.setReplyType(payload.replyingTo() != null ? payload.replyingTo().type() : payload.replyType());
+    entity.setReplyMediaUrl(payload.replyingTo() != null ? payload.replyingTo().mediaUrl() : payload.replyMediaUrl());
+    entity.setReplyMimeType(payload.replyingTo() != null ? payload.replyingTo().mimeType() : payload.replyMimeType());
+    entity.setReplyFileName(payload.replyingTo() != null ? payload.replyingTo().fileName() : payload.replyFileName());
     entity = chatMessageRepository.save(entity);
     Instant receiverOfflineAt = isUserConnected(normalizedTo) && isPresenceAlive(normalizedTo, Instant.now().toEpochMilli())
         ? null
@@ -140,9 +145,21 @@ public class ChatWebSocketController {
             entity.getReaction(),
             payload.replyingTo() != null
                 ? payload.replyingTo()
-                : buildReplyPreview(payload.replyText(), payload.replySenderName()),
+                : buildReplyPreview(
+                    payload.replyText(),
+                    payload.replySenderName(),
+                    payload.replyMessageId(),
+                    payload.replyType(),
+                    payload.replyMediaUrl(),
+                    payload.replyMimeType(),
+                    payload.replyFileName()),
             payload.replyText(),
             payload.replySenderName(),
+            payload.replyMessageId(),
+            payload.replyType(),
+            payload.replyMediaUrl(),
+            payload.replyMimeType(),
+            payload.replyFileName(),
             entity.getCreatedAt() != null ? entity.getCreatedAt().toEpochMilli() : Instant.now().toEpochMilli(),
             entity.isEdited(),
             entity.getEditedAt() != null ? entity.getEditedAt().toEpochMilli() : null));
@@ -549,11 +566,22 @@ public class ChatWebSocketController {
     }
   }
 
-  private ReplyPreview buildReplyPreview(String replyText, String replySenderName) {
-    if (replyText == null || replyText.isBlank()) {
+  private ReplyPreview buildReplyPreview(
+      String replyText,
+      String replySenderName,
+      Long replyMessageId,
+      String replyType,
+      String replyMediaUrl,
+      String replyMimeType,
+      String replyFileName) {
+    if ((replyText == null || replyText.isBlank())
+        && replyMessageId == null
+        && (replyType == null || replyType.isBlank())
+        && (replyMediaUrl == null || replyMediaUrl.isBlank())
+        && (replyFileName == null || replyFileName.isBlank())) {
       return null;
     }
-    return new ReplyPreview(replyText, replySenderName);
+    return new ReplyPreview(replyText, replySenderName, replyMessageId, replyType, replyMediaUrl, replyMimeType, replyFileName);
   }
 
   private String normalizeUsername(String username) {
@@ -597,7 +625,12 @@ public class ChatWebSocketController {
       String mimeType,
       ReplyPreview replyingTo,
       String replyText,
-      String replySenderName) {}
+      String replySenderName,
+      Long replyMessageId,
+      String replyType,
+      String replyMediaUrl,
+      String replyMimeType,
+      String replyFileName) {}
 
   public record IncomingMessage(
       Long id,
@@ -611,11 +644,23 @@ public class ChatWebSocketController {
       ReplyPreview replyingTo,
       String replyText,
       String replySenderName,
+      Long replyMessageId,
+      String replyType,
+      String replyMediaUrl,
+      String replyMimeType,
+      String replyFileName,
       Long createdAt,
       Boolean edited,
       Long editedAt) {}
 
-  public record ReplyPreview(String text, String senderName) {}
+  public record ReplyPreview(
+      String text,
+      String senderName,
+      Long messageId,
+      String type,
+      String mediaUrl,
+      String mimeType,
+      String fileName) {}
 
   public record UserStatusMessage(String username) {}
 

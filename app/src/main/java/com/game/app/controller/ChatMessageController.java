@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.time.Instant;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -21,18 +22,26 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 import com.game.app.model.ChatMessageEntity;
 import com.game.app.model.ChatMediaEntity;
+import com.game.app.model.MobilePushTokenEntity;
 import com.game.app.model.UserEntity;
 import com.game.app.repository.ChatMessageRepository;
 import com.game.app.repository.ChatMediaRepository;
+import com.game.app.repository.MobilePushTokenRepository;
 import com.game.app.repository.UserRepository;
+import com.game.app.service.ChatAnalyticsService;
+import com.game.app.service.ChatCheckEventService;
 import com.game.app.service.JwtTokenService;
+import com.game.app.service.PushNotificationService;
+import com.game.app.websocket.ChatWebSocketController;
 
 @RestController
 @RequestMapping("/api/app/messages")
@@ -42,14 +51,29 @@ public class ChatMessageController {
   private final ChatMediaRepository chatMediaRepository;
   private final UserRepository userRepository;
   private final JwtTokenService jwtTokenService;
+  private final MobilePushTokenRepository mobilePushTokenRepository;
+  private final PushNotificationService pushNotificationService;
+  private final ChatAnalyticsService chatAnalyticsService;
+  private final ChatCheckEventService chatCheckEventService;
+  private final SimpMessagingTemplate messagingTemplate;
 
   public ChatMessageController(ChatMessageRepository chatMessageRepository, ChatMediaRepository chatMediaRepository,
       UserRepository userRepository,
-      JwtTokenService jwtTokenService) {
+      JwtTokenService jwtTokenService,
+      MobilePushTokenRepository mobilePushTokenRepository,
+      PushNotificationService pushNotificationService,
+      ChatAnalyticsService chatAnalyticsService,
+      ChatCheckEventService chatCheckEventService,
+      SimpMessagingTemplate messagingTemplate) {
     this.chatMessageRepository = chatMessageRepository;
     this.chatMediaRepository = chatMediaRepository;
     this.userRepository = userRepository;
     this.jwtTokenService = jwtTokenService;
+    this.mobilePushTokenRepository = mobilePushTokenRepository;
+    this.pushNotificationService = pushNotificationService;
+    this.chatAnalyticsService = chatAnalyticsService;
+    this.chatCheckEventService = chatCheckEventService;
+    this.messagingTemplate = messagingTemplate;
   }
 
   @GetMapping("/conversation")
@@ -196,6 +220,80 @@ public class ChatMessageController {
     return response.body(data);
   }
 
+  @PostMapping("/notification-reply")
+  public NotificationReplyResponse replyFromNotification(@RequestBody NotificationReplyRequest request) {
+    String mobilePushToken = request != null ? normalizePushToken(request.mobilePushToken()) : "";
+    String toUsername = request != null ? normalizeUsername(request.toUsername()) : "";
+    String text = request != null && request.message() != null ? request.message().trim() : "";
+
+    if (mobilePushToken.isBlank() || toUsername.isBlank() || text.isBlank()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Notification reply requires token, recipient, and message");
+    }
+    if (text.length() > 4000) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Reply is too long");
+    }
+
+    MobilePushTokenEntity pushToken = mobilePushTokenRepository.findByToken(mobilePushToken)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unknown mobile push token"));
+
+    String fromUsername = normalizeUsername(pushToken.getUsername());
+    if (fromUsername.isBlank()) {
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Push token is not linked to a user");
+    }
+    if (fromUsername.equalsIgnoreCase(toUsername)) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot send notification reply to yourself");
+    }
+
+    requireChatUser(fromUsername);
+    requireChatUser(toUsername);
+
+    ChatMessageEntity entity = new ChatMessageEntity();
+    entity.setFromUsername(fromUsername);
+    entity.setToUsername(toUsername);
+    entity.setMessage(text);
+    entity.setType("text");
+    entity = chatMessageRepository.save(entity);
+
+    Instant createdAt = entity.getCreatedAt() != null ? entity.getCreatedAt() : Instant.now();
+    chatCheckEventService.trackOutgoingMessage(fromUsername, toUsername, null);
+    try {
+      chatAnalyticsService.recordMessage(fromUsername, toUsername, entity.getType(), createdAt);
+    } catch (Exception ignored) {
+      // Keep notification reply delivery non-blocking if analytics write fails.
+    }
+
+    messagingTemplate.convertAndSendToUser(
+        toUsername,
+        "/queue/messages",
+        new ChatWebSocketController.IncomingMessage(
+            entity.getId(),
+            fromUsername,
+            entity.getMessage(),
+            entity.getType(),
+            entity.getFileName(),
+            entity.getMediaUrl(),
+            entity.getMimeType(),
+            entity.getReaction(),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            createdAt.toEpochMilli(),
+            entity.isEdited(),
+            entity.getEditedAt() != null ? entity.getEditedAt().toEpochMilli() : null));
+
+    pushNotificationService.notifyUser(
+        toUsername,
+        "@" + fromUsername,
+        text,
+        "/#/chat?with=" + fromUsername);
+
+    return new NotificationReplyResponse(true, entity.getId(), createdAt.toEpochMilli());
+  }
+
   private ConversationMessageDto toDto(ChatMessageEntity row, String meUsername) {
     boolean isSender = meUsername.equalsIgnoreCase(row.getFromUsername());
     return new ConversationMessageDto(
@@ -212,7 +310,12 @@ public class ChatMessageController {
         row.isEdited(),
         row.getEditedAt() != null ? row.getEditedAt().toEpochMilli() : null,
         row.getReplyText(),
-        row.getReplySenderName());
+        row.getReplySenderName(),
+        row.getReplyMessageId(),
+        row.getReplyType(),
+        row.getReplyMediaUrl(),
+        row.getReplyMimeType(),
+        row.getReplyFileName());
   }
 
   private UserEntity requireAuthUser(String authHeader) {
@@ -227,6 +330,20 @@ public class ChatMessageController {
 
   private String normalizeUsername(String username) {
     return username == null ? "" : username.trim().toLowerCase();
+  }
+
+  private String normalizePushToken(String token) {
+    return token == null ? "" : token.trim();
+  }
+
+  private UserEntity requireChatUser(String username) {
+    String normalized = normalizeUsername(username);
+    UserEntity user = userRepository.findByUsername(normalized)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found"));
+    if (!"chat".equalsIgnoreCase(user.getRole())) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Chat access is allowed only for chat role users");
+    }
+    return user;
   }
 
   private String normalizeMimeType(String contentType, String originalFilename) {
@@ -266,7 +383,12 @@ public class ChatMessageController {
       Boolean edited,
       Long editedAt,
       String replyText,
-      String replySenderName) {
+      String replySenderName,
+      Long replyMessageId,
+      String replyType,
+      String replyMediaUrl,
+      String replyMimeType,
+      String replyFileName) {
   }
 
   public record ConversationPageDto(
@@ -282,6 +404,18 @@ public class ChatMessageController {
       String text,
       String type,
       String fileName,
+      Long createdAt) {
+  }
+
+  public record NotificationReplyRequest(
+      String mobilePushToken,
+      String toUsername,
+      String message) {
+  }
+
+  public record NotificationReplyResponse(
+      boolean success,
+      Long messageId,
       Long createdAt) {
   }
 

@@ -387,22 +387,41 @@ public class PushNotificationService {
 
   private boolean sendToMobileToken(FirebaseMessaging messaging, MobilePushTokenEntity token, String title, String body, String url) {
     try {
-      Message message = Message.builder()
+      String normalizedPlatform = normalizePlatform(token.getPlatform());
+      String safeTitle = title != null ? title : "";
+      String safeBody = body != null ? body : "";
+      String safeUrl = url != null ? url : "/#/chat";
+      String peerUsername = extractPeerUsernameFromUrl(safeUrl);
+
+      AndroidConfig.Builder androidConfig = AndroidConfig.builder()
+          .setPriority(AndroidConfig.Priority.HIGH)
+          .setTtl(FCM_TTL_MILLIS);
+      if (!"android".equals(normalizedPlatform)) {
+        androidConfig.setNotification(AndroidNotification.builder()
+            .setChannelId(FCM_ANDROID_CHANNEL_ID)
+            .setIcon(FCM_ANDROID_SMALL_ICON)
+            .setSound("default")
+            .build());
+      }
+
+      Message.Builder messageBuilder = Message.builder()
           .setToken(token.getToken())
-          .setNotification(com.google.firebase.messaging.Notification.builder().setTitle(title).setBody(body).build())
-          .putData("title", title != null ? title : "")
-          .putData("body", body != null ? body : "")
-          .putData("url", url != null ? url : "/#/chat")
-          .setAndroidConfig(AndroidConfig.builder()
-              .setPriority(AndroidConfig.Priority.HIGH)
-              .setTtl(FCM_TTL_MILLIS)
-              .setNotification(AndroidNotification.builder()
-                  .setChannelId(FCM_ANDROID_CHANNEL_ID)
-                  .setIcon(FCM_ANDROID_SMALL_ICON)
-                  .setSound("default")
-                  .build())
-              .build())
-          .build();
+          .putData("title", safeTitle)
+          .putData("body", safeBody)
+          .putData("url", safeUrl)
+          .putData("peerUsername", peerUsername)
+          .putData("pushToken", token.getToken())
+          .setAndroidConfig(androidConfig.build());
+
+      if (!"android".equals(normalizedPlatform)) {
+        messageBuilder.setNotification(
+            com.google.firebase.messaging.Notification.builder()
+                .setTitle(safeTitle)
+                .setBody(safeBody)
+                .build());
+      }
+
+      Message message = messageBuilder.build();
       messaging.send(message);
       return true;
     } catch (FirebaseMessagingException error) {
@@ -430,6 +449,18 @@ public class PushNotificationService {
           latestByPlatform.putIfAbsent(platform, token);
         });
     return List.copyOf(latestByPlatform.values());
+  }
+
+  private String extractPeerUsernameFromUrl(String url) {
+    if (url == null || url.isBlank()) return "";
+    int marker = url.indexOf("with=");
+    if (marker < 0) return "";
+    String peer = url.substring(marker + 5);
+    int end = peer.indexOf('&');
+    if (end >= 0) {
+      peer = peer.substring(0, end);
+    }
+    return normalizeUsername(peer);
   }
 
   private boolean isInvalidTokenError(FirebaseMessagingException error) {
