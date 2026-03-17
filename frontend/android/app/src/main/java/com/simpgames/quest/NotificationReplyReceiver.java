@@ -65,10 +65,18 @@ public class NotificationReplyReceiver extends BroadcastReceiver {
     final String resolvedPushToken = pushToken;
     final String resolvedChatUrl = chatUrl;
     final String resolvedSenderLabel = senderLabel;
+    final String resolvedNotificationTag = ChatPushMessagingService.buildNotificationTag(
+        resolvedToUsername,
+        resolvedChatUrl,
+        resolvedSenderLabel);
 
     NotificationManager notificationManager = context.getSystemService(NotificationManager.class);
     if (notificationManager != null && resolvedNotificationId != 0) {
-      replaceNotification(notificationManager, resolvedNotificationId, buildStatusNotification(context, resolvedSenderLabel, resolvedChatUrl, "Sending reply..."));
+      replaceNotification(
+          notificationManager,
+          resolvedNotificationTag,
+          resolvedNotificationId,
+          buildStatusNotification(context, resolvedSenderLabel, resolvedChatUrl, "Sending reply..."));
     }
 
     PendingResult pendingResult = goAsync();
@@ -80,9 +88,17 @@ public class NotificationReplyReceiver extends BroadcastReceiver {
         if (manager != null) {
           if (result.success()) {
             NotificationReplyStore.clear(appContext, resolvedNotificationId);
-            replaceNotification(manager, resolvedNotificationId, buildStatusNotification(appContext, resolvedSenderLabel, resolvedChatUrl, "Reply sent"));
+            replaceNotification(
+                manager,
+                resolvedNotificationTag,
+                resolvedNotificationId,
+                buildStatusNotification(appContext, resolvedSenderLabel, resolvedChatUrl, "Reply sent"));
           } else {
-            replaceNotification(manager, resolvedNotificationId, buildStatusNotification(appContext, resolvedSenderLabel, resolvedChatUrl, result.userMessage()));
+            replaceNotification(
+                manager,
+                resolvedNotificationTag,
+                resolvedNotificationId,
+                buildStatusNotification(appContext, resolvedSenderLabel, resolvedChatUrl, result.userMessage()));
           }
         }
       } finally {
@@ -179,8 +195,18 @@ public class NotificationReplyReceiver extends BroadcastReceiver {
     return builder.build();
   }
 
-  private void replaceNotification(NotificationManager notificationManager, int notificationId, android.app.Notification notification) {
+  private void replaceNotification(
+      NotificationManager notificationManager,
+      String notificationTag,
+      int notificationId,
+      android.app.Notification notification) {
     if (notificationManager == null || notificationId == 0 || notification == null) return;
+    String safeTag = safeTrim(notificationTag);
+    if (!safeTag.isEmpty()) {
+      notificationManager.cancel(safeTag, notificationId);
+      notificationManager.notify(safeTag, notificationId, notification);
+      return;
+    }
     notificationManager.cancel(notificationId);
     notificationManager.notify(notificationId, notification);
   }

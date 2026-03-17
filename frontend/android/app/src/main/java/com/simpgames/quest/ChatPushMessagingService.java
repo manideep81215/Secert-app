@@ -44,6 +44,7 @@ public class ChatPushMessagingService extends FirebaseMessagingService {
     ensureNotificationChannel();
 
     int notificationId = buildNotificationId(peerUsername, url, title);
+    String notificationTag = buildNotificationTag(peerUsername, url, title);
     NotificationReplyStore.save(this, notificationId, peerUsername, pushToken, url, title);
     PendingIntent openIntent = createOpenChatPendingIntent(this, url);
 
@@ -93,7 +94,7 @@ public class ChatPushMessagingService extends FirebaseMessagingService {
       builder.addAction(replyAction);
     }
 
-    NotificationManagerCompat.from(this).notify(notificationId, builder.build());
+    NotificationManagerCompat.from(this).notify(notificationTag, notificationId, builder.build());
   }
 
   static PendingIntent createOpenChatPendingIntent(Context context, String url) {
@@ -146,6 +147,22 @@ public class ChatPushMessagingService extends FirebaseMessagingService {
   static int buildNotificationId(String peerUsername, String url, String title) {
     String seed = !safeTrim(peerUsername).isEmpty() ? peerUsername : (!safeTrim(url).isEmpty() ? url : title);
     return Math.max(1001, Math.abs(seed.hashCode()));
+  }
+
+  static String buildNotificationTag(String peerUsername, String url, String title) {
+    String normalizedPeer = safeTrim(peerUsername).toLowerCase();
+    if (!normalizedPeer.isEmpty()) {
+      return "chat:" + normalizedPeer;
+    }
+    String normalizedUrl = safeTrim(url);
+    if (!normalizedUrl.isEmpty()) {
+      return "chat-url:" + normalizedUrl;
+    }
+    String normalizedTitle = safeTrim(title);
+    if (!normalizedTitle.isEmpty()) {
+      return "chat-title:" + normalizedTitle;
+    }
+    return "chat";
   }
 
   private static String extractPeerUsername(String url) {
