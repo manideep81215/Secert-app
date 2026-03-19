@@ -36,6 +36,14 @@ function isCapacitorNative() {
   }
 }
 
+function isNativeAndroid() {
+  try {
+    return Capacitor?.isNativePlatform?.() === true && Capacitor?.getPlatform?.() === 'android'
+  } catch {
+    return false
+  }
+}
+
 async function ensureNativeNotificationSetup(localNotifications) {
   if (nativeNotificationSetupDone || !localNotifications) return
   const channelIds = [NATIVE_CHAT_CHANNEL_ID, LEGACY_NATIVE_CHAT_CHANNEL_ID]
@@ -180,6 +188,9 @@ export function getNotificationBlockedHelp() {
 export async function pushNotify(title, body) {
   if (isChatRouteActive()) return false
   if (shouldSkipDuplicateNotification(title, body)) return false
+
+  // Android chat pushes are already handled by FCM + ChatPushMessagingService.
+  if (isNativeAndroid()) return false
 
   if (isCapacitorNative()) {
     await ensureNativeNotificationSetup(LocalNotifications)

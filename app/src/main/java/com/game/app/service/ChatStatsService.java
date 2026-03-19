@@ -270,9 +270,23 @@ public class ChatStatsService {
     ChatStatsProgressEntity state = chatStatsProgressRepository
         .findByUserLowAndUserHighAndViewerUsername(low, high, viewer)
         .orElse(null);
-    long previous = state != null ? state.getLastMessageTotal() : totalMessages;
+    long previous = state != null ? state.getLastMessageTotal() : inferInitialPreviousTotal(totalMessages);
     chatStatsProgressRepository.upsert(low, high, viewer, totalMessages);
     return previous;
+  }
+
+  private long inferInitialPreviousTotal(long totalMessages) {
+    if (totalMessages <= 0L) {
+      return 0L;
+    }
+    if (totalMessages < MESSAGE_MILESTONE_STEP) {
+      return totalMessages;
+    }
+
+    // If tracking state is missing, treat the previous total as the floor of the
+    // current milestone bucket so the first check after an exact hit can still
+    // report milestoneJustHit=true instead of swallowing the popup forever.
+    return ((totalMessages - 1L) / MESSAGE_MILESTONE_STEP) * MESSAGE_MILESTONE_STEP;
   }
 
   private String[] canonicalPair(String u1, String u2) {

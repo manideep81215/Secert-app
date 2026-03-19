@@ -143,6 +143,16 @@ function MilestonePopup({ token, peerUsername, triggerCheck }) {
           return
         }
 
+        const exactTotalMessages = Number(stats?.totalMessages || 0)
+        if (exactTotalMessages === 9192 && !wasAlreadyCelebrated('msg', 9192)) {
+          setMilestone(SPECIAL_9192_MILESTONE)
+          setParticles(createParticles(SPECIAL_9192_MILESTONE.color, true))
+          window.setTimeout(() => {
+            if (!cancelled) setVisible(true)
+          }, 80)
+          return
+        }
+
         const reachedMilestone = Number(stats?.milestoneReached || 0)
         const milestoneJustHit = Boolean(stats?.milestoneJustHit)
 

@@ -5,6 +5,7 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Build;
 
@@ -19,6 +20,13 @@ import java.util.Map;
 
 public class ChatPushMessagingService extends FirebaseMessagingService {
   public static final String CHANNEL_ID = "chat_messages_v5";
+  private static final String CAPACITOR_STORAGE_GROUP = "CapacitorStorage";
+  private static final String PREF_APP_IN_FOREGROUND = "chat_app_in_foreground_v1";
+  private static final String PREF_CHAT_PAGE_ACTIVE = "chat_page_active_v1";
+  private static final String DEDUPE_PREFS = "chat_push_runtime_v1";
+  private static final String DEDUPE_KEY = "last_push_key";
+  private static final String DEDUPE_AT_KEY = "last_push_at";
+  private static final long DEDUPE_WINDOW_MS = 4000L;
   private static final String EXTRA_URL = "chat_url";
   private static final String EXTRA_OPEN_FROM_NOTIFICATION = "open_from_notification";
   private static final String EXTRA_PEER_USERNAME = "peer_username";
@@ -36,6 +44,15 @@ public class ChatPushMessagingService extends FirebaseMessagingService {
     String url = safeTrim(data.get("url"));
     String peerUsername = safeTrim(data.get("peerUsername"));
     String pushToken = safeTrim(data.get("pushToken"));
+    String messageId = safeTrim(data.get("messageId"));
+
+    if (shouldSuppressWhileChatOpen()) {
+      clearChatNotification(peerUsername, url, title);
+      return;
+    }
+    if (shouldSkipDuplicatePush(messageId, title, body, url, peerUsername)) {
+      return;
+    }
 
     showChatNotification(title, body, url, peerUsername, pushToken);
   }
@@ -95,6 +112,50 @@ public class ChatPushMessagingService extends FirebaseMessagingService {
     }
 
     NotificationManagerCompat.from(this).notify(notificationTag, notificationId, builder.build());
+  }
+
+  private boolean shouldSuppressWhileChatOpen() {
+    try {
+      SharedPreferences prefs = getSharedPreferences(CAPACITOR_STORAGE_GROUP, MODE_PRIVATE);
+      String foreground = safeTrim(prefs.getString(PREF_APP_IN_FOREGROUND, ""));
+      String chatPageActive = safeTrim(prefs.getString(PREF_CHAT_PAGE_ACTIVE, ""));
+      return "1".equals(foreground) && "1".equals(chatPageActive);
+    } catch (Exception ignored) {
+      return false;
+    }
+  }
+
+  private boolean shouldSkipDuplicatePush(String messageId, String title, String body, String url, String peerUsername) {
+    String signature = !safeTrim(messageId).isEmpty()
+        ? "msg:" + safeTrim(messageId)
+        : "fallback:" + safeTrim(peerUsername) + "|" + safeTrim(url) + "|" + safeTrim(title) + "|" + safeTrim(body);
+    if (signature.isEmpty()) return false;
+
+    long now = System.currentTimeMillis();
+    try {
+      SharedPreferences prefs = getSharedPreferences(DEDUPE_PREFS, MODE_PRIVATE);
+      String lastSignature = safeTrim(prefs.getString(DEDUPE_KEY, ""));
+      long lastAt = prefs.getLong(DEDUPE_AT_KEY, 0L);
+      prefs.edit()
+          .putString(DEDUPE_KEY, signature)
+          .putLong(DEDUPE_AT_KEY, now)
+          .apply();
+      return signature.equals(lastSignature) && (now - lastAt) < DEDUPE_WINDOW_MS;
+    } catch (Exception ignored) {
+      return false;
+    }
+  }
+
+  private void clearChatNotification(String peerUsername, String url, String title) {
+    int notificationId = buildNotificationId(peerUsername, url, title);
+    String notificationTag = buildNotificationTag(peerUsername, url, title);
+    NotificationManager notificationManager = getSystemService(NotificationManager.class);
+    if (notificationManager == null) return;
+    if (!notificationTag.isEmpty()) {
+      notificationManager.cancel(notificationTag, notificationId);
+      return;
+    }
+    notificationManager.cancel(notificationId);
   }
 
   static PendingIntent createOpenChatPendingIntent(Context context, String url) {

@@ -1,11 +1,14 @@
 package com.simpgames.quest;
 
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
+  private static final String CAPACITOR_STORAGE_GROUP = "CapacitorStorage";
+  private static final String PREF_APP_IN_FOREGROUND = "chat_app_in_foreground_v1";
   private String pendingNotificationUrl = "";
 
   @Override
@@ -26,7 +29,14 @@ public class MainActivity extends BridgeActivity {
   @Override
   public void onResume() {
     super.onResume();
+    setAppForegroundState(true);
     deliverPendingNotificationRoute();
+  }
+
+  @Override
+  public void onPause() {
+    setAppForegroundState(false);
+    super.onPause();
   }
 
   private void captureNotificationIntent(Intent intent) {
@@ -59,5 +69,14 @@ public class MainActivity extends BridgeActivity {
               + "})();",
           null);
     }, 180);
+  }
+
+  private void setAppForegroundState(boolean isForeground) {
+    try {
+      SharedPreferences prefs = getSharedPreferences(CAPACITOR_STORAGE_GROUP, MODE_PRIVATE);
+      prefs.edit().putString(PREF_APP_IN_FOREGROUND, isForeground ? "1" : "0").apply();
+    } catch (Exception ignored) {
+      // Foreground tracking is best-effort only.
+    }
   }
 }

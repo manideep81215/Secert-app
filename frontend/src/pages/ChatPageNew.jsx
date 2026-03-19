@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Client } from '@stomp/stompjs'
 import SockJS from 'sockjs-client'
 import { useLocation, useNavigate } from 'react-router-dom'
+import { Preferences } from '@capacitor/preferences'
 import { Haptics, ImpactStyle } from '@capacitor/haptics'
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera'
 import { Filesystem } from '@capacitor/filesystem'
@@ -40,6 +41,7 @@ const notify = { success: () => {}, error: () => {}, info: () => {}, warn: () =>
 const REALTIME_TOAST_ID = 'realtime-connection'
 const PRESENCE_LAST_SEEN_KEY = 'chat_presence_last_seen_v1'
 const ACTIVE_CHAT_PEER_KEY_PREFIX = 'active_chat_peer_v1:'
+const NATIVE_CHAT_PAGE_ACTIVE_KEY = 'chat_page_active_v1'
 const EDIT_WINDOW_MS = 15 * 60 * 1000
 const MESSAGE_ACTION_LONG_PRESS_MS = 1000
 const TYPING_STALE_MS = 1400
@@ -1084,6 +1086,33 @@ function ChatPageNew() {
       }
     }
   }, [flow.username, selectedUser?.username])
+
+  useEffect(() => {
+    let disposed = false
+
+    const syncNativeChatPageState = async () => {
+      try {
+        const shouldMarkActive = location.pathname === '/chat' && document.visibilityState === 'visible'
+        await Preferences.set({ key: NATIVE_CHAT_PAGE_ACTIVE_KEY, value: shouldMarkActive ? '1' : '0' })
+      } catch {
+        // Ignore native preference sync failures.
+      }
+    }
+
+    void syncNativeChatPageState()
+
+    const onVisibilityChange = () => {
+      if (disposed) return
+      void syncNativeChatPageState()
+    }
+
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      disposed = true
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      void Preferences.set({ key: NATIVE_CHAT_PAGE_ACTIVE_KEY, value: '0' }).catch(() => {})
+    }
+  }, [location.pathname])
 
   useEffect(() => {
     setEditingMessage(null)
