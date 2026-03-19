@@ -13,4 +13,6 @@ COPY --from=build /app/target/app-0.0.1-SNAPSHOT.jar app.jar
 
 EXPOSE 8080
 
-ENTRYPOINT ["sh", "-c", "java -Dserver.port=${PORT:-8080} -jar /app/app.jar"]
+ENV JAVA_OPTS="-Xms128m -Xmx400m -XX:+UseSerialGC"
+
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -Dserver.port=${PORT:-8080} -jar /app/app.jar"]
