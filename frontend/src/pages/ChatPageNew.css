@@ -571,11 +571,11 @@
 .message-content {
   width: min(85%, max-content);
   max-width: 85%;
+  min-width: 5.5rem;
   padding: 0.8rem 1.2rem;
   border-radius: 1.2rem;
   word-wrap: break-word;
   overflow-wrap: break-word;
-  min-width: 0;
   position: relative;
   transform-origin: bottom;
   animation: bubblePop 0.28s ease;
