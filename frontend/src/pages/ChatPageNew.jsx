@@ -3,10 +3,11 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Client } from '@stomp/stompjs'
 import SockJS from 'sockjs-client'
 import { useLocation, useNavigate } from 'react-router-dom'
+import { registerPlugin } from '@capacitor/core'
 import { Preferences } from '@capacitor/preferences'
 import { Haptics, ImpactStyle } from '@capacitor/haptics'
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera'
-import { Filesystem } from '@capacitor/filesystem'
+import { Directory, Filesystem } from '@capacitor/filesystem'
 import { getMe } from '../services/authApi'
 import {
   consumeCheckNotice,
@@ -37,6 +38,7 @@ import { resetFlowState, useFlowState } from '../hooks/useFlowState'
 import './ChatPageNew.css'
 
 const notify = { success: () => {}, error: () => {}, info: () => {}, warn: () => {}, clearWaitingQueue: () => {} }
+const OpenFile = registerPlugin('OpenFile')
 
 const REALTIME_TOAST_ID = 'realtime-connection'
 const PRESENCE_LAST_SEEN_KEY = 'chat_presence_last_seen_v1'
@@ -435,6 +437,60 @@ function ChatPageNew() {
     const safeUrl = String(url || '').trim()
     if (!safeUrl) return
     const downloadName = String(suggestedName || 'attachment').trim() || 'attachment'
+    if (isNativeCapacitorRuntime()) {
+      try {
+        const response = await fetch(safeUrl)
+        if (!response.ok) throw new Error(`open-file-fetch-failed-${response.status}`)
+        const blob = await response.blob()
+        const mimeType = String(blob?.type || response.headers.get('content-type') || 'application/octet-stream').trim() || 'application/octet-stream'
+        const toBase64 = (blobValue) => new Promise((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onloadend = () => {
+            const result = String(reader.result || '')
+            const base64Data = result.split(',').pop() || ''
+            if (!base64Data) {
+              reject(new Error('open-file-base64-empty'))
+              return
+            }
+            resolve(base64Data)
+          }
+          reader.onerror = () => reject(reader.error || new Error('open-file-base64-failed'))
+          reader.readAsDataURL(blobValue)
+        })
+
+        const safeName = downloadName.replace(/[^\w.\-() ]+/g, '_')
+        const cachePath = `chat-files/${Date.now()}-${safeName}`
+        const base64Data = await toBase64(blob)
+        await Filesystem.mkdir({
+          path: 'chat-files',
+          directory: Directory.Cache,
+          recursive: true,
+        }).catch(() => {})
+        const saved = await Filesystem.writeFile({
+          path: cachePath,
+          data: base64Data,
+          directory: Directory.Cache,
+          recursive: true,
+        })
+        let nativePath = String(saved?.uri || '').trim()
+        if (!nativePath) {
+          const fallbackUri = await Filesystem.getUri({
+            path: cachePath,
+            directory: Directory.Cache,
+          })
+          nativePath = String(fallbackUri?.uri || '').trim()
+        }
+        await OpenFile.openFile({
+          path: nativePath,
+          mimeType,
+          title: 'Open file with',
+        })
+        return
+      } catch {
+        notify.error('Unable to open file.')
+        return
+      }
+    }
     try {
       const response = await fetch(safeUrl)
       if (!response.ok) throw new Error(`download-failed-${response.status}`)
@@ -657,6 +713,9 @@ function ChatPageNew() {
     const replyMediaUrl = normalizeMediaUrl(reply.mediaUrl || null)
     const replyFileName = String(reply.fileName || '').trim()
     const replySenderName = toUserKey(reply.senderName || '')
+    const hasReplyMedia = Boolean(replyMediaUrl)
+    const hasReplyFileName = Boolean(replyFileName)
+    const hasReplyText = Boolean(replyText)
     let textOnlyFallbackKey = ''
     let senderTextFallbackKey = ''
     for (let index = messagesRef.current.length - 1; index >= 0; index -= 1) {
@@ -671,13 +730,16 @@ function ChatPageNew() {
       const sameFile = String(message.fileName || '').trim() === replyFileName
       const sameText = String(message.text || '').trim() === replyText
       const sameSender = toUserKey(message.senderName || '') === replySenderName
-      if (sameSender && ((sameMedia && sameType) || (sameFile && sameType) || sameText)) {
+      const mediaMatch = hasReplyMedia && sameType && sameMedia
+      const fileMatch = hasReplyFileName && sameType && sameFile
+      const textMatch = hasReplyText && sameText
+      if (sameSender && (mediaMatch || fileMatch || textMatch)) {
         return getMessageUiKey(message, index)
       }
-      if (!senderTextFallbackKey && sameText && sameSender) {
+      if (!senderTextFallbackKey && hasReplyText && sameText && sameSender) {
         senderTextFallbackKey = getMessageUiKey(message, index)
       }
-      if (!textOnlyFallbackKey && sameText) {
+      if (!textOnlyFallbackKey && hasReplyText && sameText) {
         textOnlyFallbackKey = getMessageUiKey(message, index)
       }
     }
