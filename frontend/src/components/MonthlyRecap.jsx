@@ -144,7 +144,7 @@ function MonthlyRecap({ token, peerUsername, forceShow = false }) {
           <div className="mr-handle" />
           <div className="mr-month-label">Monthly Recap</div>
           <div className="mr-title"><span>{monthLabel}</span> was beautiful</div>
-          <div className="mr-subtitle">Here is your story in numbers</div>
+          <div className="mr-subtitle">Here is Our story in numbers</div>
         </div>
 
         <div className="mr-divider" />

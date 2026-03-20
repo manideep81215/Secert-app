@@ -65,6 +65,16 @@ const QUICK_REACTIONS = [
 const REACTION_CODE_TO_EMOJI = QUICK_REACTIONS.reduce((acc, item) => ({ ...acc, [item.code]: item.emoji }), {})
 const REACTION_EMOJI_TO_CODE = QUICK_REACTIONS.reduce((acc, item) => ({ ...acc, [item.emoji]: item.code }), {})
 
+function getNormalizedRoutePath(location) {
+  const pathname = String(location?.pathname || '').trim()
+  const hashPath = typeof window !== 'undefined'
+    ? String(window.location.hash || '').replace(/^#/, '').trim()
+    : ''
+  const normalizedHash = hashPath ? (hashPath.startsWith('/') ? hashPath : `/${hashPath}`) : ''
+  if (normalizedHash) return normalizedHash.toLowerCase()
+  return pathname.toLowerCase()
+}
+
 function getViewportFallbackHeight() {
   if (typeof window === 'undefined') return 0
   const innerHeight = Math.round(window.innerHeight || 0)
@@ -1092,7 +1102,11 @@ function ChatPageNew() {
 
     const syncNativeChatPageState = async () => {
       try {
-        const shouldMarkActive = location.pathname === '/chat' && document.visibilityState === 'visible'
+        const shouldMarkActive = (
+          getNormalizedRoutePath(location).startsWith('/chat') &&
+          document.visibilityState === 'visible' &&
+          Boolean(selectedUserRef.current?.username)
+        )
         await Preferences.set({ key: NATIVE_CHAT_PAGE_ACTIVE_KEY, value: shouldMarkActive ? '1' : '0' })
       } catch {
         // Ignore native preference sync failures.
@@ -1112,7 +1126,7 @@ function ChatPageNew() {
       document.removeEventListener('visibilitychange', onVisibilityChange)
       void Preferences.set({ key: NATIVE_CHAT_PAGE_ACTIVE_KEY, value: '0' }).catch(() => {})
     }
-  }, [location.pathname])
+  }, [location.pathname, location.hash, selectedUser?.username])
 
   useEffect(() => {
     setEditingMessage(null)
@@ -2627,8 +2641,8 @@ function ChatPageNew() {
 
   const shouldSuppressChatNotification = (fromUsername) => {
     void fromUsername
-    const activePath = typeof window !== 'undefined' ? window.location.pathname : location.pathname
-    if (activePath === '/chat') {
+    const activePath = getNormalizedRoutePath(location)
+    if (activePath.startsWith('/chat') && selectedUserRef.current?.username) {
       // Chat screen handles live updates directly; suppress system notifications here.
       return true
     }

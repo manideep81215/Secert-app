@@ -32,6 +32,16 @@ import {
 import { ensurePushSubscription } from './lib/pushSubscription'
 import './App.css'
 
+function getNormalizedRoutePath(location) {
+  const pathname = String(location?.pathname || '').trim()
+  const hashPath = typeof window !== 'undefined'
+    ? String(window.location.hash || '').replace(/^#/, '').trim()
+    : ''
+  const normalizedHash = hashPath ? (hashPath.startsWith('/') ? hashPath : `/${hashPath}`) : ''
+  if (normalizedHash) return normalizedHash.toLowerCase()
+  return pathname.toLowerCase()
+}
+
 function App() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -39,20 +49,21 @@ function App() {
   const isAuthenticated = Boolean((flow?.username || '').trim() && (flow?.token || '').trim())
   const routeHistoryRef = useRef([])
   const isAuthenticatedRef = useRef(isAuthenticated)
-  const currentPathRef = useRef(location.pathname)
+  const currentPathRef = useRef(getNormalizedRoutePath(location))
   const previousTokenRef = useRef((flow?.token || '').trim())
   const [installPromptEvent, setInstallPromptEvent] = useState(null)
   const [isAppInstalled, setIsAppInstalled] = useState(false)
   const [showIosInstallHelp, setShowIosInstallHelp] = useState(false)
   const refreshTimerRef = useRef(null)
-  const shouldShowPrivacyBlur = !location.pathname.startsWith('/chat')
+  const normalizedRoutePath = getNormalizedRoutePath(location)
+  const shouldShowPrivacyBlur = !normalizedRoutePath.startsWith('/chat')
   const isFullBleedRoute =
-    location.pathname === '/auth' ||
-    location.pathname.startsWith('/games') ||
-    location.pathname === '/profile' ||
-    location.pathname === '/users' ||
-    location.pathname.startsWith('/chat') ||
-    location.pathname === '/timers'
+    normalizedRoutePath === '/auth' ||
+    normalizedRoutePath.startsWith('/games') ||
+    normalizedRoutePath === '/profile' ||
+    normalizedRoutePath === '/users' ||
+    normalizedRoutePath.startsWith('/chat') ||
+    normalizedRoutePath === '/timers'
 
   useEffect(() => {
     isAuthenticatedRef.current = isAuthenticated
@@ -128,21 +139,22 @@ function App() {
   }, [flow?.token, flow?.refreshToken, setFlow])
 
   useEffect(() => {
-    currentPathRef.current = location.pathname
+    const nextPath = getNormalizedRoutePath(location)
+    currentPathRef.current = nextPath
     const stack = routeHistoryRef.current
-    if (!stack.length || stack[stack.length - 1] !== location.pathname) {
-      stack.push(location.pathname)
+    if (!stack.length || stack[stack.length - 1] !== nextPath) {
+      stack.push(nextPath)
     }
     if (stack.length > 40) {
       stack.splice(0, stack.length - 40)
     }
-  }, [location.pathname])
+  }, [location.pathname, location.hash])
 
   useEffect(() => {
     const authToken = (flow?.token || '').trim()
     const authUsername = (flow?.username || '').trim()
     if (!authToken || !authUsername) return undefined
-    const currentPath = (location.pathname || '').toLowerCase()
+    const currentPath = getNormalizedRoutePath(location)
     // Page-level chat/game screens already maintain their own realtime sockets.
     if (currentPath.startsWith('/chat') || currentPath.startsWith('/games')) return undefined
 
@@ -199,7 +211,7 @@ function App() {
     return () => {
       client.deactivate()
     }
-  }, [flow?.token, flow?.username, location.pathname])
+  }, [flow?.token, flow?.username, location.pathname, location.hash])
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined

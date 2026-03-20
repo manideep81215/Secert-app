@@ -568,10 +568,12 @@
 }
 
 .message-content {
-  max-width: 55%;
+  width: min(85%, max-content);
+  max-width: 85%;
   padding: 0.8rem 1.2rem;
   border-radius: 1.2rem;
   word-wrap: break-word;
+  overflow-wrap: break-word;
   min-width: 0;
   position: relative;
   transform-origin: bottom;
@@ -741,6 +743,9 @@
 .message-text {
   font-size: 0.95rem;
   line-height: 1.4;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 
 .message-link {
@@ -1819,7 +1824,7 @@
   }
 
   .message-content {
-    max-width: 65%;
+    max-width: 85%;
   }
 }
 
@@ -1862,11 +1867,12 @@
   }
 
   .message-content {
-    max-width: calc(100% - 14px);
+    max-width: 85%;
   }
 
   .chat-container .message-content {
-    max-width: calc(100% - 14px);
+    width: min(85%, max-content);
+    max-width: min(85%, 680px);
   }
 
   .chat-container .message-content.has-media {
@@ -1952,7 +1958,7 @@
   }
 
   .message-content {
-    max-width: 90%;
+    max-width: 85%;
     padding: 0.6rem 1rem;
   }
 
@@ -2294,14 +2300,15 @@
 }
 
 .chat-container .message-content {
-  max-width: min(85%, 560px);
+  width: min(85%, max-content);
+  max-width: min(85%, 680px);
   padding: 0.55rem 0.75rem;
 }
 
 .chat-container .message-text {
   white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 
 .chat-container .message-image-preview {
