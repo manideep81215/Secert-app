@@ -3829,7 +3829,8 @@ function ChatPageNew() {
       return
     }
 
-    const rawSwipeOffset = dx
+    const isOutgoing = state.message?.sender === 'user'
+    const rawSwipeOffset = isOutgoing ? -dx : dx
     const swipeOffset = Math.max(0, Math.min(MESSAGE_REPLY_SWIPE_MAX_PX, rawSwipeOffset))
     const armed = !isMessageFailed(state.message) && Math.abs(dy) < 38 && swipeOffset >= MESSAGE_REPLY_SWIPE_TRIGGER_PX
 
@@ -4322,7 +4323,8 @@ function ChatPageNew() {
       }
   const getMessageSwipeProps = (message, messageKey) => {
     const isActive = swipingMessage.key === messageKey && swipingMessage.offset > 0
-    const offset = isActive ? swipingMessage.offset : 0
+    const directionSign = message?.sender === 'user' ? -1 : 1
+    const offset = isActive ? swipingMessage.offset * directionSign : 0
     return {
       isActive,
       bubbleStyle: {
