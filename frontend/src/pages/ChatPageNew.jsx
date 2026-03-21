@@ -3896,8 +3896,10 @@ function ChatPageNew() {
     const target = event.target
     if (!(target instanceof HTMLElement)) return
     if (target.closest('button, a, audio, video, input, textarea')) return
-    setReactionTray(null)
-    setActiveMessageActionsKey((prev) => (prev === messageKey ? null : messageKey))
+    if (activeMessageActionsKey === messageKey || reactionTray?.messageKey === messageKey) {
+      setReactionTray(null)
+      setActiveMessageActionsKey(null)
+    }
   }
 
   const getReactionTrayStyle = () => {
