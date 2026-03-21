@@ -3904,10 +3904,19 @@ function ChatPageNew() {
 
   const getReactionTrayStyle = () => {
     if (!reactionTray || typeof window === 'undefined') return {}
+    const trayMessage = getReactionTrayMessage()
     const trayWidth = 292
     const trayHeight = isTouchDevice ? 250 : 54
     const pad = 8
-    const left = Math.max(pad, Math.min(window.innerWidth - trayWidth - pad, reactionTray.x - (trayWidth / 2)))
+    const horizontalBias = isTouchDevice && trayMessage?.message?.sender === 'user'
+      ? 44
+      : isTouchDevice
+        ? -44
+        : 0
+    const left = Math.max(
+      pad,
+      Math.min(window.innerWidth - trayWidth - pad, reactionTray.x - (trayWidth / 2) + horizontalBias)
+    )
     const prefersAbove = reactionTray.y > (isTouchDevice ? 280 : 86)
     const top = prefersAbove
       ? Math.max(pad, reactionTray.y - trayHeight - 12)
@@ -4346,6 +4355,7 @@ function ChatPageNew() {
       )}
     </div>
   )
+  const reactionTrayMessage = reactionTray ? getReactionTrayMessage() : null
 
   return (
     <div
@@ -4643,8 +4653,14 @@ function ChatPageNew() {
           <div ref={messagesEndRef} />
         </motion.div>
         {reactionTray && (
-          <div className={`reaction-tray ${isTouchDevice ? 'mobile-menu' : ''}`} style={getReactionTrayStyle()}>
+          <div
+            className={`reaction-tray ${isTouchDevice ? 'mobile-menu' : ''} ${reactionTrayMessage?.message?.sender === 'user' ? 'sent' : 'received'}`}
+            style={getReactionTrayStyle()}
+          >
             <div className="reaction-tray-reactions">
+              {isTouchDevice && (
+                <div className="reaction-tray-helper">Tap and hold to super react</div>
+              )}
               {QUICK_REACTIONS.map((item) => (
                 <button
                   key={`${reactionTray.messageKey}-${item.code}`}
@@ -4658,15 +4674,11 @@ function ChatPageNew() {
                 </button>
               ))}
             </div>
-            {isTouchDevice && (() => {
-              const trayMessage = getReactionTrayMessage()
-              if (!trayMessage) return null
-              return (
-                <div className="reaction-tray-actions">
-                  {renderMessageActions(trayMessage.message, trayMessage.messageKey, trayMessage.messageFailed)}
-                </div>
-              )
-            })()}
+            {isTouchDevice && reactionTrayMessage && (
+              <div className="reaction-tray-actions">
+                {renderMessageActions(reactionTrayMessage.message, reactionTrayMessage.messageKey, reactionTrayMessage.messageFailed)}
+              </div>
+            )}
           </div>
         )}
 
