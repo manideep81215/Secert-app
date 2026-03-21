@@ -569,6 +569,10 @@
   justify-content: flex-end;
 }
 
+.message.other {
+  justify-content: flex-start;
+}
+
 .message-bubble-shell {
   position: relative;
   display: flex;
@@ -1949,12 +1953,20 @@
 
   .message-content {
     width: auto;
-    max-width: 85vw;
+    max-width: 68vw;
   }
 
   .chat-container .message-content {
     width: auto;
-    max-width: 85vw;
+    max-width: 68vw;
+  }
+
+  .chat-container .message.user .message-content {
+    max-width: 68vw;
+  }
+
+  .chat-container .message.other .message-content {
+    max-width: 62vw;
   }
 
   .chat-container .message-content.has-media {
@@ -2164,8 +2176,16 @@
 
   .message-content {
     width: auto;
-    max-width: 85vw;
+    max-width: 66vw;
     padding: 0.6rem 1rem;
+  }
+
+  .chat-container .message.user .message-content {
+    max-width: 66vw;
+  }
+
+  .chat-container .message.other .message-content {
+    max-width: 60vw;
   }
 
   .input-wrapper {
