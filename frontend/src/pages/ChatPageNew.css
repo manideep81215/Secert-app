@@ -1976,7 +1976,7 @@
     flex-direction: column;
     align-items: stretch;
     gap: 0.26rem;
-    padding: 0.45rem 0.4rem;
+    padding: 0.65rem 0.55rem;
     border-radius: 1.7rem;
     background: rgba(255, 255, 255, 0.92);
     box-shadow: 0 24px 48px rgba(70, 52, 34, 0.16);
@@ -1990,7 +1990,7 @@
 
   .message-actions-header {
     display: block;
-    padding: 0.18rem 0.5rem 0.36rem;
+    padding: 0.25rem 0.7rem 0.55rem;
     font-size: 0.9rem;
     font-weight: 700;
     color: rgba(72, 53, 36, 0.72);
@@ -2011,12 +2011,12 @@
     display: flex;
     align-items: center;
     gap: 0.8rem;
-    padding: 0.68rem 0.72rem;
+    padding: 0.82rem 0.92rem;
     font-size: 1.12rem;
   }
 
   .reaction-tray.mobile-menu .reaction-tray-actions {
-    padding-top: 0.14rem;
+    padding-top: 0.2rem;
   }
 
   .reaction-tray-helper {
