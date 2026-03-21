@@ -3905,14 +3905,26 @@ function ChatPageNew() {
   const getReactionTrayStyle = () => {
     if (!reactionTray || typeof window === 'undefined') return {}
     const trayWidth = 292
-    const trayHeight = 54
+    const trayHeight = isTouchDevice ? 250 : 54
     const pad = 8
     const left = Math.max(pad, Math.min(window.innerWidth - trayWidth - pad, reactionTray.x - (trayWidth / 2)))
-    const prefersAbove = reactionTray.y > 86
+    const prefersAbove = reactionTray.y > (isTouchDevice ? 280 : 86)
     const top = prefersAbove
       ? Math.max(pad, reactionTray.y - trayHeight - 12)
       : Math.min(window.innerHeight - trayHeight - pad, reactionTray.y + 16)
     return { left: `${left}px`, top: `${top}px` }
+  }
+
+  const getReactionTrayMessage = () => {
+    const messageKey = reactionTray?.messageKey || activeMessageActionsKey
+    if (!messageKey) return null
+    const index = messages.findIndex((msg, idx) => getMessageUiKey(msg, idx) === messageKey)
+    if (index < 0) return null
+    return {
+      messageKey,
+      message: messages[index],
+      messageFailed: isMessageFailed(messages[index]),
+    }
   }
 
   const applyMessageReaction = (messageKey, emoji) => {
@@ -4631,7 +4643,7 @@ function ChatPageNew() {
           <div ref={messagesEndRef} />
         </motion.div>
         {reactionTray && (
-          <div className="reaction-tray" style={getReactionTrayStyle()}>
+          <div className={`reaction-tray ${isTouchDevice ? 'mobile-menu' : ''}`} style={getReactionTrayStyle()}>
             {QUICK_REACTIONS.map((item) => (
               <button
                 key={`${reactionTray.messageKey}-${item.code}`}
@@ -4644,6 +4656,15 @@ function ChatPageNew() {
                 {item.emoji}
               </button>
             ))}
+            {isTouchDevice && (() => {
+              const trayMessage = getReactionTrayMessage()
+              if (!trayMessage) return null
+              return (
+                <div className="reaction-tray-actions">
+                  {renderMessageActions(trayMessage.message, trayMessage.messageKey, trayMessage.messageFailed)}
+                </div>
+              )
+            })()}
           </div>
         )}
 
