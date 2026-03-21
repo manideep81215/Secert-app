@@ -46,9 +46,9 @@ const ACTIVE_CHAT_PEER_KEY_PREFIX = 'active_chat_peer_v1:'
 const NATIVE_CHAT_PAGE_ACTIVE_KEY = 'chat_page_active_v1'
 const EDIT_WINDOW_MS = 15 * 60 * 1000
 const MESSAGE_ACTION_LONG_PRESS_MS = 1000
-const MESSAGE_REPLY_SWIPE_TRIGGER_PX = 72
-const MESSAGE_REPLY_SWIPE_MAX_PX = 112
-const MESSAGE_REPLY_SWIPE_CANCEL_Y_PX = 44
+const MESSAGE_REPLY_SWIPE_TRIGGER_PX = 56
+const MESSAGE_REPLY_SWIPE_MAX_PX = 96
+const MESSAGE_REPLY_SWIPE_CANCEL_Y_PX = 52
 const TYPING_STALE_MS = 1400
 const ONLINE_HEARTBEAT_MS = 30 * 1000
 const AUTO_REFRESH_DEBOUNCE_MS = 1200
@@ -144,7 +144,7 @@ function ChatPageNew() {
   const [editingMessage, setEditingMessage] = useState(null)
   const [draggedMessage, setDraggedMessage] = useState(null)
   const [isDraggingMessage, setIsDraggingMessage] = useState(false)
-  const [swipingMessage, setSwipingMessage] = useState({ key: null, offset: 0, armed: false })
+  const [swipingMessage, setSwipingMessage] = useState({ key: null, offset: 0 })
   const [activeMessageActionsKey, setActiveMessageActionsKey] = useState(null)
   const [socket, setSocket] = useState(null)
   const [isManualRefreshing, setIsManualRefreshing] = useState(false)
@@ -3748,7 +3748,7 @@ function ChatPageNew() {
   }
 
   const resetMessageSwipe = () => {
-    setSwipingMessage((prev) => (prev.key || prev.offset || prev.armed ? { key: null, offset: 0, armed: false } : prev))
+    setSwipingMessage((prev) => (prev.key || prev.offset ? { key: null, offset: 0 } : prev))
   }
 
   const triggerReplySwipe = (message) => {
@@ -3812,7 +3812,7 @@ function ChatPageNew() {
     beginTouchMessageGesture(touch.clientX, touch.clientY, event.target, message, messageKey)
   }
 
-  const handleMessageGestureMove = (x, y) => {
+  const handleMessageGestureMove = (x, y, sourceEvent = null) => {
     const state = messageLongPressRef.current
     if (!state?.message) return
     const dx = x - state.startX
@@ -3832,14 +3832,17 @@ function ChatPageNew() {
     const isOutgoing = state.message?.sender === 'user'
     const rawSwipeOffset = isOutgoing ? -dx : dx
     const swipeOffset = Math.max(0, Math.min(MESSAGE_REPLY_SWIPE_MAX_PX, rawSwipeOffset))
-    const armed = !isMessageFailed(state.message) && Math.abs(dy) < 34 && swipeOffset >= MESSAGE_REPLY_SWIPE_TRIGGER_PX
+    const armed = !isMessageFailed(state.message) && Math.abs(dy) < 38 && swipeOffset >= MESSAGE_REPLY_SWIPE_TRIGGER_PX
 
     if (swipeOffset > 0 && Math.abs(dy) < 52) {
+      if (sourceEvent?.cancelable && Math.abs(dx) > Math.abs(dy)) {
+        sourceEvent.preventDefault()
+      }
       messageLongPressRef.current.offset = swipeOffset
       setSwipingMessage((prev) => (
-        prev.key === state.key && prev.offset === swipeOffset && prev.armed === armed
+        prev.key === state.key && prev.offset === swipeOffset
           ? prev
-          : { key: state.key, offset: swipeOffset, armed }
+          : { key: state.key, offset: swipeOffset }
       ))
     } else if (state.offset || swipingMessage.key === state.key) {
       messageLongPressRef.current.offset = 0
@@ -3852,7 +3855,7 @@ function ChatPageNew() {
   const handleMessagePointerMove = (event) => {
     if (!isTouchDevice) return
     if (event.pointerType && event.pointerType !== 'touch') return
-    handleMessageGestureMove(event.clientX, event.clientY)
+    handleMessageGestureMove(event.clientX, event.clientY, event)
   }
 
   const handleMessageTouchMove = (event) => {
@@ -3860,7 +3863,7 @@ function ChatPageNew() {
     if (typeof window !== 'undefined' && 'PointerEvent' in window) return
     const touch = event.touches?.[0]
     if (!touch) return
-    handleMessageGestureMove(touch.clientX, touch.clientY)
+    handleMessageGestureMove(touch.clientX, touch.clientY, event)
   }
 
   const finishMessageGesture = () => {
@@ -4280,19 +4283,55 @@ function ChatPageNew() {
     const isActive = swipingMessage.key === messageKey && swipingMessage.offset > 0
     const directionSign = message?.sender === 'user' ? -1 : 1
     const offset = isActive ? swipingMessage.offset * directionSign : 0
-    const progress = isActive ? Math.min(1, swipingMessage.offset / MESSAGE_REPLY_SWIPE_TRIGGER_PX) : 0
     return {
       isActive,
-      isArmed: isActive && swipingMessage.armed,
       bubbleStyle: {
         transform: `translate3d(${offset}px, 0, 0)`,
         transition: isActive ? 'none' : 'transform 220ms cubic-bezier(0.22, 1, 0.36, 1)',
       },
-      indicatorStyle: {
-        '--reply-progress': progress,
-      },
     }
   }
+  const renderMessageActions = (message, messageKey, messageFailed) => (
+    <div className={`message-actions ${activeMessageActionsKey === messageKey ? 'active' : ''}`}>
+      <div className="message-actions-header">{getMessageFooterLabel(message)}</div>
+      <button
+        className="btn-copy"
+        onClick={() => copyTextToClipboard(message?.text || message?.fileName || '')}
+        title="Copy"
+        aria-label="Copy"
+        disabled={!(message?.text || message?.fileName)}
+      >
+        <span className="message-action-icon" aria-hidden="true">{icons.copy}</span>
+        <span className="message-action-label">Copy</span>
+      </button>
+      <button
+        className="btn-reply"
+        onClick={() => handleReply(message)}
+        title={messageFailed ? 'Cannot reply to unsent message' : 'Reply'}
+        aria-label="Reply"
+        disabled={messageFailed}
+      >
+        <span className="message-action-icon" aria-hidden="true">{icons.reply}</span>
+        <span className="message-action-label">Reply</span>
+      </button>
+      <button className="btn-delete" onClick={() => handleDeleteMessage(message)} title="Delete" aria-label="Delete">
+        <DeleteActionIcon />
+        <span className="message-action-label">Delete</span>
+      </button>
+      {message.sender === 'user' && !messageFailed && canEditMessage(message) && (
+        <button className="btn-edit" onClick={() => handleStartEdit(message)} title="Edit" aria-label="Edit">
+          <span className="message-action-icon" aria-hidden="true">{icons.edit}</span>
+          <span className="message-action-label">Edit</span>
+        </button>
+      )}
+      {message.sender === 'user' && messageFailed && (
+        <button className="btn-resend" onClick={() => handleResendMessage(message)} title="Resend" aria-label="Resend">
+          <span className="message-action-icon" aria-hidden="true">{icons.resend}</span>
+          <span className="message-action-label">Resend</span>
+        </button>
+      )}
+    </div>
+  )
 
   return (
     <div
@@ -4449,14 +4488,7 @@ function ChatPageNew() {
                 onTouchCancel={handleMessageTouchEnd}
                 onClick={(event) => handleMessageTap(event, messageKey)}
               >
-                <div className={`message-bubble-shell ${swipeProps.isActive ? 'swiping' : ''} ${swipeProps.isArmed ? 'armed' : ''}`}>
-                  <span
-                    className={`message-reply-indicator ${messageFailed ? 'disabled' : ''}`}
-                    style={swipeProps.indicatorStyle}
-                    aria-hidden="true"
-                  >
-                    {icons.reply}
-                  </span>
+                <div className="message-bubble-shell">
                   <div
                     className={`message-content ${message.type === 'image' || message.type === 'video' ? 'has-media' : ''}`}
                     style={swipeProps.bubbleStyle}
@@ -4492,33 +4524,7 @@ function ChatPageNew() {
                     )}
                   </div>
                 </div>
-                <div className={`message-actions ${activeMessageActionsKey === messageKey ? 'active' : ''}`}>
-                  <button
-                    className="btn-copy"
-                    onClick={() => copyTextToClipboard(message?.text || message?.fileName || '')}
-                    title="Copy"
-                    aria-label="Copy"
-                    disabled={!(message?.text || message?.fileName)}
-                  >
-                    {icons.copy}
-                  </button>
-                  <button
-                    className="btn-reply"
-                    onClick={() => handleReply(message)}
-                    title={messageFailed ? 'Cannot reply to unsent message' : 'Reply'}
-                    aria-label="Reply"
-                    disabled={messageFailed}
-                  >
-                    {icons.reply}
-                  </button>
-                  <button className="btn-delete" onClick={() => handleDeleteMessage(message)} title="Delete" aria-label="Delete"><DeleteActionIcon /></button>
-                  {message.sender === 'user' && !messageFailed && canEditMessage(message) && (
-                    <button className="btn-edit" onClick={() => handleStartEdit(message)} title="Edit" aria-label="Edit">{icons.edit}</button>
-                  )}
-                  {message.sender === 'user' && messageFailed && (
-                    <button className="btn-resend" onClick={() => handleResendMessage(message)} title="Resend" aria-label="Resend">{icons.resend}</button>
-                  )}
-                </div>
+                {renderMessageActions(message, messageKey, messageFailed)}
               </div>
             )})
           ) : (
@@ -4546,14 +4552,7 @@ function ChatPageNew() {
                   onClick={(event) => handleMessageTap(event, messageKey)}
                   {...messageMotionProps}
                 >
-                  <div className={`message-bubble-shell ${swipeProps.isActive ? 'swiping' : ''} ${swipeProps.isArmed ? 'armed' : ''}`}>
-                    <span
-                      className={`message-reply-indicator ${messageFailed ? 'disabled' : ''}`}
-                      style={swipeProps.indicatorStyle}
-                      aria-hidden="true"
-                    >
-                      {icons.reply}
-                    </span>
+                  <div className="message-bubble-shell">
                     <div
                       className={`message-content ${message.type === 'image' || message.type === 'video' ? 'has-media' : ''}`}
                       style={swipeProps.bubbleStyle}
@@ -4589,33 +4588,7 @@ function ChatPageNew() {
                       )}
                     </div>
                   </div>
-                  <div className={`message-actions ${activeMessageActionsKey === messageKey ? 'active' : ''}`}>
-                    <button
-                      className="btn-copy"
-                      onClick={() => copyTextToClipboard(message?.text || message?.fileName || '')}
-                      title="Copy"
-                      aria-label="Copy"
-                      disabled={!(message?.text || message?.fileName)}
-                    >
-                      {icons.copy}
-                    </button>
-                    <button
-                      className="btn-reply"
-                      onClick={() => handleReply(message)}
-                      title={messageFailed ? 'Cannot reply to unsent message' : 'Reply'}
-                      aria-label="Reply"
-                      disabled={messageFailed}
-                    >
-                      {icons.reply}
-                    </button>
-                    <button className="btn-delete" onClick={() => handleDeleteMessage(message)} title="Delete" aria-label="Delete"><DeleteActionIcon /></button>
-                    {message.sender === 'user' && !messageFailed && canEditMessage(message) && (
-                      <button className="btn-edit" onClick={() => handleStartEdit(message)} title="Edit" aria-label="Edit">{icons.edit}</button>
-                    )}
-                    {message.sender === 'user' && messageFailed && (
-                      <button className="btn-resend" onClick={() => handleResendMessage(message)} title="Resend" aria-label="Resend">{icons.resend}</button>
-                    )}
-                  </div>
+                  {renderMessageActions(message, messageKey, messageFailed)}
                 </motion.div>
               )})}
             </AnimatePresence>
