@@ -46,6 +46,9 @@ const ACTIVE_CHAT_PEER_KEY_PREFIX = 'active_chat_peer_v1:'
 const NATIVE_CHAT_PAGE_ACTIVE_KEY = 'chat_page_active_v1'
 const EDIT_WINDOW_MS = 15 * 60 * 1000
 const MESSAGE_ACTION_LONG_PRESS_MS = 1000
+const MESSAGE_REPLY_SWIPE_TRIGGER_PX = 72
+const MESSAGE_REPLY_SWIPE_MAX_PX = 112
+const MESSAGE_REPLY_SWIPE_CANCEL_Y_PX = 44
 const TYPING_STALE_MS = 1400
 const ONLINE_HEARTBEAT_MS = 30 * 1000
 const AUTO_REFRESH_DEBOUNCE_MS = 1200
@@ -141,6 +144,7 @@ function ChatPageNew() {
   const [editingMessage, setEditingMessage] = useState(null)
   const [draggedMessage, setDraggedMessage] = useState(null)
   const [isDraggingMessage, setIsDraggingMessage] = useState(false)
+  const [swipingMessage, setSwipingMessage] = useState({ key: null, offset: 0, armed: false })
   const [activeMessageActionsKey, setActiveMessageActionsKey] = useState(null)
   const [socket, setSocket] = useState(null)
   const [isManualRefreshing, setIsManualRefreshing] = useState(false)
@@ -189,6 +193,7 @@ function ChatPageNew() {
     message: null,
     startX: 0,
     startY: 0,
+    offset: 0,
     moved: false,
     triggered: false,
     swiped: false,
@@ -3742,6 +3747,22 @@ function ChatPageNew() {
     setDraggedMessage(null)
   }
 
+  const resetMessageSwipe = () => {
+    setSwipingMessage((prev) => (prev.key || prev.offset || prev.armed ? { key: null, offset: 0, armed: false } : prev))
+  }
+
+  const triggerReplySwipe = (message) => {
+    if (!message || isMessageFailed(message)) return
+    Haptics.impact({ style: ImpactStyle.Light }).catch(() => {
+      if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+        navigator.vibrate(18)
+      }
+    })
+    setReplyingTo(message)
+    setActiveMessageActionsKey(null)
+    swipeTapSuppressUntilRef.current = Date.now() + 420
+  }
+
   const handleDrop = (event) => {
     event.preventDefault()
     if (draggedMessage) {
@@ -3769,19 +3790,23 @@ function ChatPageNew() {
       message,
       startX: x,
       startY: y,
+      offset: 0,
       moved: false,
       triggered: false,
       swiped: false,
     }
+    resetMessageSwipe()
   }
 
   const handleMessagePointerDown = (event, message, messageKey) => {
     if (!isTouchDevice) return
+    if (event.pointerType && event.pointerType !== 'touch') return
     beginTouchMessageGesture(event.clientX, event.clientY, event.target, message, messageKey)
   }
 
   const handleMessageTouchStart = (event, message, messageKey) => {
     if (!isTouchDevice) return
+    if (typeof window !== 'undefined' && 'PointerEvent' in window) return
     const touch = event.touches?.[0]
     if (!touch) return
     beginTouchMessageGesture(touch.clientX, touch.clientY, event.target, message, messageKey)
@@ -3798,52 +3823,68 @@ function ChatPageNew() {
       messageLongPressRef.current.timerId = null
     }
 
-    if (Math.abs(dy) > 44 && Math.abs(dy) > Math.abs(dx) + 8) {
-      messageLongPressRef.current = { timerId: null, key: null, message: null, startX: 0, startY: 0, moved: true, triggered: false, swiped: false }
+    if (Math.abs(dy) > MESSAGE_REPLY_SWIPE_CANCEL_Y_PX && Math.abs(dy) > Math.abs(dx) + 8) {
+      resetMessageSwipe()
+      messageLongPressRef.current = { timerId: null, key: null, message: null, startX: 0, startY: 0, offset: 0, moved: true, triggered: false, swiped: false }
       return
     }
 
     const isOutgoing = state.message?.sender === 'user'
-    const reachedReplySwipe = isOutgoing ? (dx < -56 && Math.abs(dy) < 34) : (dx > 56 && Math.abs(dy) < 34)
-    if (!state.swiped && reachedReplySwipe) {
-      Haptics.impact({ style: ImpactStyle.Light }).catch(() => {
-        if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
-          navigator.vibrate(18)
-        }
-      })
-      setReplyingTo(state.message)
-      setActiveMessageActionsKey(null)
-      swipeTapSuppressUntilRef.current = Date.now() + 420
-      messageLongPressRef.current = { timerId: null, key: null, message: null, startX: 0, startY: 0, moved: true, triggered: false, swiped: true }
+    const rawSwipeOffset = isOutgoing ? -dx : dx
+    const swipeOffset = Math.max(0, Math.min(MESSAGE_REPLY_SWIPE_MAX_PX, rawSwipeOffset))
+    const armed = !isMessageFailed(state.message) && Math.abs(dy) < 34 && swipeOffset >= MESSAGE_REPLY_SWIPE_TRIGGER_PX
+
+    if (swipeOffset > 0 && Math.abs(dy) < 52) {
+      messageLongPressRef.current.offset = swipeOffset
+      setSwipingMessage((prev) => (
+        prev.key === state.key && prev.offset === swipeOffset && prev.armed === armed
+          ? prev
+          : { key: state.key, offset: swipeOffset, armed }
+      ))
+    } else if (state.offset || swipingMessage.key === state.key) {
+      messageLongPressRef.current.offset = 0
+      resetMessageSwipe()
     }
+
+    messageLongPressRef.current.moved = Math.abs(dx) > 8 || Math.abs(dy) > 8
   }
 
   const handleMessagePointerMove = (event) => {
     if (!isTouchDevice) return
+    if (event.pointerType && event.pointerType !== 'touch') return
     handleMessageGestureMove(event.clientX, event.clientY)
   }
 
   const handleMessageTouchMove = (event) => {
     if (!isTouchDevice) return
+    if (typeof window !== 'undefined' && 'PointerEvent' in window) return
     const touch = event.touches?.[0]
     if (!touch) return
     handleMessageGestureMove(touch.clientX, touch.clientY)
   }
 
-  const handleMessagePointerEnd = () => {
+  const finishMessageGesture = () => {
     const state = messageLongPressRef.current
     if (state?.timerId) {
       clearTimeout(state.timerId)
     }
-    messageLongPressRef.current = { timerId: null, key: null, message: null, startX: 0, startY: 0, moved: false, triggered: false, swiped: false }
+    const shouldReply = Boolean(state?.message) && !state?.swiped && state.offset >= MESSAGE_REPLY_SWIPE_TRIGGER_PX
+    const message = state?.message || null
+    resetMessageSwipe()
+    messageLongPressRef.current = { timerId: null, key: null, message: null, startX: 0, startY: 0, offset: 0, moved: false, triggered: false, swiped: shouldReply }
+    if (shouldReply) {
+      triggerReplySwipe(message)
+    }
+  }
+
+  const handleMessagePointerEnd = (event) => {
+    if (event?.pointerType && event.pointerType !== 'touch') return
+    finishMessageGesture()
   }
 
   const handleMessageTouchEnd = () => {
-    const state = messageLongPressRef.current
-    if (state?.timerId) {
-      clearTimeout(state.timerId)
-    }
-    messageLongPressRef.current = { timerId: null, key: null, message: null, startX: 0, startY: 0, moved: false, triggered: false, swiped: false }
+    if (typeof window !== 'undefined' && 'PointerEvent' in window) return
+    finishMessageGesture()
   }
 
   const handleMessageTap = (event, messageKey) => {
@@ -4235,6 +4276,23 @@ function ChatPageNew() {
         exit: { opacity: 0, y: -20 },
         whileHover: { scale: 1.02 },
       }
+  const getMessageSwipeProps = (message, messageKey) => {
+    const isActive = swipingMessage.key === messageKey && swipingMessage.offset > 0
+    const directionSign = message?.sender === 'user' ? -1 : 1
+    const offset = isActive ? swipingMessage.offset * directionSign : 0
+    const progress = isActive ? Math.min(1, swipingMessage.offset / MESSAGE_REPLY_SWIPE_TRIGGER_PX) : 0
+    return {
+      isActive,
+      isArmed: isActive && swipingMessage.armed,
+      bubbleStyle: {
+        transform: `translate3d(${offset}px, 0, 0)`,
+        transition: isActive ? 'none' : 'transform 220ms cubic-bezier(0.22, 1, 0.36, 1)',
+      },
+      indicatorStyle: {
+        '--reply-progress': progress,
+      },
+    }
+  }
 
   return (
     <div
@@ -4372,6 +4430,7 @@ function ChatPageNew() {
             messages.map((message, index) => {
               const messageKey = getMessageUiKey(message, index)
               const messageFailed = isMessageFailed(message)
+              const swipeProps = getMessageSwipeProps(message, messageKey)
               return (
               <div
                 key={messageKey}
@@ -4390,36 +4449,48 @@ function ChatPageNew() {
                 onTouchCancel={handleMessageTouchEnd}
                 onClick={(event) => handleMessageTap(event, messageKey)}
               >
-                <div className={`message-content ${message.type === 'image' || message.type === 'video' ? 'has-media' : ''}`}>
-                  {message.sender === 'user' && message.deliveryStatus === 'uploading' && (
-                    <span className="message-upload-ring" title="Uploading" />
-                  )}
-                  {message.sender === 'user' && message.deliveryStatus === 'failed' && (
-                    <span className="message-upload-failed" title="Failed">!</span>
-                  )}
-                  {message.replyingTo && (
-                    <div className="message-reply-context">
-                      <div className="reply-label">Replying to {message.replyingTo.senderName ? `@${formatUsername(message.replyingTo.senderName)}` : 'message'}:</div>
-                      <div className="reply-text">{renderReplyContent(message.replyingTo, 'bubble')}</div>
-                    </div>
-                  )}
-                  {renderMessageMedia(message)}
-                  {message.fileName && message.type !== 'file' && <div className="message-file-name">{message.fileName}</div>}
-                  {(message.type === 'text' || !message.type) && (
-                    <div className="message-text">{renderTextWithLinks(message.text)}</div>
-                  )}
-                  {(message.type && message.type !== 'text' && !message.mediaUrl) && (
-                    <div className="message-media-fallback">{renderTextWithLinks(`${getTypeIcon(message.type)} ${message.text}`.trim())}</div>
-                  )}
-                  <span className="message-time">{getMessageFooterLabel(message)}</span>
-                  {shouldShowSeenInline && index === lastOutgoingIndex && activeMessageActionsKey !== messageKey && (
-                    <span className="message-seen-inline">Seen</span>
-                  )}
-                  {message.reaction && (
-                    <span className="message-reaction-badge" aria-label={`Reaction ${message.reaction}`}>
-                      {message.reaction}
-                    </span>
-                  )}
+                <div className={`message-bubble-shell ${swipeProps.isActive ? 'swiping' : ''} ${swipeProps.isArmed ? 'armed' : ''}`}>
+                  <span
+                    className={`message-reply-indicator ${messageFailed ? 'disabled' : ''}`}
+                    style={swipeProps.indicatorStyle}
+                    aria-hidden="true"
+                  >
+                    {icons.reply}
+                  </span>
+                  <div
+                    className={`message-content ${message.type === 'image' || message.type === 'video' ? 'has-media' : ''}`}
+                    style={swipeProps.bubbleStyle}
+                  >
+                    {message.sender === 'user' && message.deliveryStatus === 'uploading' && (
+                      <span className="message-upload-ring" title="Uploading" />
+                    )}
+                    {message.sender === 'user' && message.deliveryStatus === 'failed' && (
+                      <span className="message-upload-failed" title="Failed">!</span>
+                    )}
+                    {message.replyingTo && (
+                      <div className="message-reply-context">
+                        <div className="reply-label">Replying to {message.replyingTo.senderName ? `@${formatUsername(message.replyingTo.senderName)}` : 'message'}:</div>
+                        <div className="reply-text">{renderReplyContent(message.replyingTo, 'bubble')}</div>
+                      </div>
+                    )}
+                    {renderMessageMedia(message)}
+                    {message.fileName && message.type !== 'file' && <div className="message-file-name">{message.fileName}</div>}
+                    {(message.type === 'text' || !message.type) && (
+                      <div className="message-text">{renderTextWithLinks(message.text)}</div>
+                    )}
+                    {(message.type && message.type !== 'text' && !message.mediaUrl) && (
+                      <div className="message-media-fallback">{renderTextWithLinks(`${getTypeIcon(message.type)} ${message.text}`.trim())}</div>
+                    )}
+                    <span className="message-time">{getMessageFooterLabel(message)}</span>
+                    {shouldShowSeenInline && index === lastOutgoingIndex && activeMessageActionsKey !== messageKey && (
+                      <span className="message-seen-inline">Seen</span>
+                    )}
+                    {message.reaction && (
+                      <span className="message-reaction-badge" aria-label={`Reaction ${message.reaction}`}>
+                        {message.reaction}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className={`message-actions ${activeMessageActionsKey === messageKey ? 'active' : ''}`}>
                   <button
@@ -4455,6 +4526,7 @@ function ChatPageNew() {
               {messages.map((message, index) => {
                 const messageKey = getMessageUiKey(message, index)
                 const messageFailed = isMessageFailed(message)
+                const swipeProps = getMessageSwipeProps(message, messageKey)
                 return (
                 <motion.div
                   key={messageKey}
@@ -4474,36 +4546,48 @@ function ChatPageNew() {
                   onClick={(event) => handleMessageTap(event, messageKey)}
                   {...messageMotionProps}
                 >
-                  <div className={`message-content ${message.type === 'image' || message.type === 'video' ? 'has-media' : ''}`}>
-                    {message.sender === 'user' && message.deliveryStatus === 'uploading' && (
-                      <span className="message-upload-ring" title="Uploading" />
-                    )}
-                    {message.sender === 'user' && message.deliveryStatus === 'failed' && (
-                      <span className="message-upload-failed" title="Failed">!</span>
-                    )}
-                    {message.replyingTo && (
-                      <div className="message-reply-context">
-                        <div className="reply-label">Replying to {message.replyingTo.senderName ? `@${formatUsername(message.replyingTo.senderName)}` : 'message'}:</div>
-                        <div className="reply-text">{renderReplyContent(message.replyingTo, 'bubble')}</div>
-                      </div>
-                    )}
-                    {renderMessageMedia(message)}
-                    {message.fileName && message.type !== 'file' && <div className="message-file-name">{message.fileName}</div>}
-                    {(message.type === 'text' || !message.type) && (
-                      <div className="message-text">{renderTextWithLinks(message.text)}</div>
-                    )}
-                    {(message.type && message.type !== 'text' && !message.mediaUrl) && (
-                      <div className="message-media-fallback">{renderTextWithLinks(`${getTypeIcon(message.type)} ${message.text}`.trim())}</div>
-                    )}
-                    <span className="message-time">{getMessageFooterLabel(message)}</span>
-                    {shouldShowSeenInline && index === lastOutgoingIndex && activeMessageActionsKey !== messageKey && (
-                      <span className="message-seen-inline">Seen</span>
-                    )}
-                    {message.reaction && (
-                      <span className="message-reaction-badge" aria-label={`Reaction ${message.reaction}`}>
-                        {message.reaction}
-                      </span>
-                    )}
+                  <div className={`message-bubble-shell ${swipeProps.isActive ? 'swiping' : ''} ${swipeProps.isArmed ? 'armed' : ''}`}>
+                    <span
+                      className={`message-reply-indicator ${messageFailed ? 'disabled' : ''}`}
+                      style={swipeProps.indicatorStyle}
+                      aria-hidden="true"
+                    >
+                      {icons.reply}
+                    </span>
+                    <div
+                      className={`message-content ${message.type === 'image' || message.type === 'video' ? 'has-media' : ''}`}
+                      style={swipeProps.bubbleStyle}
+                    >
+                      {message.sender === 'user' && message.deliveryStatus === 'uploading' && (
+                        <span className="message-upload-ring" title="Uploading" />
+                      )}
+                      {message.sender === 'user' && message.deliveryStatus === 'failed' && (
+                        <span className="message-upload-failed" title="Failed">!</span>
+                      )}
+                      {message.replyingTo && (
+                        <div className="message-reply-context">
+                          <div className="reply-label">Replying to {message.replyingTo.senderName ? `@${formatUsername(message.replyingTo.senderName)}` : 'message'}:</div>
+                          <div className="reply-text">{renderReplyContent(message.replyingTo, 'bubble')}</div>
+                        </div>
+                      )}
+                      {renderMessageMedia(message)}
+                      {message.fileName && message.type !== 'file' && <div className="message-file-name">{message.fileName}</div>}
+                      {(message.type === 'text' || !message.type) && (
+                        <div className="message-text">{renderTextWithLinks(message.text)}</div>
+                      )}
+                      {(message.type && message.type !== 'text' && !message.mediaUrl) && (
+                        <div className="message-media-fallback">{renderTextWithLinks(`${getTypeIcon(message.type)} ${message.text}`.trim())}</div>
+                      )}
+                      <span className="message-time">{getMessageFooterLabel(message)}</span>
+                      {shouldShowSeenInline && index === lastOutgoingIndex && activeMessageActionsKey !== messageKey && (
+                        <span className="message-seen-inline">Seen</span>
+                      )}
+                      {message.reaction && (
+                        <span className="message-reaction-badge" aria-label={`Reaction ${message.reaction}`}>
+                          {message.reaction}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className={`message-actions ${activeMessageActionsKey === messageKey ? 'active' : ''}`}>
                     <button
