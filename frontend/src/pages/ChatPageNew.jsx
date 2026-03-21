@@ -4644,18 +4644,20 @@ function ChatPageNew() {
         </motion.div>
         {reactionTray && (
           <div className={`reaction-tray ${isTouchDevice ? 'mobile-menu' : ''}`} style={getReactionTrayStyle()}>
-            {QUICK_REACTIONS.map((item) => (
-              <button
-                key={`${reactionTray.messageKey}-${item.code}`}
-                type="button"
-                className="reaction-tray-btn"
-                onClick={() => applyMessageReaction(reactionTray.messageKey, item.emoji)}
-                aria-label={`React ${item.emoji}`}
-                title={`React ${item.emoji}`}
-              >
-                {item.emoji}
-              </button>
-            ))}
+            <div className="reaction-tray-reactions">
+              {QUICK_REACTIONS.map((item) => (
+                <button
+                  key={`${reactionTray.messageKey}-${item.code}`}
+                  type="button"
+                  className="reaction-tray-btn"
+                  onClick={() => applyMessageReaction(reactionTray.messageKey, item.emoji)}
+                  aria-label={`React ${item.emoji}`}
+                  title={`React ${item.emoji}`}
+                >
+                  {item.emoji}
+                </button>
+              ))}
+            </div>
             {isTouchDevice && (() => {
               const trayMessage = getReactionTrayMessage()
               if (!trayMessage) return null
