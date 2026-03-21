@@ -3829,8 +3829,7 @@ function ChatPageNew() {
       return
     }
 
-    const isOutgoing = state.message?.sender === 'user'
-    const rawSwipeOffset = isOutgoing ? -dx : dx
+    const rawSwipeOffset = dx
     const swipeOffset = Math.max(0, Math.min(MESSAGE_REPLY_SWIPE_MAX_PX, rawSwipeOffset))
     const armed = !isMessageFailed(state.message) && Math.abs(dy) < 38 && swipeOffset >= MESSAGE_REPLY_SWIPE_TRIGGER_PX
 
@@ -3906,21 +3905,22 @@ function ChatPageNew() {
     if (!reactionTray || typeof window === 'undefined') return {}
     const trayMessage = getReactionTrayMessage()
     const trayWidth = 292
-    const trayHeight = isTouchDevice ? 250 : 54
+    const trayHeight = isTouchDevice ? 62 : 54
     const pad = 8
-    const horizontalBias = isTouchDevice && trayMessage?.message?.sender === 'user'
-      ? 44
-      : isTouchDevice
-        ? -44
-        : 0
+    const messageNode = trayMessage?.messageKey ? messageNodeMapRef.current?.[trayMessage.messageKey] : null
+    const bubbleNode = messageNode?.querySelector?.('.message-content') || null
+    const messageRect = bubbleNode?.getBoundingClientRect?.() || messageNode?.getBoundingClientRect?.() || null
+    const anchorX = messageRect
+      ? (messageRect.left + (messageRect.width / 2))
+      : reactionTray.x
     const left = Math.max(
       pad,
-      Math.min(window.innerWidth - trayWidth - pad, reactionTray.x - (trayWidth / 2) + horizontalBias)
+      Math.min(window.innerWidth - trayWidth - pad, anchorX - (trayWidth / 2))
     )
-    const prefersAbove = reactionTray.y > (isTouchDevice ? 280 : 86)
-    const top = prefersAbove
-      ? Math.max(pad, reactionTray.y - trayHeight - 12)
-      : Math.min(window.innerHeight - trayHeight - pad, reactionTray.y + 16)
+    const anchorBottom = messageRect ? messageRect.bottom : reactionTray.y
+    const top = isTouchDevice
+      ? Math.min(window.innerHeight - trayHeight - pad, anchorBottom + 6)
+      : Math.max(pad, (messageRect ? messageRect.top : reactionTray.y) - trayHeight - 10)
     return { left: `${left}px`, top: `${top}px` }
   }
 
@@ -4304,8 +4304,7 @@ function ChatPageNew() {
       }
   const getMessageSwipeProps = (message, messageKey) => {
     const isActive = swipingMessage.key === messageKey && swipingMessage.offset > 0
-    const directionSign = message?.sender === 'user' ? -1 : 1
-    const offset = isActive ? swipingMessage.offset * directionSign : 0
+    const offset = isActive ? swipingMessage.offset : 0
     return {
       isActive,
       bubbleStyle: {
@@ -4657,10 +4656,10 @@ function ChatPageNew() {
             className={`reaction-tray ${isTouchDevice ? 'mobile-menu' : ''} ${reactionTrayMessage?.message?.sender === 'user' ? 'sent' : 'received'}`}
             style={getReactionTrayStyle()}
           >
+            {isTouchDevice && (
+              <div className="reaction-tray-helper">Tap and hold to super react</div>
+            )}
             <div className="reaction-tray-reactions">
-              {isTouchDevice && (
-                <div className="reaction-tray-helper">Tap and hold to super react</div>
-              )}
               {QUICK_REACTIONS.map((item) => (
                 <button
                   key={`${reactionTray.messageKey}-${item.code}`}
@@ -4674,11 +4673,6 @@ function ChatPageNew() {
                 </button>
               ))}
             </div>
-            {isTouchDevice && reactionTrayMessage && (
-              <div className="reaction-tray-actions">
-                {renderMessageActions(reactionTrayMessage.message, reactionTrayMessage.messageKey, reactionTrayMessage.messageFailed)}
-              </div>
-            )}
           </div>
         )}
 
