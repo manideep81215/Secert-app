@@ -1972,7 +1972,6 @@
   .message > .message-actions.active {
     display: flex;
     position: absolute;
-    top: calc(100% + 4.6rem);
     z-index: 18;
     width: fit-content;
     min-width: 9.4rem;
@@ -1990,6 +1989,16 @@
     transform: none;
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
+  }
+
+  .message > .message-actions.active.below {
+    top: calc(100% + 2.85rem);
+    bottom: auto;
+  }
+
+  .message > .message-actions.active.above {
+    top: auto;
+    bottom: calc(100% + 1rem);
   }
 
   .message.user > .message-actions.active {

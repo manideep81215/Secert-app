@@ -3906,6 +3906,9 @@ function ChatPageNew() {
     const trayMessage = getReactionTrayMessage()
     const trayWidth = 292
     const trayHeight = isTouchDevice ? 62 : 54
+    const actionOffsetBelowPx = 46
+    const actionCardHeightPx = 132
+    const trayGapPx = 8
     const pad = 8
     const messageNode = trayMessage?.messageKey ? messageNodeMapRef.current?.[trayMessage.messageKey] : null
     const bubbleNode = messageNode?.querySelector?.('.message-content') || null
@@ -3917,10 +3920,25 @@ function ChatPageNew() {
       pad,
       Math.min(window.innerWidth - trayWidth - pad, anchorX - (trayWidth / 2))
     )
+    const anchorTop = messageRect ? messageRect.top : reactionTray.y
     const anchorBottom = messageRect ? messageRect.bottom : reactionTray.y
+    const bottomSpace = typeof window !== 'undefined' ? (window.innerHeight - anchorBottom) : 0
+    const actionPlacement = bottomSpace < actionCardHeightPx ? 'above' : 'below'
+    const aboveTop = Math.max(pad, anchorTop - trayHeight - 10)
+    const belowTop = Math.min(window.innerHeight - trayHeight - pad, anchorBottom + 6)
     const top = isTouchDevice
-      ? Math.min(window.innerHeight - trayHeight - pad, anchorBottom + 6)
-      : Math.max(pad, (messageRect ? messageRect.top : reactionTray.y) - trayHeight - 10)
+      ? (
+          actionPlacement === 'above'
+            ? Math.max(pad, anchorTop - trayHeight - actionCardHeightPx - 16)
+            : Math.max(
+                pad,
+                Math.min(
+                  window.innerHeight - trayHeight - pad,
+                  anchorBottom + actionOffsetBelowPx - trayHeight - trayGapPx
+                )
+              )
+        )
+      : Math.max(pad, anchorTop - trayHeight - 10)
     return { left: `${left}px`, top: `${top}px` }
   }
 
@@ -4313,8 +4331,18 @@ function ChatPageNew() {
       },
     }
   }
+  const getMessageActionsPlacement = (messageKey) => {
+    if (typeof window === 'undefined' || !messageKey) return 'below'
+    const messageNode = messageNodeMapRef.current?.[messageKey]
+    const bubbleNode = messageNode?.querySelector?.('.message-content') || null
+    const rect = bubbleNode?.getBoundingClientRect?.() || messageNode?.getBoundingClientRect?.() || null
+    if (!rect) return 'below'
+    const estimatedCardHeight = 132
+    const bottomSpace = window.innerHeight - rect.bottom
+    return bottomSpace < estimatedCardHeight ? 'above' : 'below'
+  }
   const renderMessageActions = (message, messageKey, messageFailed) => (
-    <div className={`message-actions ${activeMessageActionsKey === messageKey ? 'active' : ''}`}>
+    <div className={`message-actions ${activeMessageActionsKey === messageKey ? 'active' : ''} ${getMessageActionsPlacement(messageKey)}`}>
       <div className="message-actions-header">{getMessageFooterLabel(message)}</div>
       <button
         className="btn-copy"
@@ -4355,6 +4383,26 @@ function ChatPageNew() {
     </div>
   )
   const reactionTrayMessage = reactionTray ? getReactionTrayMessage() : null
+
+  useEffect(() => {
+    if (!isTouchDevice) return undefined
+    if (!reactionTray && !activeMessageActionsKey) return undefined
+
+    const handleOutsidePress = (event) => {
+      const target = event.target
+      if (!(target instanceof HTMLElement)) return
+      if (target.closest('.reaction-tray')) return
+      if (target.closest('.message-actions.active')) return
+      if (target.closest('.message')) return
+      setReactionTray(null)
+      setActiveMessageActionsKey(null)
+    }
+
+    document.addEventListener('pointerdown', handleOutsidePress, true)
+    return () => {
+      document.removeEventListener('pointerdown', handleOutsidePress, true)
+    }
+  }, [isTouchDevice, reactionTray, activeMessageActionsKey])
 
   return (
     <div
@@ -4767,10 +4815,10 @@ function ChatPageNew() {
               {showAttachMenu && (
                 <div className="attach-dropdown">
                   <button className="attach-item" onClick={() => { mediaInputRef.current?.click(); setShowAttachMenu(false) }} title="Send Photo" aria-label="Send photo">
-                    <PhotoAttachIcon className="attach-icon attach-icon-photo" /> Photo
+                    <PhotoAttachIcon className="attach-icon attach-icon-photo" /> Gallary
                   </button>
                   <button className="attach-item" onClick={() => { handleCameraPhotoCapture(); setShowAttachMenu(false) }} title="Capture photo" aria-label="Capture photo">
-                    <CameraAttachIcon className="attach-icon attach-icon-camera" /> Camera Photo
+                    <CameraAttachIcon className="attach-icon attach-icon-camera" /> Photo
                   </button>
                   <button className="attach-item" onClick={() => { handleCameraVideoCapture(); setShowAttachMenu(false) }} title="Capture video" aria-label="Capture video">
                     <CameraAttachIcon className="attach-icon attach-icon-camera" /> Camera Video
