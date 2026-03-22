@@ -979,6 +979,12 @@
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
 }
 
+.reaction-tray-emoji-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
 .reaction-tray-reactions {
   display: inline-flex;
   align-items: center;
@@ -1005,24 +1011,34 @@
   width: 100%;
 }
 
-.reaction-tray.mobile-menu .reaction-tray-reactions {
+.reaction-tray.mobile-menu .reaction-tray-emoji-bar {
   align-self: center;
   display: flex;
-  flex-wrap: nowrap;
+  flex-direction: column;
+  align-items: stretch;
   gap: 0.18rem;
-  padding: 0.28rem 0.34rem;
-  border-radius: 999px;
+  min-width: min(16.5rem, calc(100vw - 2rem));
+  padding: 0.32rem 0.36rem 0.3rem;
+  border-radius: 1.15rem;
   background: rgba(255, 255, 255, 0.98);
   border: 1px solid rgba(0, 0, 0, 0.08);
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.16);
   white-space: nowrap;
 }
 
-.reaction-tray.mobile-menu.sent .reaction-tray-reactions {
+.reaction-tray.mobile-menu .reaction-tray-reactions {
+  align-self: stretch;
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: center;
+  gap: 0.18rem;
+}
+
+.reaction-tray.mobile-menu.sent .reaction-tray-emoji-bar {
   align-self: center;
 }
 
-.reaction-tray.mobile-menu.received .reaction-tray-reactions {
+.reaction-tray.mobile-menu.received .reaction-tray-emoji-bar {
   align-self: center;
 }
 

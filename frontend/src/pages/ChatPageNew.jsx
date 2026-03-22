@@ -4807,22 +4807,24 @@ function ChatPageNew() {
             className={`reaction-tray ${isTouchDevice ? 'mobile-menu' : ''} ${reactionTrayMessage?.message?.sender === 'user' ? 'sent' : 'received'}`}
             style={getReactionTrayStyle()}
           >
-            {isTouchDevice && (
-              <div className="reaction-tray-helper">Tap and hold to super react</div>
-            )}
-            <div className="reaction-tray-reactions">
-              {QUICK_REACTIONS.map((item) => (
-                <button
-                  key={`${reactionTray.messageKey}-${item.code}`}
-                  type="button"
-                  className="reaction-tray-btn"
-                  onClick={() => applyMessageReaction(reactionTray.messageKey, item.emoji)}
-                  aria-label={`React ${item.emoji}`}
-                  title={`React ${item.emoji}`}
-                >
-                  {item.emoji}
-                </button>
-              ))}
+            <div className="reaction-tray-emoji-bar">
+              {isTouchDevice && (
+                <div className="reaction-tray-helper">Tap and hold to super react</div>
+              )}
+              <div className="reaction-tray-reactions">
+                {QUICK_REACTIONS.map((item) => (
+                  <button
+                    key={`${reactionTray.messageKey}-${item.code}`}
+                    type="button"
+                    className="reaction-tray-btn"
+                    onClick={() => applyMessageReaction(reactionTray.messageKey, item.emoji)}
+                    aria-label={`React ${item.emoji}`}
+                    title={`React ${item.emoji}`}
+                  >
+                    {item.emoji}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         )}
