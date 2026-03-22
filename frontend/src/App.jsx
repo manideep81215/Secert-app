@@ -460,50 +460,7 @@ function App() {
   }, [flow?.token])
 
   return (
-    <div className={`app-wrap container-fluid ${isFullBleedRoute ? 'app-auth-route p-0' : 'py-4 px-3 px-md-4'}`}>
-      {shouldShowPrivacyBlur && <PrivacyBlur />}
-      <div className={isFullBleedRoute ? 'app-auth-max' : 'mx-auto app-max'}>
-        <Routes>
-          <Route path="/" element={<Navigate to={isAuthenticated ? '/games' : '/auth'} replace />} />
-          <Route path="/auth" element={isAuthenticated ? <Navigate to="/games" replace /> : <AuthPage />} />
-          <Route path="/games" element={isAuthenticated ? <GamesPage /> : <Navigate to="/auth" replace />} />
-          <Route path="/games/rps" element={isAuthenticated ? <RpsGamePage /> : <Navigate to="/auth" replace />} />
-          <Route path="/games/coin" element={isAuthenticated ? <CoinGamePage /> : <Navigate to="/auth" replace />} />
-          <Route path="/games/ttt" element={isAuthenticated ? <TttGamePage /> : <Navigate to="/auth" replace />} />
-          <Route path="/games/snake-ladder" element={isAuthenticated ? <SnakeLadderGamePage /> : <Navigate to="/auth" replace />} />
-          <Route path="/verify" element={isAuthenticated ? <Navigate to="/profile" replace /> : <Navigate to="/auth" replace />} />
-          <Route path="/users" element={isAuthenticated ? <Navigate to="/chat" replace state={{ openUsersList: true }} /> : <Navigate to="/auth" replace />} />
-          <Route path="/chat" element={isAuthenticated ? <ChatPageNew /> : <Navigate to="/auth" replace />} />
-          <Route path="/chat/recap" element={isAuthenticated ? <RecapPage /> : <Navigate to="/auth" replace />} />
-          <Route path="/chat/info" element={isAuthenticated ? <ChatInfoPage /> : <Navigate to="/auth" replace />} />
-          <Route path="/timers" element={isAuthenticated ? <LoveTimers /> : <Navigate to="/auth" replace />} />
-          <Route path="/profile" element={isAuthenticated ? <ProfilePage /> : <Navigate to="/auth" replace />} />
-          <Route path="*" element={<Navigate to="/auth" replace />} />
-        </Routes>
-      </div>
-
-      {!isAppInstalled && installPromptEvent && (
-        <button className="pwa-install-btn" onClick={handleInstall} aria-label="Install app">
-          Install App
-        </button>
-      )}
-
-      {!isAppInstalled && !installPromptEvent && showIosInstallHelp && (
-        <div className="pwa-ios-help" role="status" aria-live="polite">
-          <button
-            className="pwa-ios-help-close"
-            onClick={dismissIosInstallHelp}
-            type="button"
-            aria-label="Close iOS install instructions"
-          >
-            x
-          </button>
-          <p className="pwa-ios-help-title">Install on iPhone</p>
-          <p className="pwa-ios-help-text">1. Tap Share in Safari.</p>
-          <p className="pwa-ios-help-text">2. Tap Add to Home Screen.</p>
-        </div>
-      )}
-
+    <>
       <ToastContainer
         position="top-right"
         autoClose={1500}
@@ -520,9 +477,62 @@ function App() {
             &#10003;
           </span>
         )}
+        style={{
+          position: 'fixed',
+          top: '40px',
+          right: '16px',
+          left: 'auto',
+          zIndex: 9600,
+          width: 'min(80vw, 260px)',
+          maxWidth: 'min(80vw, 260px)',
+        }}
       />
 
-    </div>
+      <div className={`app-wrap container-fluid ${isFullBleedRoute ? 'app-auth-route p-0' : 'py-4 px-3 px-md-4'}`}>
+        {shouldShowPrivacyBlur && <PrivacyBlur />}
+        <div className={isFullBleedRoute ? 'app-auth-max' : 'mx-auto app-max'}>
+          <Routes>
+            <Route path="/" element={<Navigate to={isAuthenticated ? '/games' : '/auth'} replace />} />
+            <Route path="/auth" element={isAuthenticated ? <Navigate to="/games" replace /> : <AuthPage />} />
+            <Route path="/games" element={isAuthenticated ? <GamesPage /> : <Navigate to="/auth" replace />} />
+            <Route path="/games/rps" element={isAuthenticated ? <RpsGamePage /> : <Navigate to="/auth" replace />} />
+            <Route path="/games/coin" element={isAuthenticated ? <CoinGamePage /> : <Navigate to="/auth" replace />} />
+            <Route path="/games/ttt" element={isAuthenticated ? <TttGamePage /> : <Navigate to="/auth" replace />} />
+            <Route path="/games/snake-ladder" element={isAuthenticated ? <SnakeLadderGamePage /> : <Navigate to="/auth" replace />} />
+            <Route path="/verify" element={isAuthenticated ? <Navigate to="/profile" replace /> : <Navigate to="/auth" replace />} />
+            <Route path="/users" element={isAuthenticated ? <Navigate to="/chat" replace state={{ openUsersList: true }} /> : <Navigate to="/auth" replace />} />
+            <Route path="/chat" element={isAuthenticated ? <ChatPageNew /> : <Navigate to="/auth" replace />} />
+            <Route path="/chat/recap" element={isAuthenticated ? <RecapPage /> : <Navigate to="/auth" replace />} />
+            <Route path="/chat/info" element={isAuthenticated ? <ChatInfoPage /> : <Navigate to="/auth" replace />} />
+            <Route path="/timers" element={isAuthenticated ? <LoveTimers /> : <Navigate to="/auth" replace />} />
+            <Route path="/profile" element={isAuthenticated ? <ProfilePage /> : <Navigate to="/auth" replace />} />
+            <Route path="*" element={<Navigate to="/auth" replace />} />
+          </Routes>
+        </div>
+
+        {!isAppInstalled && installPromptEvent && (
+          <button className="pwa-install-btn" onClick={handleInstall} aria-label="Install app">
+            Install App
+          </button>
+        )}
+
+        {!isAppInstalled && !installPromptEvent && showIosInstallHelp && (
+          <div className="pwa-ios-help" role="status" aria-live="polite">
+            <button
+              className="pwa-ios-help-close"
+              onClick={dismissIosInstallHelp}
+              type="button"
+              aria-label="Close iOS install instructions"
+            >
+              x
+            </button>
+            <p className="pwa-ios-help-title">Install on iPhone</p>
+            <p className="pwa-ios-help-text">1. Tap Share in Safari.</p>
+            <p className="pwa-ios-help-text">2. Tap Add to Home Screen.</p>
+          </div>
+        )}
+      </div>
+    </>
   )
 }
 

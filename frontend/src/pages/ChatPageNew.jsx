@@ -222,7 +222,7 @@ function ChatPageNew() {
   const conversationCacheRef = useRef({})
   const messagesRef = useRef([])
   const draggedMessageRef = useRef(null)
-  const lastMessageTapRef = useRef({ key: null, at: 0 })
+  const lastMessageTapRef = useRef({ key: null, at: 0, count: 0, timerId: null })
   const hasOlderMessagesRef = useRef(false)
   const messageNodeMapRef = useRef({})
   const highlightClearTimerRef = useRef(null)
@@ -3733,8 +3733,7 @@ function ChatPageNew() {
     setActiveMessageActionsKey(null)
   }
 
-  const confirmDeleteMessage = () => {
-    const message = pendingDeleteMessage
+  const performDeleteMessage = (message) => {
     if (!selectedUser || !message) {
       setShowDeleteConfirm(false)
       setPendingDeleteMessage(null)
@@ -3780,6 +3779,10 @@ function ChatPageNew() {
     setActiveMessageActionsKey((prev) => (prev === messageKey ? null : prev))
     setShowDeleteConfirm(false)
     setPendingDeleteMessage(null)
+  }
+
+  const confirmDeleteMessage = () => {
+    performDeleteMessage(pendingDeleteMessage)
   }
 
   const handleDragStart = (event, message) => {
@@ -3951,6 +3954,14 @@ function ChatPageNew() {
     finishMessageGesture()
   }
 
+  const clearPendingMessageTap = () => {
+    const timerId = lastMessageTapRef.current?.timerId
+    if (timerId) {
+      clearTimeout(timerId)
+    }
+    lastMessageTapRef.current = { key: null, at: 0, count: 0, timerId: null }
+  }
+
   const handleMessageTap = (event, message, messageKey) => {
     if (!isTouchDevice) return
     if (Date.now() < swipeTapSuppressUntilRef.current) return
@@ -3960,20 +3971,37 @@ function ChatPageNew() {
 
     const now = Date.now()
     const lastTap = lastMessageTapRef.current
-    const isDoubleTap = lastTap.key === messageKey && (now - lastTap.at) <= 320
-
-    if (isDoubleTap) {
-      lastMessageTapRef.current = { key: null, at: 0 }
-      triggerReplySwipe(message)
-      return
-    }
-
-    lastMessageTapRef.current = { key: messageKey, at: now }
     if (activeMessageActionsKey === messageKey || reactionTray?.messageKey === messageKey) {
       setReactionTray(null)
       setActiveMessageActionsKey(null)
     }
+
+    const isSameTapSequence = lastTap.key === messageKey && (now - lastTap.at) <= 320
+    const nextCount = isSameTapSequence ? Math.min(3, Number(lastTap.count || 0) + 1) : 1
+
+    if (lastTap.timerId) {
+      clearTimeout(lastTap.timerId)
+    }
+
+    if (nextCount >= 3) {
+      clearPendingMessageTap()
+      handleDeleteMessage(message)
+      return
+    }
+
+    const timerId = window.setTimeout(() => {
+      if (nextCount === 2) {
+        triggerReplySwipe(message)
+      }
+      clearPendingMessageTap()
+    }, 320)
+
+    lastMessageTapRef.current = { key: messageKey, at: now, count: nextCount, timerId }
   }
+
+  useEffect(() => () => {
+    clearPendingMessageTap()
+  }, [])
 
   const getReactionTrayStyle = () => {
     if (!reactionTray || typeof window === 'undefined') return {}
