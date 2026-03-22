@@ -18,9 +18,9 @@ const SECRET_TAP_MESSAGES = {
   2: '📢 amma nanna unnaru🚨',
   3: "📢 can't stay Bye Good Night🚨",
 }
-const TONY_LONG_PRESS_MESSAGE = '📢 Aagu baby Ostha ,Matladaniki avvatle 🚨'
-const HIHI_LONG_PRESS_MESSAGE = '📢 Hari unnadu🚨'
-const TONY_HIHI_DOUBLE_TAP_MESSAGE = '📢 friends unnaru chatting cheyadam avvatle🚨'
+const TONY_LONG_PRESS_MESSAGE = '📢 friends unnaru chatting cheyadam avvatle🚨 '
+const HIHI_LONG_PRESS_MESSAGE = '📢 Hari unnadu 🚨'
+const TONY_HIHI_DOUBLE_TAP_MESSAGE = '📢 Aagu baby Ostha ,Matladaniki avvatle 🚨'
 
 const normalizeUsername = (value) => String(value || '').trim().toLowerCase()
 

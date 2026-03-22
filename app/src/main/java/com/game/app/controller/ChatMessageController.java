@@ -357,8 +357,23 @@ public class ChatMessageController {
     if (name.matches(".*\\.(apk)$")) {
       return "application/vnd.android.package-archive";
     }
-    if (name.matches(".*\\.(mp4|mov|m4v|webm|mkv|avi|3gp)$")) {
+    if (name.matches(".*\\.(mp4|m4v)$")) {
       return "video/mp4";
+    }
+    if (name.matches(".*\\.(mov)$")) {
+      return "video/quicktime";
+    }
+    if (name.matches(".*\\.(webm)$")) {
+      return "video/webm";
+    }
+    if (name.matches(".*\\.(mkv)$")) {
+      return "video/x-matroska";
+    }
+    if (name.matches(".*\\.(avi)$")) {
+      return "video/x-msvideo";
+    }
+    if (name.matches(".*\\.(3gp)$")) {
+      return "video/3gpp";
     }
     if (name.matches(".*\\.(jpg|jpeg|png|gif|webp|heic|heif|bmp|svg)$")) {
       return "image/jpeg";

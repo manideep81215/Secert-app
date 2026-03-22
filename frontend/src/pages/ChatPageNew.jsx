@@ -25,6 +25,7 @@ import MonthlyRecap from '../components/MonthlyRecap'
 import MilestonePopup from '../components/MilestonePopup'
 import LovePercentageChip from '../components/LovePercentageChip'
 import CheckedForYouPopup from '../components/CheckedForYouPopup'
+import SnapCameraScreen from '../components/SnapCameraScreen'
 import timerLoveBirdsIcon from '../assets/in-love.png'
 import ChatUsersPanel from './ChatUsersPanel'
 import {
@@ -132,7 +133,9 @@ function ChatPageNew() {
   const [inputValue, setInputValue] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [showAttachMenu, setShowAttachMenu] = useState(false)
+  const [isSnapCameraOpen, setIsSnapCameraOpen] = useState(false)
   const [pendingImagePreview, setPendingImagePreview] = useState(null)
+  const [isPendingImageSending, setIsPendingImageSending] = useState(false)
   const [activeMediaPreview, setActiveMediaPreview] = useState(null)
   const [isMobileView, setIsMobileView] = useState(() => window.innerWidth <= 920)
   const [isTouchDevice, setIsTouchDevice] = useState(
@@ -260,6 +263,21 @@ function ChatPageNew() {
     }
     const platform = cap.getPlatform?.()
     return platform === 'ios' || platform === 'android'
+  }
+  const isGrantedPermissionState = (value) => value === 'granted' || value === 'limited'
+  const requestNativeCameraPermission = async () => {
+    if (!isNativeCapacitorRuntime()) return true
+    try {
+      const permission = await Camera.requestPermissions({ permissions: ['camera'] })
+      if (isGrantedPermissionState(permission?.camera)) {
+        return true
+      }
+    } catch (error) {
+      const message = String(error?.message || '').toLowerCase()
+      if (message.includes('cancel')) return false
+    }
+    notify.error('Camera permission is required to use the camera.')
+    return false
   }
   const getCapacitorKeyboard = async () => {
     const runtimeKeyboard = window?.Capacitor?.Plugins?.Keyboard
@@ -3295,7 +3313,7 @@ function ChatPageNew() {
   }
 
   const sendMediaFile = async (file, type) => {
-    if (!selectedUser || !file) return
+    if (!selectedUser || !file) return false
 
     let resolvedType = type
     if (type === 'photo') {
@@ -3365,7 +3383,7 @@ function ChatPageNew() {
       if (!compressedResult?.file) {
         updateTempMessage({ deliveryStatus: 'failed', uploadProgress: 100 })
         notify.error('Upload must be below 200MB. Compression could not reduce this media enough.')
-        return
+        return false
       }
       uploadFile = compressedResult.file
       updateTempMessage({
@@ -3384,7 +3402,7 @@ function ChatPageNew() {
     if (uploadFile.size > maxBytes) {
       updateTempMessage({ deliveryStatus: 'failed', uploadProgress: 100 })
       notify.error('Upload must be below 200MB.')
-      return
+      return false
     }
 
     let uploaded
@@ -3403,16 +3421,16 @@ function ChatPageNew() {
         notify.error('Session expired. Please login again.')
         resetFlowState(setFlow)
         navigate('/auth')
-        return
+        return false
       }
       if (error?.response?.status === 413) {
         updateTempMessage({ deliveryStatus: 'failed', uploadProgress: 100 })
         notify.error('File exceeds upload limit (200MB max).')
-        return
+        return false
       }
       updateTempMessage({ deliveryStatus: 'failed', uploadProgress: 100 })
       notify.error('Media upload failed. Please try a smaller file.')
-      return
+      return false
     }
 
     const uploadedUrl = normalizeMediaUrl(uploaded?.mediaUrl || localPreviewUrl)
@@ -3436,7 +3454,7 @@ function ChatPageNew() {
     if (!isRealtimeReady) {
       updateTempMessage({ deliveryStatus: 'failed' })
       notify.error('Media uploaded, but realtime is disconnected. Tap resend when connection returns.')
-      return
+      return true
     }
 
     try {
@@ -3444,7 +3462,7 @@ function ChatPageNew() {
       if (!activeSocket?.connected) {
         updateTempMessage({ deliveryStatus: 'failed' })
         notify.error('Media uploaded, but realtime is disconnected. Tap resend when connection returns.')
-        return
+        return true
       }
       activeSocket.publish({
         destination: '/app/chat.send',
@@ -3475,12 +3493,22 @@ function ChatPageNew() {
       console.error('Realtime publish failed after upload', error)
       updateTempMessage({ deliveryStatus: 'failed' })
       notify.error('Media uploaded, but send failed. Tap resend.')
+      return true
     }
+    return true
   }
 
   const handleFileUpload = async (event, type) => {
     const file = event?.target?.files?.[0]
     if (!file) return
+
+    if (!selectedUser) {
+      notify.error('Select a user first.')
+      if (event?.target) {
+        event.target.value = ''
+      }
+      return
+    }
 
     if (type === 'photo' && inferMediaKind(file) === 'image') {
       clearPendingImagePreview()
@@ -3495,11 +3523,54 @@ function ChatPageNew() {
     }
   }
 
+  const queueCapturedPhotoToChat = async (file) => {
+    if (!file) return false
+    const didQueue = await sendMediaFile(file, 'photo')
+    if (didQueue) {
+      return true
+    }
+    clearPendingImagePreview()
+    const previewUrl = URL.createObjectURL(file)
+    setPendingImagePreview({ file, url: previewUrl, name: file.name || 'image' })
+    return false
+  }
+
+  const handleCameraPhotoInputChange = async (event) => {
+    const file = event?.target?.files?.[0]
+    if (!file) return
+
+    if (!selectedUser) {
+      notify.error('Select a user first.')
+      if (event?.target) {
+        event.target.value = ''
+      }
+      return
+    }
+
+    await queueCapturedPhotoToChat(file)
+
+    if (event?.target) {
+      event.target.value = ''
+    }
+  }
+
   const confirmImagePreviewSend = async () => {
     if (!pendingImagePreview?.file) return
+    if (!selectedUser) {
+      notify.error('Select a user first.')
+      return
+    }
+    if (isPendingImageSending) return
     const file = pendingImagePreview.file
-    clearPendingImagePreview()
-    await sendMediaFile(file, 'photo')
+    setIsPendingImageSending(true)
+    try {
+      const didQueue = await sendMediaFile(file, 'photo')
+      if (didQueue) {
+        clearPendingImagePreview()
+      }
+    } finally {
+      setIsPendingImageSending(false)
+    }
   }
 
   const stopVoiceRecording = (discard = false) => {
@@ -4154,11 +4225,18 @@ function ChatPageNew() {
   }
 
   const handleCameraPhotoCapture = async () => {
+    if (!selectedUser) {
+      notify.error('Select a user first.')
+      return
+    }
     const isNativeRuntime = isNativeCapacitorRuntime()
     if (!isNativeRuntime) {
       cameraPhotoInputRef.current?.click()
       return
     }
+
+    const hasPermission = await requestNativeCameraPermission()
+    if (!hasPermission) return
 
     try {
       const toFileFromBlob = (blob, name, typeHint = '') => {
@@ -4211,9 +4289,7 @@ function ChatPageNew() {
         blob = await response.blob()
       }
       const file = toFileFromBlob(blob, `camera-${Date.now()}.${extension}`, fileType)
-      clearPendingImagePreview()
-      const previewUrl = URL.createObjectURL(file)
-      setPendingImagePreview({ file, url: previewUrl, name: file.name || 'image' })
+      await queueCapturedPhotoToChat(file)
     } catch (error) {
       const code = String(error?.message || '').toLowerCase()
       const cancelled = code.includes('cancel') || code.includes('user cancelled')
@@ -4223,12 +4299,28 @@ function ChatPageNew() {
     }
   }
 
+  const openSnapCamera = () => {
+    if (!selectedUser) {
+      notify.error('Select a user first.')
+      return
+    }
+    setShowAttachMenu(false)
+    setIsSnapCameraOpen(true)
+  }
+
   const handleCameraVideoCapture = async () => {
+    if (!selectedUser) {
+      notify.error('Select a user first.')
+      return
+    }
     const isNativeRuntime = isNativeCapacitorRuntime()
-    if (!isNativeRuntime) {
+    if (!isNativeRuntime || isAndroidPlatform) {
       cameraVideoInputRef.current?.click()
       return
     }
+
+    const hasPermission = await requestNativeCameraPermission()
+    if (!hasPermission) return
 
     const mediaCaptureApi = window?.navigator?.device?.capture
     if (!mediaCaptureApi?.captureVideo) {
@@ -4895,6 +4987,30 @@ function ChatPageNew() {
           <div className="input-wrapper">
             <div className="input-actions" ref={attachMenuRef}>
               <button
+                className="btn-action btn-snap"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  openSnapCamera()
+                }}
+                title="Open Snap Camera"
+                aria-label="Open snap camera"
+              >
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M23 7l-7 5 7 5V7z" />
+                  <rect x="1" y="5" width="15" height="14" rx="2" />
+                </svg>
+              </button>
+              <button
                 className="btn-action btn-plus"
                 onClick={(event) => {
                   event.stopPropagation()
@@ -4994,7 +5110,7 @@ function ChatPageNew() {
             type="file"
             ref={cameraPhotoInputRef}
             style={{ display: 'none' }}
-            onChange={(event) => handleFileUpload(event, 'photo')}
+            onChange={handleCameraPhotoInputChange}
             accept="image/*"
             capture="environment"
           />
@@ -5053,7 +5169,7 @@ function ChatPageNew() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            <div className="image-preview-backdrop" onClick={clearPendingImagePreview} />
+            <div className="image-preview-backdrop" onClick={isPendingImageSending ? undefined : clearPendingImagePreview} />
             <motion.div
               className="image-preview-sheet"
               initial={{ y: 24, opacity: 0 }}
@@ -5063,13 +5179,24 @@ function ChatPageNew() {
               <div className="image-preview-title">Preview image</div>
               <img src={pendingImagePreview.url} alt={pendingImagePreview.name} className="image-preview-full" />
               <div className="image-preview-actions">
-                <button type="button" className="image-preview-cancel" onClick={clearPendingImagePreview}>Cancel</button>
-                <button type="button" className="image-preview-send" onClick={confirmImagePreviewSend}>Send</button>
+                <button type="button" className="image-preview-cancel" onClick={clearPendingImagePreview} disabled={isPendingImageSending}>Cancel</button>
+                <button type="button" className="image-preview-send" onClick={confirmImagePreviewSend} disabled={isPendingImageSending}>
+                  {isPendingImageSending ? 'Sending...' : 'Send'}
+                </button>
               </div>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {isSnapCameraOpen && (
+        <SnapCameraScreen
+          currentUser={flow.username}
+          otherUser={selectedUser?.username || ''}
+          onClose={() => setIsSnapCameraOpen(false)}
+          onSend={(file, capturedType) => sendMediaFile(file, capturedType === 'video' ? 'video' : 'photo')}
+        />
+      )}
 
       <AnimatePresence>
         {showDeleteConfirm && (
