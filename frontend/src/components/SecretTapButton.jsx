@@ -14,13 +14,13 @@ const SECRET_TAP_TARGETS = {
   test: ['tony'],
 }
 const SECRET_TAP_MESSAGES = {
-  1: 'Wait , Ostha(tap-msg)',
-  2: 'amma nanna unnaru(tap-msg)',
-  3: "can't stay Bye Good Night(tap-msg)",
+  1: '📢 Wait , Ostha🚨',
+  2: '📢 amma nanna unnaru🚨',
+  3: "📢 can't stay Bye Good Night🚨",
 }
-const TONY_LONG_PRESS_MESSAGE = 'Aagu baby Ostha ,Avvatle matladadam(tap-msg)'
-const HIHI_LONG_PRESS_MESSAGE = 'Hari unnadu(tap-msg)'
-const TONY_HIHI_DOUBLE_TAP_MESSAGE = 'friends unnaru chatting avvatle(tap-msg)'
+const TONY_LONG_PRESS_MESSAGE = '📢 Aagu baby Ostha ,Matladaniki avvatle 🚨'
+const HIHI_LONG_PRESS_MESSAGE = '📢 Hari unnadu🚨'
+const TONY_HIHI_DOUBLE_TAP_MESSAGE = '📢 friends unnaru chatting cheyadam avvatle🚨'
 
 const normalizeUsername = (value) => String(value || '').trim().toLowerCase()
 
@@ -46,8 +46,7 @@ function SecretTapButton({ username, socketRef }) {
 
   const canUseSecretTap = recipients.length > 0
   const canSendTonyHihiDoubleTap = (
-    (normalizedUsername === TONY_USERNAME && recipients.includes(HIHI_USERNAME))
-    || (normalizedUsername === HIHI_USERNAME && recipients.includes(TONY_USERNAME))
+    normalizedUsername === TONY_USERNAME && recipients.includes(HIHI_USERNAME)
   )
 
   const clearTapTimer = () => {
