@@ -23,7 +23,7 @@ const OVERLAY_SHADOW_COLOR = 'rgba(0,0,0,0.45)'
 const OVERLAY_EDIT_TAP_THRESHOLD = 0.014
 const OVERLAY_MIN_SIZE = 0.65
 const OVERLAY_MAX_SIZE = 2.4
-const OVERLAY_SIZE_STEP = 0.12
+const OVERLAY_SIZE_STEP = 0.05
 
 function createOverlayId() {
   return `overlay_${Date.now()}_${Math.random().toString(16).slice(2)}`
@@ -56,6 +56,13 @@ function clampOverlayItemSize(sizeValue, type) {
     return getOverlayDefaultSize(type)
   }
   return clamp(parsed, OVERLAY_MIN_SIZE, OVERLAY_MAX_SIZE)
+}
+
+function getStageDistance(firstPoint, secondPoint) {
+  if (!firstPoint || !secondPoint) return 0
+  const deltaX = Number(firstPoint.x || 0) - Number(secondPoint.x || 0)
+  const deltaY = Number(firstPoint.y || 0) - Number(secondPoint.y || 0)
+  return Math.hypot(deltaX, deltaY)
 }
 
 function getNineBySixteenCrop(sourceWidth, sourceHeight) {
@@ -994,13 +1001,13 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
     setOverlayComposer((prev) => (prev ? { ...prev, value: nextValue } : prev))
   }
 
-  function adjustOverlayComposerSize(direction) {
-    const delta = direction === 'down' ? -OVERLAY_SIZE_STEP : OVERLAY_SIZE_STEP
+  function handleOverlayComposerSizeChange(event) {
+    const nextPercent = Number(event?.target?.value)
     setOverlayComposer((prev) => {
       if (!prev) return prev
       return {
         ...prev,
-        size: clampOverlayItemSize(Number(prev.size || getOverlayDefaultSize(prev.type)) + delta, prev.type),
+        size: clampOverlayItemSize(nextPercent / 100, prev.type),
       }
     })
   }
@@ -1086,13 +1093,20 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
     dragFrameRef.current = 0
     const activeDrag = dragOverlayRef.current
     if (!activeDrag?.latestPoint) return
-    const { id, offsetX, offsetY, latestPoint } = activeDrag
+    const { id, offsetX, offsetY, latestPoint, gestureMode, latestSize } = activeDrag
     setOverlayItems((prev) => prev.map((item) => (
       item.id === id
         ? {
             ...item,
-            x: clamp(latestPoint.x - offsetX, 0.08, 0.92),
-            y: clamp(latestPoint.y - offsetY, 0.08, 0.92),
+            ...(gestureMode === 'pinch'
+              ? {}
+              : {
+                  x: clamp(latestPoint.x - offsetX, 0.08, 0.92),
+                  y: clamp(latestPoint.y - offsetY, 0.08, 0.92),
+                }),
+            ...(Number.isFinite(latestSize)
+              ? { size: clampOverlayItemSize(latestSize, item.type) }
+              : {}),
           }
         : item
     )))
@@ -1117,13 +1131,20 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
     if (shouldDeleteOverlay) {
       setOverlayItems((prev) => prev.filter((item) => item.id !== activeDrag.id))
     } else if (activeDrag?.latestPoint) {
-      const { id, offsetX, offsetY, latestPoint } = activeDrag
+      const { id, offsetX, offsetY, latestPoint, gestureMode, latestSize } = activeDrag
       setOverlayItems((prev) => prev.map((item) => (
         item.id === id
           ? {
               ...item,
-              x: clamp(latestPoint.x - offsetX, 0.08, 0.92),
-              y: clamp(latestPoint.y - offsetY, 0.08, 0.92),
+              ...(gestureMode === 'pinch'
+                ? {}
+                : {
+                    x: clamp(latestPoint.x - offsetX, 0.08, 0.92),
+                    y: clamp(latestPoint.y - offsetY, 0.08, 0.92),
+                  }),
+              ...(Number.isFinite(latestSize)
+                ? { size: clampOverlayItemSize(latestSize, item.type) }
+                : {}),
             }
           : item
       )))
@@ -1144,13 +1165,39 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
 
   function handleOverlayDragMove(event) {
     if (!dragOverlayRef.current) return
-    if (dragOverlayRef.current.pointerId != null && event.pointerId !== dragOverlayRef.current.pointerId) return
     event.preventDefault()
     event.stopPropagation()
     const stagePoint = getStagePoint(event)
     if (!stagePoint) return
 
+    const activeDrag = dragOverlayRef.current
+    const pointerMap = activeDrag.pointerMap instanceof Map ? activeDrag.pointerMap : null
+    if (pointerMap && !pointerMap.has(event.pointerId)) return
+    if (pointerMap) {
+      pointerMap.set(event.pointerId, stagePoint)
+    } else if (activeDrag.pointerId != null && event.pointerId !== activeDrag.pointerId) {
+      return
+    }
+
     dragOverlayRef.current.latestPoint = stagePoint
+    if (dragOverlayRef.current.gestureMode === 'pinch' && pointerMap && pointerMap.size >= 2) {
+      const [firstPoint, secondPoint] = [...pointerMap.values()]
+      const pinchDistance = getStageDistance(firstPoint, secondPoint)
+      if (pinchDistance > 0 && Number(dragOverlayRef.current.pinchStartDistance || 0) > 0) {
+        dragOverlayRef.current.latestSize = clampOverlayItemSize(
+          Number(dragOverlayRef.current.startSize || 1) * (pinchDistance / dragOverlayRef.current.pinchStartDistance),
+          dragOverlayRef.current.itemType,
+        )
+        dragOverlayRef.current.didMove = true
+      }
+      dragOverlayRef.current.isInsideDeleteZone = false
+      setIsDeleteDropActive(false)
+      if (!dragFrameRef.current) {
+        dragFrameRef.current = window.requestAnimationFrame(flushOverlayDragFrame)
+      }
+      return
+    }
+
     const deltaX = stagePoint.x - Number(dragOverlayRef.current.startPoint?.x || 0)
     const deltaY = stagePoint.y - Number(dragOverlayRef.current.startPoint?.y || 0)
     if (Math.hypot(deltaX, deltaY) >= OVERLAY_EDIT_TAP_THRESHOLD) {
@@ -1171,6 +1218,35 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
     const stagePoint = getStagePoint(event)
     if (!stagePoint) return
 
+    const activeDrag = dragOverlayRef.current
+    if (activeDrag && activeDrag.id !== item.id) {
+      stopOverlayDrag()
+    }
+    if (activeDrag && activeDrag.id === item.id && isMobileDevice) {
+      if (typeof event.currentTarget?.setPointerCapture === 'function' && event.pointerId != null) {
+        try {
+          event.currentTarget.setPointerCapture(event.pointerId)
+        } catch {
+          // Ignore unsupported pointer-capture failures.
+        }
+      }
+      if (!(activeDrag.pointerMap instanceof Map)) {
+        activeDrag.pointerMap = new Map()
+      }
+      activeDrag.pointerMap.set(event.pointerId, stagePoint)
+      if (activeDrag.pointerMap.size >= 2) {
+        const [firstPoint, secondPoint] = [...activeDrag.pointerMap.values()]
+        activeDrag.gestureMode = 'pinch'
+        activeDrag.pinchStartDistance = Math.max(getStageDistance(firstPoint, secondPoint), 0.0001)
+        activeDrag.startSize = clampOverlayItemSize(activeDrag.latestSize ?? item.size, item.type)
+        activeDrag.latestSize = activeDrag.startSize
+        activeDrag.didMove = true
+        activeDrag.isInsideDeleteZone = false
+        setIsDeleteDropActive(false)
+      }
+      return
+    }
+
     if (typeof event.currentTarget?.setPointerCapture === 'function' && event.pointerId != null) {
       try {
         event.currentTarget.setPointerCapture(event.pointerId)
@@ -1185,6 +1261,12 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
       offsetY: stagePoint.y - item.y,
       startPoint: stagePoint,
       latestPoint: stagePoint,
+      latestSize: clampOverlayItemSize(item?.size, item?.type),
+      startSize: clampOverlayItemSize(item?.size, item?.type),
+      pinchStartDistance: 0,
+      itemType: item.type,
+      gestureMode: 'drag',
+      pointerMap: new Map([[event.pointerId, stagePoint]]),
       didMove: false,
       isInsideDeleteZone: false,
       pointerId: event.pointerId,
@@ -1227,6 +1309,23 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
       window.cancelAnimationFrame(drawingFrameRef.current)
       drawingFrameRef.current = 0
     }
+  }
+
+  function handleUndoDrawing() {
+    if (drawingFrameRef.current) {
+      window.cancelAnimationFrame(drawingFrameRef.current)
+      drawingFrameRef.current = 0
+    }
+    drawingQueuedPointsRef.current = []
+    drawingPointerIdRef.current = null
+
+    if (drawingPathRef.current || draftDrawingPath?.points?.length) {
+      drawingPathRef.current = null
+      setDraftDrawingPath(null)
+      return
+    }
+
+    setDrawingPaths((prev) => prev.slice(0, -1))
   }
 
   function flushDraftDrawingPoints() {
@@ -1838,6 +1937,7 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
   }, [flash, frontCam, preview])
 
   const previewImageClassName = filter !== 'none' ? `filter-${filter}` : ''
+  const hasUndoableDrawing = Boolean(draftDrawingPath?.points?.length || drawingPaths.length)
 
   return (
     <div className="snap-screen">
@@ -1934,6 +2034,7 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
               >
                 {isDrawMode ? 'Drawing' : 'Draw'}
               </button>
+              <button type="button" onClick={handleUndoDrawing} disabled={!hasUndoableDrawing}>Undo</button>
               <button type="button" onClick={() => promptForOverlay('emoji')}>Emoji</button>
               <button type="button" onClick={() => promptForOverlay('note')}>Note</button>
             </div>
@@ -1974,13 +2075,19 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
                   <button type="submit">{overlayComposer.itemId ? 'Save' : 'Add'}</button>
                 </div>
                 <div className="snap-overlay-size-controls">
-                  <span className="snap-overlay-size-label">
+                  <label className="snap-overlay-size-label" htmlFor="snap-overlay-size-range">
                     Size {Math.round(clampOverlayItemSize(overlayComposer.size, overlayComposer.type) * 100)}%
-                  </span>
-                  <div className="snap-overlay-size-buttons">
-                    <button type="button" onClick={() => adjustOverlayComposerSize('down')}>A-</button>
-                    <button type="button" onClick={() => adjustOverlayComposerSize('up')}>A+</button>
-                  </div>
+                  </label>
+                  <input
+                    id="snap-overlay-size-range"
+                    className="snap-overlay-size-range"
+                    type="range"
+                    min={Math.round(OVERLAY_MIN_SIZE * 100)}
+                    max={Math.round(OVERLAY_MAX_SIZE * 100)}
+                    step={Math.round(OVERLAY_SIZE_STEP * 100)}
+                    value={Math.round(clampOverlayItemSize(overlayComposer.size, overlayComposer.type) * 100)}
+                    onChange={handleOverlayComposerSizeChange}
+                  />
                 </div>
               </form>
             )}
