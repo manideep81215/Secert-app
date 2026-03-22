@@ -199,6 +199,58 @@
   height: 100%;
   object-fit: cover;
 }
+.snap-overlay-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.snap-drawing-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.snap-drawing-overlay.is-drawing {
+  pointer-events: auto;
+  cursor: crosshair;
+}
+.snap-overlay-item {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  border: none;
+  background: transparent;
+  color: #fff;
+  font-weight: 900;
+  text-align: center;
+  cursor: grab;
+  user-select: none;
+  text-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+.snap-overlay-item:active {
+  cursor: grabbing;
+}
+.snap-overlay-item-text {
+  font-size: 1.55rem;
+  letter-spacing: 0.02em;
+}
+.snap-overlay-item-emoji {
+  font-size: 2.2rem;
+  line-height: 1;
+}
+.snap-overlay-item-note {
+  min-width: 150px;
+  max-width: 210px;
+  padding: 12px 16px;
+  border-radius: 18px;
+  background: rgba(255, 240, 112, 0.94);
+  color: #1d1d1d;
+  font-size: 0.96rem;
+  line-height: 1.3;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.22);
+  white-space: pre-wrap;
+}
 .send-btn {
   position: absolute; bottom: 48px; right: 24px;
   min-width: 88px;
@@ -237,6 +289,10 @@
   font-size: 11px; cursor: pointer;
   font-weight: 800;
   letter-spacing: 0.04em;
+}
+.edit-tools button.is-active {
+  background: rgba(255, 252, 0, 0.92);
+  color: #000;
 }
 .sent-overlay {
   position: absolute; inset: 0;
