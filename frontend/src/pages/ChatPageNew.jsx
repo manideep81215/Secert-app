@@ -47,6 +47,7 @@ const NATIVE_CHAT_PAGE_ACTIVE_KEY = 'chat_page_active_v1'
 const EDIT_WINDOW_MS = 15 * 60 * 1000
 const MESSAGE_ACTION_LONG_PRESS_MS = 1000
 const MESSAGE_REPLY_SWIPE_TRIGGER_PX = 56
+const MESSAGE_REPLY_SWIPE_TRIGGER_OUTGOING_PX = 42
 const MESSAGE_REPLY_SWIPE_MAX_PX = 96
 const MESSAGE_REPLY_SWIPE_CANCEL_Y_PX = 52
 const TYPING_STALE_MS = 1400
@@ -218,6 +219,7 @@ function ChatPageNew() {
   const syncKeyboardLayoutRef = useRef(() => {})
   const conversationCacheRef = useRef({})
   const messagesRef = useRef([])
+  const draggedMessageRef = useRef(null)
   const hasOlderMessagesRef = useRef(false)
   const messageNodeMapRef = useRef({})
   const highlightClearTimerRef = useRef(null)
@@ -3732,9 +3734,15 @@ function ChatPageNew() {
   }
 
   const handleDragStart = (event, message) => {
+    draggedMessageRef.current = message
     setDraggedMessage(message)
     setIsDraggingMessage(true)
     event.dataTransfer.effectAllowed = 'copy'
+    try {
+      event.dataTransfer.setData('text/plain', String(message?.id || message?.tempId || message?.clientId || message?.text || 'reply'))
+    } catch {
+      // Some environments restrict drag payloads; the ref fallback still preserves the dragged message.
+    }
   }
 
   const handleDragOver = (event) => {
@@ -3743,6 +3751,7 @@ function ChatPageNew() {
   }
 
   const handleDragEnd = () => {
+    draggedMessageRef.current = null
     setIsDraggingMessage(false)
     setDraggedMessage(null)
   }
@@ -3765,11 +3774,12 @@ function ChatPageNew() {
 
   const handleDrop = (event) => {
     event.preventDefault()
-    if (draggedMessage) {
-      setReplyingTo(draggedMessage)
-      setDraggedMessage(null)
-      setIsDraggingMessage(false)
-    }
+    const message = draggedMessageRef.current || draggedMessage
+    if (!message) return
+    setReplyingTo(message)
+    draggedMessageRef.current = null
+    setDraggedMessage(null)
+    setIsDraggingMessage(false)
   }
 
   const beginTouchMessageGesture = (x, y, target, message, messageKey) => {
@@ -3832,7 +3842,8 @@ function ChatPageNew() {
     const isOutgoing = state.message?.sender === 'user'
     const rawSwipeOffset = isOutgoing ? -dx : dx
     const swipeOffset = Math.max(0, Math.min(MESSAGE_REPLY_SWIPE_MAX_PX, rawSwipeOffset))
-    const armed = !isMessageFailed(state.message) && Math.abs(dy) < 38 && swipeOffset >= MESSAGE_REPLY_SWIPE_TRIGGER_PX
+    const replyTriggerPx = isOutgoing ? MESSAGE_REPLY_SWIPE_TRIGGER_OUTGOING_PX : MESSAGE_REPLY_SWIPE_TRIGGER_PX
+    const armed = !isMessageFailed(state.message) && Math.abs(dy) < 38 && swipeOffset >= replyTriggerPx
 
     if (swipeOffset > 0 && Math.abs(dy) < 52) {
       if (sourceEvent?.cancelable && Math.abs(dx) > Math.abs(dy)) {
@@ -3871,7 +3882,8 @@ function ChatPageNew() {
     if (state?.timerId) {
       clearTimeout(state.timerId)
     }
-    const shouldReply = Boolean(state?.message) && !state?.swiped && state.offset >= MESSAGE_REPLY_SWIPE_TRIGGER_PX
+    const replyTriggerPx = state?.message?.sender === 'user' ? MESSAGE_REPLY_SWIPE_TRIGGER_OUTGOING_PX : MESSAGE_REPLY_SWIPE_TRIGGER_PX
+    const shouldReply = Boolean(state?.message) && !state?.swiped && state.offset >= replyTriggerPx
     const message = state?.message || null
     resetMessageSwipe()
     messageLongPressRef.current = { timerId: null, key: null, message: null, startX: 0, startY: 0, offset: 0, moved: false, triggered: false, swiped: shouldReply }
@@ -4280,6 +4292,30 @@ function ChatPageNew() {
     )
   }
 
+  const renderMessageBody = (message) => {
+    const isPlainTextMessage = message.type === 'text' || !message.type
+
+    if (isPlainTextMessage) {
+      return (
+        <div className="message-text-row">
+          <div className="message-text">{renderTextWithLinks(message.text)}</div>
+          <span className="message-time message-time-inline">{getMessageFooterLabel(message)}</span>
+        </div>
+      )
+    }
+
+    return (
+      <>
+        {renderMessageMedia(message)}
+        {message.fileName && message.type !== 'file' && <div className="message-file-name">{message.fileName}</div>}
+        {(message.type && message.type !== 'text' && !message.mediaUrl) && (
+          <div className="message-media-fallback">{renderTextWithLinks(`${getTypeIcon(message.type)} ${message.text}`.trim())}</div>
+        )}
+        <span className="message-time">{getMessageFooterLabel(message)}</span>
+      </>
+    )
+  }
+
   const handleSelectUserFromPanel = (user) => {
     setSelectedUser(user)
     setUnreadMap((prev) => ({ ...prev, [toUserKey(user.username)]: false }))
@@ -4578,15 +4614,7 @@ function ChatPageNew() {
                         <div className="reply-text">{renderReplyContent(message.replyingTo, 'bubble')}</div>
                       </div>
                     )}
-                    {renderMessageMedia(message)}
-                    {message.fileName && message.type !== 'file' && <div className="message-file-name">{message.fileName}</div>}
-                    {(message.type === 'text' || !message.type) && (
-                      <div className="message-text">{renderTextWithLinks(message.text)}</div>
-                    )}
-                    {(message.type && message.type !== 'text' && !message.mediaUrl) && (
-                      <div className="message-media-fallback">{renderTextWithLinks(`${getTypeIcon(message.type)} ${message.text}`.trim())}</div>
-                    )}
-                    <span className="message-time">{getMessageFooterLabel(message)}</span>
+                    {renderMessageBody(message)}
                     {shouldShowSeenInline && index === lastOutgoingIndex && activeMessageActionsKey !== messageKey && (
                       <span className="message-seen-inline">Seen</span>
                     )}
@@ -4642,15 +4670,7 @@ function ChatPageNew() {
                           <div className="reply-text">{renderReplyContent(message.replyingTo, 'bubble')}</div>
                         </div>
                       )}
-                      {renderMessageMedia(message)}
-                      {message.fileName && message.type !== 'file' && <div className="message-file-name">{message.fileName}</div>}
-                      {(message.type === 'text' || !message.type) && (
-                        <div className="message-text">{renderTextWithLinks(message.text)}</div>
-                      )}
-                      {(message.type && message.type !== 'text' && !message.mediaUrl) && (
-                        <div className="message-media-fallback">{renderTextWithLinks(`${getTypeIcon(message.type)} ${message.text}`.trim())}</div>
-                      )}
-                      <span className="message-time">{getMessageFooterLabel(message)}</span>
+                      {renderMessageBody(message)}
                       {shouldShowSeenInline && index === lastOutgoingIndex && activeMessageActionsKey !== messageKey && (
                         <span className="message-seen-inline">Seen</span>
                       )}
