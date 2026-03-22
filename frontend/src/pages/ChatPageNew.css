@@ -775,11 +775,21 @@
 }
 
 .message-text-with-time {
-  display: block;
+  display: inline-block;
   position: relative;
-  padding-right: 3.2rem;
-  padding-bottom: 0.15rem;
   min-width: 0;
+  max-width: 100%;
+}
+
+.message-text-content {
+  display: inline;
+}
+
+.message-time-spacer {
+  display: inline-block;
+  width: 3.35rem;
+  height: 0.85rem;
+  pointer-events: none;
 }
 
 .message-link {
@@ -926,6 +936,7 @@
   right: 0;
   bottom: 0;
   margin: 0;
+  padding-left: 0.28rem;
   display: inline-block;
   white-space: nowrap;
   line-height: 1.1;
@@ -2574,6 +2585,10 @@
 .chat-container .message-time-inline {
   font-size: 0.72rem;
   opacity: 0.78;
+}
+
+.chat-container .message-time-spacer {
+  width: 3.15rem;
 }
 
 .chat-container .message-image-preview {
