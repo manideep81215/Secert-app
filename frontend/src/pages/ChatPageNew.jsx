@@ -60,6 +60,8 @@ const CONVERSATION_SCROLL_TOP_THRESHOLD = 140
 const AUTO_SCROLL_BOTTOM_THRESHOLD = 120
 const MISSED_SCAN_PAGE_LIMIT = 12
 const OFFLINE_DASHBOARD_REDIRECT_MS = 60 * 1000
+const SECRET_TAP_TYPE = 'secret-tap'
+const TONY_USERNAME = 'tony'
 const QUICK_REACTIONS = [
   { code: 'heart', emoji: '❤️' },
   { code: 'laugh', emoji: '😂' },
@@ -553,12 +555,20 @@ function ChatPageNew() {
     }
     return url
   }
+  const isSecretTapMessageType = (messageType) => String(messageType || '').trim().toLowerCase() === SECRET_TAP_TYPE
   const getMessagePreview = (messageType, textValue, fileNameValue) => {
+    if (isSecretTapMessageType(messageType)) return ''
     if (messageType === 'image') return 'Sent an image'
     if (messageType === 'video') return 'Sent a video'
     if (messageType === 'voice') return 'Sent a voice message'
     if (messageType === 'file') return fileNameValue ? `Sent file: ${fileNameValue}` : 'Sent a file'
     return textValue || 'New message'
+  }
+  const getNotificationPreview = (messageType, textValue, fileNameValue, viewerUsername) => {
+    if (isSecretTapMessageType(messageType)) {
+      return toUserKey(viewerUsername) === TONY_USERNAME ? (textValue || 'New message') : 'New message'
+    }
+    return getMessagePreview(messageType, textValue, fileNameValue)
   }
   const toReplyText = (reply) => {
     if (!reply) return ''
@@ -587,9 +597,18 @@ function ChatPageNew() {
         lastCreatedAt: 0,
       }
     }
-    let latest = rows[rows.length - 1]
+    const visibleRows = rows.filter((row) => !isSecretTapMessageType(row?.type))
+    if (!visibleRows.length) {
+      return {
+        hasConversation: rows.length > 0,
+        lastMessage: '',
+        timestamp: '',
+        lastCreatedAt: 0,
+      }
+    }
+    let latest = visibleRows[visibleRows.length - 1]
     let latestCreatedAt = Number(latest?.createdAt || latest?.clientCreatedAt || 0)
-    for (const row of rows) {
+    for (const row of visibleRows) {
       const createdAt = Number(row?.createdAt || row?.clientCreatedAt || 0)
       if (createdAt >= latestCreatedAt) {
         latest = row
@@ -620,6 +639,14 @@ function ChatPageNew() {
         lastCreatedAt: 0,
       }
     }
+    if (isSecretTapMessageType(row?.type)) {
+      return {
+        hasConversation: true,
+        lastMessage: '',
+        timestamp: '',
+        lastCreatedAt: 0,
+      }
+    }
     return {
       hasConversation: true,
       lastMessage: getMessagePreview(row?.type || null, row?.text || '', row?.fileName || null),
@@ -638,7 +665,7 @@ function ChatPageNew() {
       const pageResult = await getConversation(token, peerUsername, { page, size: CONVERSATION_PAGE_SIZE })
       const rows = Array.isArray(pageResult?.messages) ? pageResult.messages : []
       const incomingRows = rows
-        .filter((row) => row?.sender === 'other')
+        .filter((row) => row?.sender === 'other' && !isSecretTapMessageType(row?.type))
         .map((row) => Number(row?.createdAt || 0))
         .filter((value) => value > 0)
 
@@ -2328,7 +2355,7 @@ function ChatPageNew() {
               editedAt: Number(data?.editedAt || 0) || null,
             }
             incoming.timestamp = formatTimestamp(incoming.createdAt)
-            const incomingPreview = getMessagePreview(incoming.type, incoming.text, incoming.fileName)
+            const incomingPreview = getNotificationPreview(incoming.type, incoming.text, incoming.fileName, authUsername)
             setStatusMap((prev) => ({ ...prev, [toUserKey(fromUsername)]: { status: 'online', lastSeenAt: null } }))
             updatePresenceLastSeen(fromUsername, incomingCreatedAt || Date.now())
             if (!shouldSuppressChatNotification(fromUsername)) {
@@ -2339,7 +2366,11 @@ function ChatPageNew() {
             setUsers((prev) =>
               prev.map((user) =>
                 toUserKey(user.username) === fromUserKey
-                  ? { ...user, lastMessage: text, timestamp: getTimeLabel(), hasConversation: true, lastCreatedAt: incomingCreatedAt || Date.now() }
+                  ? (
+                      isSecretTapMessageType(incoming.type)
+                        ? user
+                        : { ...user, lastMessage: text, timestamp: getTimeLabel(), hasConversation: true, lastCreatedAt: incomingCreatedAt || Date.now() }
+                    )
                   : user
               )
             )
@@ -4323,7 +4354,7 @@ function ChatPageNew() {
   }
 
   const renderMessageBody = (message) => {
-    const isPlainTextMessage = message.type === 'text' || !message.type
+    const isPlainTextMessage = message.type === 'text' || !message.type || isSecretTapMessageType(message.type)
 
     if (isPlainTextMessage) {
       return (

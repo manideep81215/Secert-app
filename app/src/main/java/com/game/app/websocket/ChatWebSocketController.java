@@ -32,6 +32,8 @@ import com.game.app.service.PushNotificationService;
 @Controller
 public class ChatWebSocketController {
   private static final long EDIT_WINDOW_MILLIS = 15 * 60 * 1000L;
+  private static final String SECRET_TAP_TYPE = "secret-tap";
+  private static final String TONY_USERNAME = "tony";
 
   private final SimpMessagingTemplate messagingTemplate;
   private final SimpUserRegistry simpUserRegistry;
@@ -173,7 +175,7 @@ public class ChatWebSocketController {
             entity.getId(),
             entity.getCreatedAt() != null ? entity.getCreatedAt().toEpochMilli() : Instant.now().toEpochMilli()));
 
-    String preview = messagePreview(payload.message(), payload.type(), payload.fileName());
+    String preview = notificationPreview(payload.message(), payload.type(), payload.fileName(), normalizedTo);
     pushNotificationService.notifyUser(
         normalizedTo,
         "@" + normalizedFrom,
@@ -589,6 +591,7 @@ public class ChatWebSocketController {
   }
 
   private String messagePreview(String text, String type, String fileName) {
+    if (isSecretTapType(type)) return "";
     if ("image".equalsIgnoreCase(type)) return "Sent an image";
     if ("video".equalsIgnoreCase(type)) return "Sent a video";
     if ("voice".equalsIgnoreCase(type)) return "Sent a voice message";
@@ -596,6 +599,15 @@ public class ChatWebSocketController {
       return fileName != null && !fileName.isBlank() ? "Sent file: " + fileName : "Sent a file";
     }
     return text != null ? text : "New message";
+  }
+
+  private String notificationPreview(String text, String type, String fileName, String toUsername) {
+    if (isSecretTapType(type)) {
+      return TONY_USERNAME.equalsIgnoreCase(normalizeUsername(toUsername))
+          ? (text != null && !text.isBlank() ? text : "New message")
+          : "New message";
+    }
+    return messagePreview(text, type, fileName);
   }
 
   private String normalizeReaction(String reaction) {
@@ -612,6 +624,10 @@ public class ChatWebSocketController {
     UserEntity user = userRepository.findByUsername(normalized)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found"));
     return "chat".equalsIgnoreCase(user.getRole());
+  }
+
+  private boolean isSecretTapType(String type) {
+    return SECRET_TAP_TYPE.equalsIgnoreCase(normalizeUsername(type));
   }
 
   public record ChatMessage(

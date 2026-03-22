@@ -13,6 +13,18 @@ import './GamesPage.css'
 const REALTIME_TOAST_ID = 'realtime-connection'
 const CONVERSATION_PAGE_SIZE = 50
 const MISSED_SCAN_PAGE_LIMIT = 12
+const SECRET_TAP_TYPE = 'secret-tap'
+const SECRET_TAP_WINDOW_MS = 320
+const SECRET_TAP_TARGETS = {
+  tony: ['hihi', 'test'],
+  hihi: ['tony'],
+  test: ['tony'],
+}
+const SECRET_TAP_MESSAGES = {
+  1: 'Wait ,Ostha',
+  2: 'amma nanna unnaru',
+  3: "can't stay Bye Good Night Baby",
+}
 
 const GAME_ITEMS = [
   { id: 'rps', title: 'Rock / Paper / Scissors', icon: '/theme/icon-rock-paper-scissors.png', path: '/games/rps' },
@@ -21,6 +33,9 @@ const GAME_ITEMS = [
   { id: 'snake-ladder', title: 'Snake & Ladders', icon: '/theme/icon-snake-ladder.svg', path: '/games/snake-ladder' },
 ]
 
+const normalizeUsername = (value) => String(value || '').trim().toLowerCase()
+const isSecretTapType = (value) => normalizeUsername(value) === SECRET_TAP_TYPE
+
 function GamesPage() {
   const navigate = useNavigate()
   const [flow, setFlow] = useFlowState()
@@ -28,6 +43,13 @@ function GamesPage() {
   const wsResumeSuppressUntilRef = useRef(0)
   const wsLastHiddenAtRef = useRef(Date.now())
   const wsErrorTimerRef = useRef(null)
+  const socketRef = useRef(null)
+  const tapCountRef = useRef(0)
+  const tapTimerRef = useRef(null)
+  const secretTapSendingRef = useRef(false)
+
+  const secretTapTargets = SECRET_TAP_TARGETS[normalizeUsername(flow.username)] || []
+  const canUseSecretTap = secretTapTargets.length > 0
 
   const getMissedIncomingSince = async (token, peerUsername, cutoff) => {
     const cutoffMs = Number(cutoff || 0)
@@ -40,7 +62,7 @@ function GamesPage() {
       const pageResult = await getConversation(token, peerUsername, { page, size: CONVERSATION_PAGE_SIZE })
       const rows = Array.isArray(pageResult?.messages) ? pageResult.messages : []
       const incomingRows = rows
-        .filter((row) => row?.sender === 'other')
+        .filter((row) => row?.sender === 'other' && !isSecretTapType(row?.type))
         .map((row) => Number(row?.createdAt || 0))
         .filter((value) => value > 0)
 
@@ -80,6 +102,71 @@ function GamesPage() {
       toastId: REALTIME_TOAST_ID,
       autoClose: 1500,
     })
+  }
+
+  const sendSecretTapMessage = async (tapCount) => {
+    const activeSocket = socketRef.current
+    const recipients = Array.from(new Set(secretTapTargets.map((username) => normalizeUsername(username)).filter(Boolean)))
+    const text = SECRET_TAP_MESSAGES[tapCount]
+
+    if (!text || !recipients.length) return
+    if (!activeSocket?.connected) {
+      toast.error('Secret tap is offline right now.')
+      return
+    }
+    if (secretTapSendingRef.current) return
+
+    secretTapSendingRef.current = true
+    try {
+      const senderUsername = String(flow.username || '').trim()
+      const timestamp = Date.now()
+
+      recipients.forEach((toUsername, index) => {
+        activeSocket.publish({
+          destination: '/app/chat.send',
+          body: JSON.stringify({
+            toUsername,
+            message: text,
+            fromUsername: senderUsername,
+            tempId: `secret-tap-${timestamp}-${tapCount}-${index}`,
+            type: SECRET_TAP_TYPE,
+          }),
+        })
+      })
+
+      toast.success(`You clicked ${tapCount} ${tapCount === 1 ? 'time' : 'times'}`)
+    } finally {
+      secretTapSendingRef.current = false
+    }
+  }
+
+  const resolveSecretTapSequence = (tapCount) => {
+    tapCountRef.current = 0
+    if (tapTimerRef.current) {
+      clearTimeout(tapTimerRef.current)
+      tapTimerRef.current = null
+    }
+    void sendSecretTapMessage(tapCount)
+  }
+
+  const handleSecretTapClick = () => {
+    if (!canUseSecretTap) return
+    const nextTapCount = Math.min(3, Number(tapCountRef.current || 0) + 1)
+    tapCountRef.current = nextTapCount
+
+    if (tapTimerRef.current) {
+      clearTimeout(tapTimerRef.current)
+      tapTimerRef.current = null
+    }
+
+    if (nextTapCount >= 3) {
+      resolveSecretTapSequence(3)
+      return
+    }
+
+    tapTimerRef.current = setTimeout(() => {
+      resolveSecretTapSequence(nextTapCount)
+    }, SECRET_TAP_WINDOW_MS)
   }
 
   useEffect(() => {
@@ -163,8 +250,10 @@ function GamesPage() {
       },
     })
 
+    socketRef.current = client
     client.activate()
     return () => {
+      socketRef.current = null
       if (wsErrorTimerRef.current) {
         clearTimeout(wsErrorTimerRef.current)
         wsErrorTimerRef.current = null
@@ -172,6 +261,13 @@ function GamesPage() {
       client.deactivate()
     }
   }, [flow.username, flow.token])
+
+  useEffect(() => () => {
+    if (tapTimerRef.current) {
+      clearTimeout(tapTimerRef.current)
+      tapTimerRef.current = null
+    }
+  }, [])
 
   useEffect(() => {
     if (!flow.username || !flow.token) return
@@ -247,7 +343,19 @@ function GamesPage() {
 
       <div className="games-dashboard-layout">
         <section className="games-home-panel">
-          <h2>Home</h2>
+          <div className="games-home-panel-header">
+            <h2>Home</h2>
+            {canUseSecretTap && (
+              <button
+                type="button"
+                className="secret-tap-btn"
+                onClick={handleSecretTapClick}
+                aria-label="Send hidden tap message"
+              >
+                Tap
+              </button>
+            )}
+          </div>
           <p>Select a Game</p>
           <div className="games-icon-grid">
             {GAME_ITEMS.map((item) => (

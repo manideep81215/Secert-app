@@ -32,6 +32,9 @@ import {
 import { ensurePushSubscription } from './lib/pushSubscription'
 import './App.css'
 
+const SECRET_TAP_TYPE = 'secret-tap'
+const TONY_USERNAME = 'tony'
+
 function getNormalizedRoutePath(location) {
   const pathname = String(location?.pathname || '').trim()
   const hashPath = typeof window !== 'undefined'
@@ -40,6 +43,26 @@ function getNormalizedRoutePath(location) {
   const normalizedHash = hashPath ? (hashPath.startsWith('/') ? hashPath : `/${hashPath}`) : ''
   if (normalizedHash) return normalizedHash.toLowerCase()
   return pathname.toLowerCase()
+}
+
+function isSecretTapType(value) {
+  return String(value || '').trim().toLowerCase() === SECRET_TAP_TYPE
+}
+
+function previewFromPayloadForUser(payload, viewerUsername) {
+  const type = payload?.type || 'text'
+  if (isSecretTapType(type)) {
+    const normalizedViewer = String(viewerUsername || '').trim().toLowerCase()
+    if (normalizedViewer === TONY_USERNAME) {
+      return payload?.message || 'New message'
+    }
+    return 'New message'
+  }
+  if (type === 'image') return 'Sent an image'
+  if (type === 'video') return 'Sent a video'
+  if (type === 'voice') return 'Sent a voice message'
+  if (type === 'file') return payload?.fileName ? `Sent file: ${payload.fileName}` : 'Sent a file'
+  return payload?.message || 'New message'
 }
 
 function App() {
@@ -168,15 +191,6 @@ function App() {
       return Boolean(activeChatPeer)
     }
 
-    const previewFromPayload = (payload) => {
-      const type = payload?.type || 'text'
-      if (type === 'image') return 'Sent an image'
-      if (type === 'video') return 'Sent a video'
-      if (type === 'voice') return 'Sent a voice message'
-      if (type === 'file') return payload?.fileName ? `Sent file: ${payload.fileName}` : 'Sent a file'
-      return payload?.message || 'New message'
-    }
-
     const client = new Client({
       webSocketFactory: () => new SockJS(WS_CHAT_URL, null, {
         transports: ['websocket', 'xhr-streaming', 'xhr-polling'],
@@ -197,7 +211,7 @@ function App() {
             const currentPath = currentPathRef.current || ''
             if (shouldSuppressGlobalMessageNotification(currentPath)) return
 
-            const preview = previewFromPayload(payload)
+            const preview = previewFromPayloadForUser(payload, authUsername)
             await pushNotify(`@${fromUsername}`, preview)
             setNotifyCutoff(authUsername, fromUsername, Number(payload?.createdAt || Date.now()))
           } catch {

@@ -34,10 +34,12 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessageEntity, 
       SELECT m.*
       FROM chat_messages m
       WHERE (m.from_username = :username OR m.to_username = :username)
+        AND LOWER(TRIM(COALESCE(m.type, 'text'))) <> 'secret-tap'
         AND m.id = (
           SELECT m2.id
           FROM chat_messages m2
           WHERE (m2.from_username = :username OR m2.to_username = :username)
+            AND LOWER(TRIM(COALESCE(m2.type, 'text'))) <> 'secret-tap'
             AND (
               CASE
                 WHEN m2.from_username = :username THEN m2.to_username
