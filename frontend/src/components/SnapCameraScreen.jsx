@@ -1,3 +1,5 @@
+import { Camera, CameraResultType, CameraSource } from '@capacitor/camera'
+import { Capacitor } from '@capacitor/core'
 import { useEffect, useRef, useState } from 'react'
 import './SnapCamera.css'
 
@@ -211,12 +213,65 @@ function canvasToBlob(targetCanvas, type, quality) {
   })
 }
 
+function isLikelyMobileDevice() {
+  if (typeof window === 'undefined') return false
+  const coarsePointer = typeof window.matchMedia === 'function'
+    && window.matchMedia('(pointer: coarse)').matches
+  const userAgent = typeof navigator !== 'undefined'
+    ? String(navigator.userAgent || '')
+    : ''
+  return coarsePointer || /android|iphone|ipad|ipod|mobile/i.test(userAgent)
+}
+
+function getImageExtensionFromMimeType(mimeType) {
+  const normalizedType = String(mimeType || '').trim().toLowerCase()
+  if (normalizedType.includes('png')) return 'png'
+  if (normalizedType.includes('webp')) return 'webp'
+  if (normalizedType.includes('gif')) return 'gif'
+  if (normalizedType.includes('heic')) return 'heic'
+  if (normalizedType.includes('heif')) return 'heif'
+  if (normalizedType.includes('bmp')) return 'bmp'
+  return 'jpg'
+}
+
+async function createImageFileFromUrlCandidates(urlCandidates, fallbackPrefix = 'snap') {
+  const uniqueCandidates = [...new Set(
+    (urlCandidates || [])
+      .map((value) => String(value || '').trim())
+      .filter(Boolean),
+  )]
+
+  for (const candidate of uniqueCandidates) {
+    try {
+      const response = await fetch(candidate)
+      if (!response.ok) continue
+      const blob = await response.blob()
+      const mimeType = String(blob.type || '').trim() || 'image/jpeg'
+      const extension = getImageExtensionFromMimeType(mimeType)
+      return new File([blob], `${fallbackPrefix}_${Date.now()}.${extension}`, {
+        type: mimeType,
+        lastModified: Date.now(),
+      })
+    } catch {
+      // Try the next candidate.
+    }
+  }
+
+  throw new Error('snap-library-photo-read-failed')
+}
+
+function isCancellationError(error) {
+  const message = String(error?.message || error || '').trim().toLowerCase()
+  return message.includes('cancel')
+}
+
 export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSend }) {
   const [mode, setMode] = useState('camera')
   const [filter, setFilter] = useState('none')
   const [timer, setTimer] = useState('off')
   const [zoom, setZoom] = useState('1x')
   const [flash, setFlash] = useState(false)
+  const [torchAvailable, setTorchAvailable] = useState(false)
   const [frontCam, setFront] = useState(false)
   const [preview, setPreview] = useState(null)
   const [file, setFile] = useState(null)
@@ -245,6 +300,10 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
   const dragOverlayRef = useRef(null)
   const drawingPathRef = useRef(null)
   const zoomFactor = parseZoomFactor(zoom)
+  const isMobileDevice = isLikelyMobileDevice()
+  const isNativeRuntime = Capacitor.isNativePlatform()
+  const cameraToggleLabel = isMobileDevice ? 'Rotate Camera' : 'Flip'
+  const libraryAccept = mode === 'video' ? 'video/*' : 'image/*'
 
   function clearPreviewUrl(url) {
     const value = String(url || '').trim()
@@ -457,6 +516,46 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
     recordingOutputStreamRef.current = null
   }
 
+  async function applyTorchState(nextEnabled) {
+    const videoTrack = streamRef.current?.getVideoTracks?.()?.[0]
+    if (!videoTrack || typeof videoTrack.getCapabilities !== 'function' || typeof videoTrack.applyConstraints !== 'function') {
+      if (mountedRef.current) {
+        setTorchAvailable(false)
+      }
+      return false
+    }
+
+    try {
+      const capabilities = videoTrack.getCapabilities()
+      const supportsTorch = Boolean(capabilities?.torch)
+      if (mountedRef.current) {
+        setTorchAvailable(supportsTorch && !frontCam)
+      }
+      if (!supportsTorch || frontCam) {
+        if (supportsTorch) {
+          try {
+            await videoTrack.applyConstraints({
+              advanced: [{ torch: false }],
+            })
+          } catch {
+            // Ignore best-effort torch shutdown issues.
+          }
+        }
+        return false
+      }
+
+      await videoTrack.applyConstraints({
+        advanced: [{ torch: Boolean(nextEnabled) }],
+      })
+      return true
+    } catch {
+      if (mountedRef.current) {
+        setTorchAvailable(false)
+      }
+      return false
+    }
+  }
+
   async function applyNativeTrackZoom(nextZoomFactor) {
     const videoTrack = streamRef.current?.getVideoTracks?.()?.[0]
     if (!videoTrack || typeof videoTrack.getCapabilities !== 'function' || typeof videoTrack.applyConstraints !== 'function') {
@@ -470,8 +569,14 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
 
       const minZoom = Number(zoomCapabilities.min || 1) || 1
       const maxZoom = Number(zoomCapabilities.max || nextZoomFactor) || nextZoomFactor
+      if (minZoom > 1.05) {
+        return
+      }
+
       const step = Number(zoomCapabilities.step || 0) || 0
-      let resolvedZoom = clamp(nextZoomFactor, minZoom, maxZoom)
+      let resolvedZoom = nextZoomFactor <= 1.01
+        ? 1
+        : clamp(nextZoomFactor, Math.max(1, minZoom), maxZoom)
       if (step > 0) {
         resolvedZoom = Math.round(resolvedZoom / step) * step
       }
@@ -486,6 +591,10 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
 
   function stopPreview() {
     stopCaptureComposition()
+    void applyTorchState(false)
+    if (mountedRef.current) {
+      setTorchAvailable(false)
+    }
     if (videoRef.current) {
       videoRef.current.srcObject = null
     }
@@ -493,12 +602,16 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
     streamRef.current = null
   }
 
-  function clearCapturedMedia() {
+  function clearCapturedMedia(options = {}) {
+    const { restartPreview = true } = options
     replacePreviewUrl(null)
     setFile(null)
     setCapturedType('photo')
     setSent(false)
     clearOverlayEditing()
+    if (restartPreview && mountedRef.current) {
+      void startPreview()
+    }
   }
 
   async function startPreview() {
@@ -539,6 +652,7 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
         await videoRef.current.play().catch(() => {})
       }
       await applyNativeTrackZoom(zoomFactor)
+      await applyTorchState(flash)
       startCaptureComposition()
     } catch (error) {
       console.error('Camera preview error:', error)
@@ -568,7 +682,8 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
 
   function acceptCapturedPhoto(inputFile) {
     if (!inputFile) return
-    clearCapturedMedia()
+    stopPreview()
+    clearCapturedMedia({ restartPreview: false })
     setFile(inputFile)
     setCapturedType('photo')
     replacePreviewUrl(URL.createObjectURL(inputFile))
@@ -577,7 +692,8 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
   function acceptCapturedVideo(inputFile) {
     if (!inputFile) return
     const preparedFile = buildVideoFile(inputFile, inputFile.name, inputFile.type)
-    clearCapturedMedia()
+    stopPreview()
+    clearCapturedMedia({ restartPreview: false })
     setFile(preparedFile)
     setCapturedType('video')
     replacePreviewUrl(URL.createObjectURL(preparedFile))
@@ -737,101 +853,169 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
   async function composeVideoWithOverlays(inputFile, overlaySnapshot, pathSnapshot) {
     const sourceUrl = URL.createObjectURL(inputFile)
     const video = document.createElement('video')
-    video.src = sourceUrl
     video.preload = 'auto'
     video.playsInline = true
+    video.setAttribute('playsinline', '')
     video.volume = 0
+    video.src = sourceUrl
 
-    const loaded = await new Promise((resolve, reject) => {
-      video.onloadedmetadata = () => resolve(true)
-      video.onerror = () => reject(new Error('overlay-video-load-failed'))
-    })
-    if (!loaded) {
-      URL.revokeObjectURL(sourceUrl)
-      return inputFile
+    const attachedToBody = typeof document !== 'undefined' && !!document.body
+    if (attachedToBody) {
+      video.style.position = 'fixed'
+      video.style.left = '-99999px'
+      video.style.top = '0'
+      video.style.width = '1px'
+      video.style.height = '1px'
+      video.style.opacity = '0'
+      video.style.pointerEvents = 'none'
+      document.body.appendChild(video)
     }
 
-    const outputCanvas = document.createElement('canvas')
-    outputCanvas.width = SNAP_CAPTURE_WIDTH
-    outputCanvas.height = SNAP_CAPTURE_HEIGHT
+    try {
+      const loaded = await new Promise((resolve, reject) => {
+        if (video.readyState >= 2) {
+          resolve(true)
+          return
+        }
 
-    const mediaStream = typeof video.captureStream === 'function'
-      ? video.captureStream()
-      : null
-    const outputStream = outputCanvas.captureStream(SNAP_CAPTURE_FPS)
-    mediaStream?.getAudioTracks?.().forEach((track) => outputStream.addTrack(track))
+        const handleReady = () => {
+          cleanup()
+          resolve(true)
+        }
+        const handleError = () => {
+          cleanup()
+          reject(new Error('overlay-video-load-failed'))
+        }
+        const cleanup = () => {
+          video.removeEventListener('loadeddata', handleReady)
+          video.removeEventListener('canplay', handleReady)
+          video.removeEventListener('error', handleError)
+        }
 
-    const preferredMimeTypes = [
-      'video/mp4;codecs=h264,aac',
-      'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
-      'video/mp4',
-      'video/webm;codecs=vp9,opus',
-      'video/webm;codecs=vp8,opus',
-      'video/webm',
-    ]
-    const supportedMimeType = preferredMimeTypes.find((value) => MediaRecorder.isTypeSupported?.(value))
-    const recorder = supportedMimeType
-      ? new MediaRecorder(outputStream, { mimeType: supportedMimeType })
-      : new MediaRecorder(outputStream)
-    const chunks = []
-    let animationFrameId = 0
-
-    const drawFrame = () => {
-      const didDraw = drawSourceToCanvas({
-        sourceElement: video,
-        sourceWidth: video.videoWidth,
-        sourceHeight: video.videoHeight,
-        targetCanvas: outputCanvas,
+        video.addEventListener('loadeddata', handleReady, { once: true })
+        video.addEventListener('canplay', handleReady, { once: true })
+        video.addEventListener('error', handleError, { once: true })
       })
-      if (didDraw) {
-        drawAllOverlaysToCanvas(outputCanvas, overlaySnapshot, pathSnapshot)
+      if (!loaded) {
+        return inputFile
       }
-      if (!video.paused && !video.ended) {
-        animationFrameId = window.requestAnimationFrame(drawFrame)
-      }
-    }
 
-    const stopStreams = () => {
-      if (animationFrameId) {
-        window.cancelAnimationFrame(animationFrameId)
-        animationFrameId = 0
+      const outputCanvas = document.createElement('canvas')
+      outputCanvas.width = SNAP_CAPTURE_WIDTH
+      outputCanvas.height = SNAP_CAPTURE_HEIGHT
+
+      const mediaStream = typeof video.captureStream === 'function'
+        ? video.captureStream()
+        : null
+      const outputStream = outputCanvas.captureStream(SNAP_CAPTURE_FPS)
+      mediaStream?.getAudioTracks?.().forEach((track) => outputStream.addTrack(track))
+
+      const preferredMimeTypes = [
+        'video/mp4;codecs=h264,aac',
+        'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+        'video/mp4',
+        'video/webm;codecs=vp9,opus',
+        'video/webm;codecs=vp8,opus',
+        'video/webm',
+      ]
+      const supportedMimeType = preferredMimeTypes.find((value) => MediaRecorder.isTypeSupported?.(value))
+      const recorder = supportedMimeType
+        ? new MediaRecorder(outputStream, { mimeType: supportedMimeType })
+        : new MediaRecorder(outputStream)
+      const chunks = []
+      let animationFrameId = 0
+      let videoFrameCallbackId = 0
+      let playbackStopped = false
+
+      const renderFrame = () => {
+        const didDraw = drawSourceToCanvas({
+          sourceElement: video,
+          sourceWidth: video.videoWidth,
+          sourceHeight: video.videoHeight,
+          targetCanvas: outputCanvas,
+        })
+        if (didDraw) {
+          drawAllOverlaysToCanvas(outputCanvas, overlaySnapshot, pathSnapshot)
+        }
       }
-      outputStream.getTracks().forEach((track) => track.stop())
-      mediaStream?.getTracks?.().forEach((track) => track.stop())
+
+      const scheduleNextFrame = () => {
+        if (playbackStopped || video.ended || recorder.state === 'inactive') {
+          return
+        }
+
+        if (typeof video.requestVideoFrameCallback === 'function') {
+          videoFrameCallbackId = video.requestVideoFrameCallback(() => {
+            renderFrame()
+            scheduleNextFrame()
+          })
+          return
+        }
+
+        animationFrameId = window.requestAnimationFrame(() => {
+          renderFrame()
+          scheduleNextFrame()
+        })
+      }
+
+      const stopStreams = () => {
+        playbackStopped = true
+        if (animationFrameId) {
+          window.cancelAnimationFrame(animationFrameId)
+          animationFrameId = 0
+        }
+        if (videoFrameCallbackId && typeof video.cancelVideoFrameCallback === 'function') {
+          video.cancelVideoFrameCallback(videoFrameCallbackId)
+          videoFrameCallbackId = 0
+        }
+        outputStream.getTracks().forEach((track) => track.stop())
+        mediaStream?.getTracks?.().forEach((track) => track.stop())
+        video.pause()
+        video.removeAttribute('src')
+        video.load()
+      }
+
+      const blob = await new Promise(async (resolve, reject) => {
+        recorder.ondataavailable = (event) => {
+          if (event.data && event.data.size > 0) {
+            chunks.push(event.data)
+          }
+        }
+        recorder.onerror = (event) => {
+          stopStreams()
+          reject(event)
+        }
+        recorder.onstop = () => {
+          stopStreams()
+          resolve(new Blob(chunks, { type: recorder.mimeType || inputFile.type || 'video/mp4' }))
+        }
+
+        try {
+          await video.play()
+        } catch {
+          video.muted = true
+          video.defaultMuted = true
+          video.setAttribute('muted', '')
+          await video.play()
+        }
+
+        renderFrame()
+        recorder.start(250)
+        scheduleNextFrame()
+        video.onended = () => {
+          if (recorder.state !== 'inactive') {
+            recorder.stop()
+          }
+        }
+      })
+
+      return buildVideoFile(blob, inputFile?.name || `snap_${Date.now()}`, recorder.mimeType || blob.type || inputFile.type)
+    } finally {
+      if (attachedToBody) {
+        video.remove()
+      }
       URL.revokeObjectURL(sourceUrl)
     }
-
-    const blob = await new Promise(async (resolve, reject) => {
-      recorder.ondataavailable = (event) => {
-        if (event.data && event.data.size > 0) {
-          chunks.push(event.data)
-        }
-      }
-      recorder.onerror = (event) => {
-        stopStreams()
-        reject(event)
-      }
-      recorder.onstop = () => {
-        stopStreams()
-        resolve(new Blob(chunks, { type: recorder.mimeType || inputFile.type || 'video/mp4' }))
-      }
-
-      recorder.start(250)
-      drawFrame()
-      try {
-        await video.play()
-      } catch {
-        video.muted = true
-        await video.play()
-      }
-      video.onended = () => {
-        if (recorder.state !== 'inactive') {
-          recorder.stop()
-        }
-      }
-    })
-
-    return buildVideoFile(blob, inputFile?.name || `snap_${Date.now()}`, recorder.mimeType || blob.type || inputFile.type)
   }
 
   async function prepareMediaForSend(inputFile, mediaType) {
@@ -994,8 +1178,46 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
     await capturePhoto()
   }
 
-  function handleLibraryButtonPress() {
-    libraryInputRef.current?.click()
+  async function handleLibraryButtonPress() {
+    if (mode !== 'video' && isNativeRuntime) {
+      try {
+        const photo = await Camera.getPhoto({
+          source: CameraSource.Photos,
+          resultType: CameraResultType.Uri,
+          quality: 92,
+          correctOrientation: true,
+        })
+
+        const nativePath = String(photo?.path || '').trim()
+        const webPath = String(photo?.webPath || '').trim()
+        const urlCandidates = [
+          webPath,
+          nativePath && typeof Capacitor.convertFileSrc === 'function'
+            ? Capacitor.convertFileSrc(nativePath)
+            : '',
+        ]
+        const selectedPhoto = await createImageFileFromUrlCandidates(urlCandidates, 'snap')
+        acceptCapturedPhoto(selectedPhoto)
+      } catch (error) {
+        if (!isCancellationError(error)) {
+          console.error('Snap library open failed:', error)
+        }
+      }
+      return
+    }
+
+    const input = libraryInputRef.current
+    if (!input) return
+    input.value = ''
+    try {
+      if (typeof input.showPicker === 'function') {
+        input.showPicker()
+        return
+      }
+    } catch {
+      // Fall through to click for runtimes without showPicker support.
+    }
+    input.click()
   }
 
   function handleLibraryInputChange(event) {
@@ -1034,7 +1256,7 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
       setSent(true)
       window.setTimeout(() => {
         setSent(false)
-        clearCapturedMedia()
+        clearCapturedMedia({ restartPreview: false })
         onClose?.()
       }, 1500)
     } catch (error) {
@@ -1068,9 +1290,20 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
   }, [frontCam, mode])
 
   useEffect(() => {
+    if (frontCam && flash) {
+      setFlash(false)
+    }
+  }, [flash, frontCam])
+
+  useEffect(() => {
     void applyNativeTrackZoom(zoomFactor)
     renderCaptureFrame()
   }, [zoomFactor])
+
+  useEffect(() => {
+    if (preview) return
+    void applyTorchState(flash)
+  }, [flash, frontCam, preview])
 
   const previewImageClassName = filter !== 'none' ? `filter-${filter}` : ''
   const previewTransform = `${frontCam ? 'scaleX(-1) ' : ''}scale(${zoomFactor})`
@@ -1180,6 +1413,7 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
             <button
               className={`icon-btn ${flash ? 'flash-on' : ''}`}
               onClick={() => setFlash(!flash)}
+              disabled={frontCam || (!torchAvailable && !flash)}
               type="button"
             >
               {flash ? 'Flash On' : 'Flash'}
@@ -1256,7 +1490,14 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
                 aria-label={isRecording ? 'Stop video recording' : (mode === 'video' ? 'Start video recording' : 'Capture photo')}
                 type="button"
               />
-              <button className="flip-btn" onClick={() => setFront(!frontCam)} disabled={isRecording} type="button">Flip</button>
+              <button
+                className="flip-btn"
+                onClick={() => setFront(!frontCam)}
+                disabled={isRecording}
+                type="button"
+              >
+                {cameraToggleLabel}
+              </button>
             </div>
           </div>
         </>
@@ -1265,8 +1506,16 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
       <input
         ref={libraryInputRef}
         type="file"
-        accept="image/*,video/*"
-        style={{ display: 'none' }}
+        accept={libraryAccept}
+        style={{
+          position: 'fixed',
+          left: '-9999px',
+          top: '0',
+          width: '1px',
+          height: '1px',
+          opacity: 0,
+          pointerEvents: 'none',
+        }}
         onChange={handleLibraryInputChange}
       />
     </div>
