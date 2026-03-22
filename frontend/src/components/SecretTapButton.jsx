@@ -14,12 +14,12 @@ const SECRET_TAP_TARGETS = {
   test: ['tony'],
 }
 const SECRET_TAP_MESSAGES = {
-  1: 'Wait , Ostha',
-  2: 'amma nanna unnaru',
-  3: "can't stay Bye Good Night",
+  1: 'Wait , Ostha(tap-msg)',
+  2: 'amma nanna unnaru(tap-msg)',
+  3: "can't stay Bye Good Night(tap-msg)",
 }
-const TONY_LONG_PRESS_MESSAGE = 'Aagu baby Ostha ,Avvatle matladadam'
-const HIHI_LONG_PRESS_MESSAGE = 'Hari unnadu'
+const TONY_LONG_PRESS_MESSAGE = 'Aagu baby Ostha ,Avvatle matladadam(tap-msg)'
+const HIHI_LONG_PRESS_MESSAGE = 'Hari unnadu(tap-msg)'
 const TONY_HIHI_DOUBLE_TAP_MESSAGE = 'friends unnaru chatting avvatle(tap-msg)'
 
 const normalizeUsername = (value) => String(value || '').trim().toLowerCase()
@@ -163,6 +163,13 @@ function SecretTapButton({ username, socketRef }) {
   const handlePointerDown = (event) => {
     if (!hasLongPressMessage || !canUseSecretTap) return
     if (event.pointerType === 'mouse' && event.button !== 0) return
+    if (typeof event.currentTarget?.setPointerCapture === 'function') {
+      try {
+        event.currentTarget.setPointerCapture(event.pointerId)
+      } catch {
+        // Ignore pointer capture errors on unsupported runtimes.
+      }
+    }
     suppressNextClickRef.current = false
     clearLongPressTimer()
     longPressTimerRef.current = setTimeout(() => {
@@ -177,8 +184,15 @@ function SecretTapButton({ username, socketRef }) {
     }, SECRET_TAP_LONG_PRESS_MS)
   }
 
-  const handlePointerEnd = () => {
+  const handlePointerEnd = (event) => {
     if (!hasLongPressMessage) return
+    if (typeof event?.currentTarget?.releasePointerCapture === 'function') {
+      try {
+        event.currentTarget.releasePointerCapture(event.pointerId)
+      } catch {
+        // Ignore pointer capture errors on unsupported runtimes.
+      }
+    }
     clearLongPressTimer()
   }
 
@@ -196,7 +210,6 @@ function SecretTapButton({ username, socketRef }) {
       onClick={handleClick}
       onPointerDown={handlePointerDown}
       onPointerUp={handlePointerEnd}
-      onPointerLeave={handlePointerEnd}
       onPointerCancel={handlePointerEnd}
       onContextMenu={suppressImageCallout}
       onDragStart={suppressImageCallout}
