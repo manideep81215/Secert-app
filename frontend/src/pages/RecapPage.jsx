@@ -31,6 +31,15 @@ function formatRecapPeriodLabel(startValue, endValue) {
   if (!startDate || !endDate || Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
     return 'Recap Period'
   }
+  const nextMonthStart = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 1)
+  const isFullMonthWindow =
+    startDate.getDate() === 1 &&
+    endDate.getDate() === 1 &&
+    endDate.getFullYear() === nextMonthStart.getFullYear() &&
+    endDate.getMonth() === nextMonthStart.getMonth()
+  if (isFullMonthWindow) {
+    return startDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+  }
   const startLabel = startDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
   const endLabel = endDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
   return `${startLabel} - ${endLabel}`
@@ -173,7 +182,7 @@ function RecapPage() {
       <div className="recap-card">
         <div className="recap-page-header">
           <button type="button" className="recap-page-back" onClick={() => navigate('/chat')}>{'←'}</button>
-          <div className="recap-page-title">Your <span>Love Story</span> in Numbers</div>
+          <div className="recap-page-title">Your <span>Monthly Recap</span> in Numbers</div>
           <div className="recap-page-sub">with @{peerUsername}</div>
         </div>
 

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { toast } from 'react-toastify'
-import fistIcon from '../assets/secret-tap-fist.svg'
+import tapIcon from '../assets/secret-tap-icon.png'
 import './SecretTapButton.css'
 
 const SECRET_TAP_TYPE = 'secret-tap'
@@ -113,7 +113,7 @@ function SecretTapButton({ username, socketRef }) {
       aria-label="Send hidden tap message"
       title="Send hidden tap message"
     >
-      <img src={fistIcon} alt="" className="secret-tap-btn-icon" aria-hidden="true" />
+      <img src={tapIcon} alt="" className="secret-tap-btn-icon" aria-hidden="true" />
     </button>
   )
 }

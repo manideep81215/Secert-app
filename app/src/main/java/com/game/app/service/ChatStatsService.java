@@ -242,9 +242,7 @@ public class ChatStatsService {
   }
 
   private RecapPeriods calculateRecapPeriods(LocalDate today) {
-    LocalDate currentStartDate = today.getDayOfMonth() >= 13
-        ? LocalDate.of(today.getYear(), today.getMonth(), 13)
-        : LocalDate.of(today.minusMonths(1).getYear(), today.minusMonths(1).getMonth(), 13);
+    LocalDate currentStartDate = LocalDate.of(today.getYear(), today.getMonth(), 1);
     RecapPeriod current = new RecapPeriod(currentStartDate, currentStartDate.plusMonths(1));
     RecapPeriod previous = new RecapPeriod(currentStartDate.minusMonths(1), currentStartDate);
     return new RecapPeriods(previous, current);

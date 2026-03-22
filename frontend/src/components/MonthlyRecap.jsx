@@ -7,9 +7,7 @@ const DISMISS_KEY_PREFIX = 'monthly_recap_dismissed_v1:'
 const CLOSE_ANIMATION_MS = 380
 
 function getRecapCycleKey(value) {
-  const endDate = value.getDate() >= 13
-    ? new Date(value.getFullYear(), value.getMonth(), 13)
-    : new Date(value.getFullYear(), value.getMonth() - 1, 13)
+  const endDate = new Date(value.getFullYear(), value.getMonth(), 1)
   const year = endDate.getFullYear()
   const month = String(endDate.getMonth() + 1).padStart(2, '0')
   const day = String(endDate.getDate()).padStart(2, '0')
@@ -20,18 +18,21 @@ function formatRecapPeriodLabel(startValue, endValue, fallbackDate) {
   const startDate = startValue ? new Date(startValue) : null
   const endDate = endValue ? new Date(endValue) : null
   if (startDate && endDate && !Number.isNaN(startDate.getTime()) && !Number.isNaN(endDate.getTime())) {
+    const isFullMonthWindow =
+      startDate.getDate() === 1 &&
+      endDate.getDate() === 1 &&
+      endDate.getFullYear() === new Date(startDate.getFullYear(), startDate.getMonth() + 1, 1).getFullYear() &&
+      endDate.getMonth() === new Date(startDate.getFullYear(), startDate.getMonth() + 1, 1).getMonth()
+    if (isFullMonthWindow) {
+      return startDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+    }
     const startLabel = startDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
     const endLabel = endDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
     return `${startLabel} - ${endLabel}`
   }
 
-  const fallbackEnd = fallbackDate.getDate() >= 13
-    ? new Date(fallbackDate.getFullYear(), fallbackDate.getMonth(), 13)
-    : new Date(fallbackDate.getFullYear(), fallbackDate.getMonth() - 1, 13)
-  const fallbackStart = new Date(fallbackEnd.getFullYear(), fallbackEnd.getMonth() - 1, 13)
-  const startLabel = fallbackStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-  const endLabel = fallbackEnd.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-  return `${startLabel} - ${endLabel}`
+  const fallbackStart = new Date(fallbackDate.getFullYear(), fallbackDate.getMonth() - 1, 1)
+  return fallbackStart.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
 }
 
 function StatRow({ emoji, label, value, delay, color }) {
@@ -65,7 +66,7 @@ function MonthlyRecap({ token, peerUsername, forceShow = false }) {
   useEffect(() => {
     if (!token || !peerUsername) return
 
-    const isRecapDay = now.getDate() === 13
+    const isRecapDay = now.getDate() === 1
     if (!isRecapDay && !forceShow) return
 
     try {
