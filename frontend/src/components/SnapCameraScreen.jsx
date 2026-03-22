@@ -1,4 +1,4 @@
-import { Camera, CameraResultType, CameraSource } from '@capacitor/camera'
+import { Camera, CameraDirection, CameraResultType, CameraSource } from '@capacitor/camera'
 import { Capacitor } from '@capacitor/core'
 import { useEffect, useRef, useState } from 'react'
 import './SnapCamera.css'
@@ -48,6 +48,17 @@ function getOverlayDefaultSize(type) {
   if (type === 'emoji') return 1.1
   if (type === 'note') return 1
   return 1
+}
+
+function getOverlayPreviewBaseWidth(type, stageWidth = 0) {
+  const resolvedStageWidth = Math.max(0, Number(stageWidth || 0))
+  if (type === 'note') {
+    return resolvedStageWidth > 0 ? Math.max(220, resolvedStageWidth - 64) : 290
+  }
+  if (type === 'text') {
+    return resolvedStageWidth > 0 ? Math.max(250, resolvedStageWidth - 42) : 330
+  }
+  return 0
 }
 
 function clampOverlayItemSize(sizeValue, type) {
@@ -212,6 +223,72 @@ function pathToSvg(points) {
   }).join(' ')
 }
 
+function wrapOverlayTextToLines(context, text, maxWidth) {
+  if (!context || !Number.isFinite(maxWidth) || maxWidth <= 0) {
+    return [String(text || '').trim()].filter(Boolean)
+  }
+
+  const normalizedText = String(text || '').replace(/\r/g, '')
+  const paragraphs = normalizedText.split('\n')
+  const lines = []
+
+  const pushWrappedToken = (token) => {
+    const characters = Array.from(String(token || ''))
+    let fragment = ''
+
+    characters.forEach((character) => {
+      const nextFragment = fragment + character
+      if (fragment && context.measureText(nextFragment).width > maxWidth) {
+        lines.push(fragment.trimEnd())
+        fragment = character
+      } else {
+        fragment = nextFragment
+      }
+    })
+
+    return fragment
+  }
+
+  paragraphs.forEach((paragraph, paragraphIndex) => {
+    if (!paragraph) {
+      lines.push('')
+      return
+    }
+
+    const tokens = paragraph.match(/\S+\s*|\s+/g) || [paragraph]
+    let currentLine = ''
+
+    tokens.forEach((token) => {
+      if (!token) return
+
+      if (context.measureText(token).width > maxWidth) {
+        if (currentLine.trim()) {
+          lines.push(currentLine.trimEnd())
+          currentLine = ''
+        }
+        currentLine = pushWrappedToken(token)
+        return
+      }
+
+      const nextLine = currentLine + token
+      if (currentLine && context.measureText(nextLine).width > maxWidth) {
+        lines.push(currentLine.trimEnd())
+        currentLine = token.trimStart()
+      } else {
+        currentLine = nextLine
+      }
+    })
+
+    if (currentLine) {
+      lines.push(currentLine.trimEnd())
+    } else if (paragraphIndex < paragraphs.length - 1) {
+      lines.push('')
+    }
+  })
+
+  return lines.length > 0 ? lines : ['']
+}
+
 function loadImageElement(objectUrl) {
   return new Promise((resolve, reject) => {
     const image = new Image()
@@ -308,6 +385,32 @@ async function createImageFileFromUrlCandidates(urlCandidates, fallbackPrefix = 
   throw new Error('snap-library-photo-read-failed')
 }
 
+function createImageFileFromDataUrl(dataUrl, fallbackPrefix = 'snap') {
+  const normalizedDataUrl = String(dataUrl || '').trim()
+  if (!normalizedDataUrl.startsWith('data:')) {
+    throw new Error('snap-camera-data-url-missing')
+  }
+
+  const segments = normalizedDataUrl.split(',')
+  if (segments.length < 2) {
+    throw new Error('snap-camera-data-url-invalid')
+  }
+
+  const mimeMatch = /^data:([^;]+)/i.exec(segments[0])
+  const mimeType = String(mimeMatch?.[1] || 'image/jpeg').trim() || 'image/jpeg'
+  const extension = getImageExtensionFromMimeType(mimeType)
+  const byteCharacters = window.atob(segments[1])
+  const byteArray = new Uint8Array(byteCharacters.length)
+  for (let index = 0; index < byteCharacters.length; index += 1) {
+    byteArray[index] = byteCharacters.charCodeAt(index)
+  }
+
+  return new File([byteArray], `${fallbackPrefix}_${Date.now()}.${extension}`, {
+    type: mimeType,
+    lastModified: Date.now(),
+  })
+}
+
 function isCancellationError(error) {
   const message = String(error?.message || error || '').trim().toLowerCase()
   return message.includes('cancel')
@@ -384,6 +487,7 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
   const [recordingSeconds, setRecordingSeconds] = useState(0)
   const [countdownSeconds, setCountdownSeconds] = useState(0)
   const [isPreparingRecording, setIsPreparingRecording] = useState(false)
+  const [isNativePhotoFallbackActive, setIsNativePhotoFallbackActive] = useState(false)
   const videoRef = useRef(null)
   const streamRef = useRef(null)
   const mediaRecorderRef = useRef(null)
@@ -414,7 +518,7 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
   const overlayZoomScale = getOverlayZoomScale(zoomFactor)
   const isMobileDevice = isLikelyMobileDevice()
   const isNativeRuntime = Capacitor.isNativePlatform()
-  const cameraToggleLabel = isMobileDevice ? 'Rotate Camera' : 'Flip'
+  const cameraToggleLabel = '🔄'
   const libraryAccept = mode === 'video' ? 'video/*' : 'image/*'
 
   function clearPreviewUrl(url) {
@@ -462,6 +566,27 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
       : drawingPaths
   }
 
+  function getRenderableOverlayItems() {
+    const editingItemId = String(overlayComposer?.itemId || '').trim()
+    if (!editingItemId) {
+      return overlayItems
+    }
+
+    const draftType = String(overlayComposer?.type || '').trim()
+    const draftSize = clampOverlayItemSize(overlayComposer?.size, draftType)
+    const draftContent = String(overlayComposer?.value ?? '')
+
+    return overlayItems.map((item) => (
+      item.id === editingItemId
+        ? {
+            ...item,
+            content: draftContent,
+            size: draftSize,
+          }
+        : item
+    ))
+  }
+
   function drawOverlayItemsToCanvas(context, width, height, overlaySnapshot) {
     if (!context || !Array.isArray(overlaySnapshot)) return
     const overlayScale = overlayZoomScale
@@ -489,21 +614,8 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
 
       if (item.type === 'note') {
         context.font = `800 ${Math.round(width * 0.036 * itemScale)}px "Segoe UI", sans-serif`
-        const maxWidth = width * Math.min(0.88, 0.58 * itemScale)
-        const words = content.split(/\s+/).filter(Boolean)
-        const lines = []
-        let currentLine = ''
-        words.forEach((word) => {
-          const nextLine = currentLine ? `${currentLine} ${word}` : word
-          if (context.measureText(nextLine).width > maxWidth && currentLine) {
-            lines.push(currentLine)
-            currentLine = word
-          } else {
-            currentLine = nextLine
-          }
-        })
-        if (currentLine) lines.push(currentLine)
-        if (lines.length === 0) lines.push(content)
+        const maxWidth = width * 0.84
+        const lines = wrapOverlayTextToLines(context, content, maxWidth)
 
         const lineHeight = Math.round(width * 0.05 * itemScale)
         const boxWidth = Math.min(
@@ -544,13 +656,20 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
       }
 
       context.font = `900 ${Math.round(width * 0.062 * itemScale)}px "Segoe UI", sans-serif`
+      const maxWidth = width * 0.9
+      const lines = wrapOverlayTextToLines(context, content, maxWidth)
+      const lineHeight = Math.round(width * 0.07 * itemScale)
+      const startY = y - (((lines.length - 1) * lineHeight) / 2)
       context.fillStyle = '#ffffff'
       context.strokeStyle = 'rgba(0, 0, 0, 0.35)'
       context.lineWidth = Math.max(4, Math.round(width * 0.01 * itemScale))
       context.lineJoin = 'round'
       context.miterLimit = 2
-      context.strokeText(content, x, y)
-      context.fillText(content, x, y)
+      lines.forEach((line, index) => {
+        const lineY = startY + (index * lineHeight)
+        context.strokeText(line, x, lineY)
+        context.fillText(line, x, lineY)
+      })
       context.restore()
     })
   }
@@ -841,6 +960,9 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
   async function startPreview() {
     try {
       stopPreview()
+      if (mountedRef.current) {
+        setIsNativePhotoFallbackActive(false)
+      }
       if (isNativeRuntime && typeof Camera?.requestPermissions === 'function') {
         try {
           await Camera.requestPermissions({
@@ -849,6 +971,9 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
         } catch {
           // Let getUserMedia surface the actual failure if permissions stay blocked.
         }
+      }
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error('camera-preview-api-unavailable')
       }
       const buildConstraints = (withAudio, preferredDeviceId = '') => ({
         video: {
@@ -907,6 +1032,10 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
       await applyTorchState(flash)
       startCaptureComposition()
     } catch (error) {
+      if (mountedRef.current) {
+        setTorchAvailable(false)
+        setIsNativePhotoFallbackActive(Boolean(isNativeRuntime && mode === 'camera'))
+      }
       console.error('Camera preview error:', error)
     }
   }
@@ -949,6 +1078,42 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
     setFile(preparedFile)
     setCapturedType('video')
     replacePreviewUrl(URL.createObjectURL(preparedFile))
+  }
+
+  async function capturePhotoWithNativeCamera() {
+    if (!isNativeRuntime || typeof Camera?.getPhoto !== 'function') {
+      return false
+    }
+
+    try {
+      const photo = await Camera.getPhoto({
+        source: CameraSource.Camera,
+        resultType: CameraResultType.DataUrl,
+        quality: 92,
+        correctOrientation: true,
+        saveToGallery: false,
+        direction: frontCam ? CameraDirection.Front : CameraDirection.Rear,
+      })
+
+      const dataUrl = String(photo?.dataUrl || '').trim()
+      const nativePath = String(photo?.path || '').trim()
+      const webPath = String(photo?.webPath || '').trim()
+      const selectedPhoto = dataUrl
+        ? createImageFileFromDataUrl(dataUrl, 'snap')
+        : await createImageFileFromUrlCandidates([
+            webPath,
+            nativePath && typeof Capacitor.convertFileSrc === 'function'
+              ? Capacitor.convertFileSrc(nativePath)
+              : '',
+          ], 'snap')
+      acceptCapturedPhoto(selectedPhoto)
+      return true
+    } catch (error) {
+      if (!isCancellationError(error)) {
+        console.error('Snap native photo capture failed:', error)
+      }
+      return false
+    }
   }
 
   function addOverlayItem(type, content) {
@@ -1591,7 +1756,7 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
   }
 
   async function prepareMediaForSend(inputFile, mediaType) {
-    const overlaySnapshot = overlayItems.map((item) => ({ ...item }))
+    const overlaySnapshot = getRenderableOverlayItems().map((item) => ({ ...item }))
     const pathSnapshot = getAllDrawingPaths().map((path) => ({
       ...path,
       points: Array.isArray(path.points) ? path.points.map((point) => ({ ...point })) : [],
@@ -1680,10 +1845,20 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
 
     const activeVideo = await ensurePreviewReady()
     const captureCanvas = ensureCaptureCanvas()
-    if (!activeVideo || !captureCanvas) return
+    if (!activeVideo || !captureCanvas) {
+      if (isNativeRuntime) {
+        await capturePhotoWithNativeCamera()
+      }
+      return
+    }
     if (!renderCaptureFrame()) {
       await waitForAnimationFrames(2)
-      if (!renderCaptureFrame()) return
+      if (!renderCaptureFrame()) {
+        if (isNativeRuntime) {
+          await capturePhotoWithNativeCamera()
+        }
+        return
+      }
     }
 
     try {
@@ -1694,6 +1869,9 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
       acceptCapturedPhoto(snapFile)
     } catch (error) {
       console.error('Snap photo capture failed:', error)
+      if (isNativeRuntime) {
+        await capturePhotoWithNativeCamera()
+      }
     }
   }
 
@@ -1938,6 +2116,8 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
 
   const previewImageClassName = filter !== 'none' ? `filter-${filter}` : ''
   const hasUndoableDrawing = Boolean(draftDrawingPath?.points?.length || drawingPaths.length)
+  const renderableOverlayItems = getRenderableOverlayItems()
+  const stageWidth = Number(stageRef.current?.clientWidth || 0)
 
   return (
     <div className="snap-screen">
@@ -1989,25 +2169,34 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
                 ))}
               </svg>
 
-              {overlayItems.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  className={`snap-overlay-item snap-overlay-item-${item.type}`}
-                  style={{
-                    left: `${clamp(Number(item.x || 0.5), 0, 1) * 100}%`,
-                    top: `${clamp(Number(item.y || 0.5), 0, 1) * 100}%`,
-                    '--snap-overlay-scale': overlayZoomScale * clampOverlayItemSize(item?.size, item?.type),
-                  }}
-                  onPointerDown={(event) => handleOverlayPointerDown(event, item)}
-                  onClick={() => handleOverlayItemClick(item)}
-                >
-                  {item.content}
-                </button>
-              ))}
+              {renderableOverlayItems.map((item) => {
+                const itemScale = overlayZoomScale * clampOverlayItemSize(item?.size, item?.type)
+                const previewBaseWidth = getOverlayPreviewBaseWidth(item?.type, stageWidth)
+                const previewMaxWidth = previewBaseWidth > 0
+                  ? `${Math.round(previewBaseWidth / Math.max(0.55, itemScale || 1))}px`
+                  : undefined
+
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`snap-overlay-item snap-overlay-item-${item.type}`}
+                    style={{
+                      left: `${clamp(Number(item.x || 0.5), 0, 1) * 100}%`,
+                      top: `${clamp(Number(item.y || 0.5), 0, 1) * 100}%`,
+                      '--snap-overlay-scale': itemScale,
+                      ...(previewMaxWidth ? { '--snap-overlay-max-width': previewMaxWidth } : {}),
+                    }}
+                    onPointerDown={(event) => handleOverlayPointerDown(event, item)}
+                    onClick={() => handleOverlayItemClick(item)}
+                  >
+                    {item.content}
+                  </button>
+                )
+              })}
             </div>
 
-            {overlayItems.length > 0 && (
+            {renderableOverlayItems.length > 0 && (
               <div
                 ref={deleteDropZoneRef}
                 className={`snap-delete-dropzone ${isDeleteDropActive ? 'is-active' : ''}`}
@@ -2117,6 +2306,12 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
             <button className="icon-btn" onClick={() => setFilter('none')} type="button">Clear FX</button>
           </div>
 
+          {isNativePhotoFallbackActive && mode === 'camera' && (
+            <div className="snap-native-camera-hint">
+              Live preview is unavailable here. Tap the shutter to open the native camera.
+            </div>
+          )}
+
           {(countdownSeconds > 0 || isPreparingRecording || isRecording) && (
             <div className={`recording-pill ${countdownSeconds > 0 ? 'timer-pill' : ''} ${isPreparingRecording ? 'preparing-pill' : ''}`}>
               {countdownSeconds > 0
@@ -2183,7 +2378,7 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
             </div>
 
             <div className="capture-row">
-              <button className="gallery-btn" onClick={handleLibraryButtonPress} disabled={isRecording || isPreparingRecording} type="button">Library</button>
+              <button className="gallery-btn" onClick={handleLibraryButtonPress} disabled={isRecording || isPreparingRecording} type="button">Gallery</button>
               <button
                 className={`shutter ${mode === 'video' ? 'video-mode' : ''} ${isRecording ? 'recording' : ''}`}
                 onClick={handleShutterPress}
@@ -2194,6 +2389,7 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
               <button
                 className="flip-btn"
                 onClick={() => setFront(!frontCam)}
+                aria-label="Rotate camera"
                 disabled={isRecording || isPreparingRecording}
                 type="button"
               >
