@@ -2591,6 +2591,31 @@
   width: 3.15rem;
 }
 
+.chat-container[data-native="true"] .message-text-with-time {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.22rem;
+}
+
+.chat-container[data-native="true"] .message-text-content {
+  display: block;
+  min-width: 0;
+}
+
+.chat-container[data-native="true"] .message-time-spacer {
+  display: none;
+}
+
+.chat-container[data-native="true"] .message-time-inline {
+  position: static;
+  display: block;
+  align-self: flex-end;
+  margin-top: 0;
+  padding-left: 0;
+  line-height: 1;
+}
+
 .chat-container .message-image-preview {
   width: min(128px, 100%);
   aspect-ratio: 3 / 4;

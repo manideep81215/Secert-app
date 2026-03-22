@@ -20,6 +20,7 @@ const SECRET_TAP_MESSAGES = {
 }
 const TONY_LONG_PRESS_MESSAGE = 'Aagu baby Ostha ,Avvatle matladadam'
 const HIHI_LONG_PRESS_MESSAGE = 'Hari unnadu'
+const TONY_HIHI_DOUBLE_TAP_MESSAGE = 'friends unnaru chatting avvatle(tap-msg)'
 
 const normalizeUsername = (value) => String(value || '').trim().toLowerCase()
 
@@ -44,6 +45,10 @@ function SecretTapButton({ username, socketRef }) {
   }, [normalizedUsername])
 
   const canUseSecretTap = recipients.length > 0
+  const canSendTonyHihiDoubleTap = (
+    (normalizedUsername === TONY_USERNAME && recipients.includes(HIHI_USERNAME))
+    || (normalizedUsername === HIHI_USERNAME && recipients.includes(TONY_USERNAME))
+  )
 
   const clearTapTimer = () => {
     if (tapTimerRef.current) {
@@ -59,10 +64,10 @@ function SecretTapButton({ username, socketRef }) {
     }
   }
 
-  const sendSecretTapMessage = async ({ text, tempKey, successToast }) => {
+  const sendSecretTapMessage = async ({ text, tempKey, successToast, targetRecipients = recipients }) => {
     const activeSocket = socketRef?.current
 
-    if (!text || !recipients.length) return
+    if (!text || !targetRecipients.length) return
     if (!activeSocket?.connected) {
       toast.error('Button Clicking Not Wokring! Wait for 5 sec and try')
       return
@@ -74,7 +79,7 @@ function SecretTapButton({ username, socketRef }) {
       const senderUsername = String(username || '').trim()
       const timestamp = Date.now()
 
-      recipients.forEach((toUsername, index) => {
+      targetRecipients.forEach((toUsername, index) => {
         activeSocket.publish({
           destination: '/app/chat.send',
           body: JSON.stringify({
@@ -98,6 +103,7 @@ function SecretTapButton({ username, socketRef }) {
   const buildTapMessageText = (tapCount) => {
     const safeTapCount = Math.max(1, Number(tapCount || 0))
     if (safeTapCount <= 1) return SECRET_TAP_MESSAGES[1]
+    if (safeTapCount === 2 && canSendTonyHihiDoubleTap) return TONY_HIHI_DOUBLE_TAP_MESSAGE
     if (safeTapCount === 2) return SECRET_TAP_MESSAGES[2]
     if (safeTapCount === 3) return SECRET_TAP_MESSAGES[3]
     if (isHihiSender) {
@@ -111,7 +117,8 @@ function SecretTapButton({ username, socketRef }) {
     clearTapTimer()
     const safeTapCount = Math.max(1, Number(tapCount || 0))
     const successToast = `You clicked ${safeTapCount} ${safeTapCount === 1 ? 'time' : 'times'}`
-    if (isTonySender) {
+    const shouldSendTonyHihiDoubleTap = safeTapCount === 2 && canSendTonyHihiDoubleTap
+    if (isTonySender && !shouldSendTonyHihiDoubleTap) {
       toast.success(successToast)
       return
     }
@@ -119,7 +126,14 @@ function SecretTapButton({ username, socketRef }) {
       text: buildTapMessageText(safeTapCount),
       tempKey: `tap-${safeTapCount}`,
       successToast,
+      targetRecipients: shouldSendTonyHihiDoubleTap
+        ? [normalizedUsername === TONY_USERNAME ? HIHI_USERNAME : TONY_USERNAME]
+        : recipients,
     })
+  }
+
+  const suppressImageCallout = (event) => {
+    event.preventDefault()
   }
 
   const handleClick = () => {
@@ -184,10 +198,13 @@ function SecretTapButton({ username, socketRef }) {
       onPointerUp={handlePointerEnd}
       onPointerLeave={handlePointerEnd}
       onPointerCancel={handlePointerEnd}
+      onContextMenu={suppressImageCallout}
+      onDragStart={suppressImageCallout}
       aria-label={hasLongPressMessage ? 'Tap or hold to send hidden message' : 'Send hidden tap message'}
       title={hasLongPressMessage ? 'Tap normally or hold for 2 seconds for the special message' : 'Send hidden tap message'}
+      draggable={false}
     >
-      <img src={tapIcon} alt="" className="secret-tap-btn-icon" aria-hidden="true" />
+      <img src={tapIcon} alt="" className="secret-tap-btn-icon" aria-hidden="true" draggable={false} />
     </button>
   )
 }
