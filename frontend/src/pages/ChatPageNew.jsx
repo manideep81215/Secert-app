@@ -917,8 +917,8 @@ function ChatPageNew() {
     const name = (inputFile?.name || '').toLowerCase()
     if (mime.startsWith('video/')) return 'video'
     if (mime.startsWith('image/')) return 'image'
-    if (/\.(mp4|mov|m4v|webm|mkv|avi|3gp)$/i.test(name)) return 'video'
-    if (/\.(jpg|jpeg|png|gif|webp|heic|heif|bmp|svg)$/i.test(name)) return 'image'
+    if (/\.(mp4|mov|qt|m4v|webm|mkv|avi|3gp|3g2)$/i.test(name)) return 'video'
+    if (/\.(jpg|jpeg|png|gif|webp|heic|heics|heif|heifs|hif|bmp|svg)$/i.test(name)) return 'image'
     return 'file'
   }
   const gzipFile = async (inputFile) => {

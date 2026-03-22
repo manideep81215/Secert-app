@@ -349,6 +349,9 @@ public class ChatMessageController {
 
   private String normalizeMimeType(String contentType, String originalFilename) {
     String rawType = contentType != null ? contentType.trim().toLowerCase() : "";
+    if (rawType.startsWith("video/x-quicktime")) {
+      return "video/quicktime";
+    }
     if (rawType.startsWith("video/") || rawType.startsWith("image/") || rawType.startsWith("audio/")) {
       return rawType;
     }
@@ -360,8 +363,11 @@ public class ChatMessageController {
     if (name.matches(".*\\.(mp4|m4v)$")) {
       return "video/mp4";
     }
-    if (name.matches(".*\\.(mov)$")) {
+    if (name.matches(".*\\.(mov|qt)$")) {
       return "video/quicktime";
+    }
+    if (name.matches(".*\\.(3g2)$")) {
+      return "video/3gpp2";
     }
     if (name.matches(".*\\.(webm)$")) {
       return "video/webm";
@@ -375,8 +381,29 @@ public class ChatMessageController {
     if (name.matches(".*\\.(3gp)$")) {
       return "video/3gpp";
     }
-    if (name.matches(".*\\.(jpg|jpeg|png|gif|webp|heic|heif|bmp|svg)$")) {
+    if (name.matches(".*\\.(heic|heics)$")) {
+      return "image/heic";
+    }
+    if (name.matches(".*\\.(heif|heifs|hif)$")) {
+      return "image/heif";
+    }
+    if (name.matches(".*\\.(jpg|jpeg)$")) {
       return "image/jpeg";
+    }
+    if (name.matches(".*\\.(png)$")) {
+      return "image/png";
+    }
+    if (name.matches(".*\\.(gif)$")) {
+      return "image/gif";
+    }
+    if (name.matches(".*\\.(webp)$")) {
+      return "image/webp";
+    }
+    if (name.matches(".*\\.(bmp)$")) {
+      return "image/bmp";
+    }
+    if (name.matches(".*\\.(svg)$")) {
+      return "image/svg+xml";
     }
     if (!rawType.isBlank()) {
       return rawType;

@@ -6,6 +6,16 @@
   z-index: 9999;
   overflow: hidden;
 }
+.snap-stage {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: min(100vw, calc(100vh * 9 / 16));
+  height: min(100vh, calc(100vw * 16 / 9));
+  aspect-ratio: 9 / 16;
+  overflow: hidden;
+  background: #000;
+}
 .snap-video {
   width: 100%;
   height: 100%;
@@ -27,11 +37,16 @@
   padding: 12px 18px;
 }
 .icon-btn {
-  width: 38px; height: 38px;
-  border-radius: 50%;
+  min-width: 72px;
+  height: 38px;
+  padding: 0 14px;
+  border-radius: 999px;
   background: rgba(0,0,0,0.4);
   border: none; color: #fff;
-  font-size: 16px; cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  cursor: pointer;
 }
 .flash-on { background: rgba(255,252,0,0.9); color: #000; }
 
@@ -98,6 +113,8 @@
   border-radius: 50%; flex-shrink: 0;
   border: 3px solid transparent;
   cursor: pointer;
+  padding: 0;
+  appearance: none;
 }
 .filter-dot.active { border-color: #FFFC00; }
 .filter-dot.filter-none { background: #fff; }
@@ -138,7 +155,8 @@
 
 .capture-row {
   display: flex; align-items: center;
-  justify-content: space-around;
+  justify-content: space-between;
+  gap: 18px;
   padding: 0 28px;
 }
 .shutter {
@@ -156,11 +174,16 @@
   box-shadow: 0 0 0 8px rgba(255, 59, 48, 0.2);
 }
 .gallery-btn, .flip-btn {
-  width: 46px; height: 46px;
-  border-radius: 50%;
+  min-width: 84px;
+  height: 46px;
+  padding: 0 16px;
+  border-radius: 999px;
   background: rgba(0,0,0,0.4);
   border: none; color: #fff;
-  font-size: 18px; cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  cursor: pointer;
 }
 
 .snap-preview {
@@ -178,19 +201,26 @@
 }
 .send-btn {
   position: absolute; bottom: 48px; right: 24px;
-  width: 58px; height: 58px;
-  border-radius: 50%;
+  min-width: 88px;
+  height: 52px;
+  padding: 0 18px;
+  border-radius: 999px;
   background: #FFFC00; border: none;
-  font-size: 22px; cursor: pointer;
-  font-weight: 700;
+  font-size: 13px; cursor: pointer;
+  font-weight: 800;
+  letter-spacing: 0.04em;
 }
 .discard-btn {
   position: absolute; top: 48px; left: 20px;
-  width: 38px; height: 38px;
-  border-radius: 50%;
+  min-width: 72px;
+  height: 38px;
+  padding: 0 14px;
+  border-radius: 999px;
   background: rgba(0,0,0,0.5);
   border: none; color: #fff;
-  font-size: 18px; cursor: pointer;
+  font-size: 11px; cursor: pointer;
+  font-weight: 800;
+  letter-spacing: 0.04em;
 }
 .edit-tools {
   position: absolute; top: 48px; right: 14px;
@@ -198,11 +228,15 @@
   gap: 12px;
 }
 .edit-tools button {
-  width: 38px; height: 38px;
-  border-radius: 50%;
+  min-width: 72px;
+  height: 38px;
+  padding: 0 14px;
+  border-radius: 999px;
   background: rgba(0,0,0,0.4);
   border: none; color: #fff;
-  font-size: 16px; cursor: pointer;
+  font-size: 11px; cursor: pointer;
+  font-weight: 800;
+  letter-spacing: 0.04em;
 }
 .sent-overlay {
   position: absolute; inset: 0;
@@ -212,11 +246,12 @@
   gap: 10px;
 }
 .sent-check {
-  width: 56px; height: 56px;
+  width: 64px; height: 56px;
   border-radius: 50%; background: #FFFC00;
   display: flex; align-items: center;
   justify-content: center;
-  font-size: 26px; font-weight: 700;
+  font-size: 16px; font-weight: 800;
+  letter-spacing: 0.06em;
 }
 .sent-overlay p {
   color: #fff; font-size: 16px;
