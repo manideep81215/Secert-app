@@ -47,7 +47,7 @@ const NATIVE_CHAT_PAGE_ACTIVE_KEY = 'chat_page_active_v1'
 const EDIT_WINDOW_MS = 15 * 60 * 1000
 const MESSAGE_ACTION_LONG_PRESS_MS = 1000
 const MESSAGE_REPLY_SWIPE_TRIGGER_PX = 56
-const MESSAGE_REPLY_SWIPE_TRIGGER_OUTGOING_PX = 42
+const MESSAGE_REPLY_SWIPE_TRIGGER_OUTGOING_PX = 24
 const MESSAGE_REPLY_SWIPE_MAX_PX = 96
 const MESSAGE_REPLY_SWIPE_CANCEL_Y_PX = 52
 const TYPING_STALE_MS = 1400
@@ -220,6 +220,7 @@ function ChatPageNew() {
   const conversationCacheRef = useRef({})
   const messagesRef = useRef([])
   const draggedMessageRef = useRef(null)
+  const lastMessageTapRef = useRef({ key: null, at: 0 })
   const hasOlderMessagesRef = useRef(false)
   const messageNodeMapRef = useRef({})
   const highlightClearTimerRef = useRef(null)
@@ -3919,12 +3920,24 @@ function ChatPageNew() {
     finishMessageGesture()
   }
 
-  const handleMessageTap = (event, messageKey) => {
+  const handleMessageTap = (event, message, messageKey) => {
     if (!isTouchDevice) return
     if (Date.now() < swipeTapSuppressUntilRef.current) return
     const target = event.target
     if (!(target instanceof HTMLElement)) return
     if (target.closest('button, a, audio, video, input, textarea')) return
+
+    const now = Date.now()
+    const lastTap = lastMessageTapRef.current
+    const isDoubleTap = lastTap.key === messageKey && (now - lastTap.at) <= 320
+
+    if (isDoubleTap) {
+      lastMessageTapRef.current = { key: null, at: 0 }
+      triggerReplySwipe(message)
+      return
+    }
+
+    lastMessageTapRef.current = { key: messageKey, at: now }
     if (activeMessageActionsKey === messageKey || reactionTray?.messageKey === messageKey) {
       setReactionTray(null)
       setActiveMessageActionsKey(null)
@@ -4549,15 +4562,6 @@ function ChatPageNew() {
               <img src={timerLoveBirdsIcon} alt="" className="timer-icon-image" aria-hidden="true" />
             </button>
             <button
-              className="btn-chat-reload"
-              onClick={handleManualReload}
-              title="Reload chat"
-              aria-label="Reload chat"
-              disabled={!selectedUser || isManualRefreshing}
-            >
-              {isManualRefreshing ? '...' : '\u21BB'}
-            </button>
-            <button
               className="btn-home-game"
               onClick={() => navigate('/games')}
               title="Go to dashboard"
@@ -4612,7 +4616,7 @@ function ChatPageNew() {
                 onTouchMove={handleMessageTouchMove}
                 onTouchEnd={handleMessageTouchEnd}
                 onTouchCancel={handleMessageTouchEnd}
-                onClick={(event) => handleMessageTap(event, messageKey)}
+                onClick={(event) => handleMessageTap(event, message, messageKey)}
               >
                 <div className="message-bubble-shell">
                   <div
@@ -4667,7 +4671,7 @@ function ChatPageNew() {
                   onTouchMove={handleMessageTouchMove}
                   onTouchEnd={handleMessageTouchEnd}
                   onTouchCancel={handleMessageTouchEnd}
-                  onClick={(event) => handleMessageTap(event, messageKey)}
+                  onClick={(event) => handleMessageTap(event, message, messageKey)}
                   {...messageMotionProps}
                 >
                   <div className="message-bubble-shell">

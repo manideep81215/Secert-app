@@ -2378,7 +2378,7 @@
 
 .chat-container .chat-user-name {
   color: #4d2e1a;
-  font-size: 0.92rem;
+  font-size: 0.82rem;
   line-height: 1.05;
 }
 
@@ -2425,9 +2425,9 @@
 }
 
 .chat-container .chat-user-avatar {
-  width: 2.45rem;
-  height: 2.45rem;
-  font-size: 2rem;
+  width: 1.85rem;
+  height: 1.85rem;
+  font-size: 1rem;
 }
 
 .chat-container .chat-user-status {
@@ -2500,17 +2500,18 @@
 }
 
 .chat-container .chat-header-left {
-  gap: 0.6rem;
+  gap: 0.5rem;
 }
 
 .chat-container .chat-user-avatar {
-  width: 2.15rem;
-  height: 2.15rem;
-  font-size: 1.25rem;
+  width: 1.9rem;
+  height: 1.9rem;
+  font-size: 1.05rem;
 }
 
 .chat-container .chat-user-name {
-  font-size: 0.95rem;
+  font-size: 0.85rem;
+  line-height: 1.05;
 }
 
 .chat-container .chat-user-status {
@@ -3217,14 +3218,14 @@
   }
 
   .chat-container[data-native="true"]:not(.mobile-users-open) .chat-user-avatar {
-    width: 1.9rem !important;
-    height: 1.9rem !important;
-    font-size: 1.08rem !important;
+    width: 1.72rem !important;
+    height: 1.72rem !important;
+    font-size: 0.96rem !important;
     border-width: 2px !important;
   }
 
   .chat-container[data-native="true"]:not(.mobile-users-open) .chat-user-name {
-    font-size: 0.88rem !important;
+    font-size: 0.8rem !important;
     line-height: 1.04 !important;
   }
 
