@@ -1266,6 +1266,23 @@ function ChatPageNew() {
   }, [])
 
   useEffect(() => {
+    if (typeof document === 'undefined') return
+
+    const handleSelectStart = (event) => {
+      const target = event.target
+      if (!(target instanceof HTMLElement)) return
+      if (!target.closest('.messages-area .message-content')) return
+      if (target.closest('input, textarea, button, a, audio, video')) return
+      event.preventDefault()
+    }
+
+    document.addEventListener('selectstart', handleSelectStart)
+    return () => {
+      document.removeEventListener('selectstart', handleSelectStart)
+    }
+  }, [])
+
+  useEffect(() => {
     if (!isNativeCapacitorRuntime()) return
     const t1 = setTimeout(() => window.dispatchEvent(new Event('resize')), 100)
     const t2 = setTimeout(() => window.dispatchEvent(new Event('resize')), 350)
@@ -4297,10 +4314,10 @@ function ChatPageNew() {
 
     if (isPlainTextMessage) {
       return (
-        <div className="message-text-row">
-          <div className="message-text">{renderTextWithLinks(message.text)}</div>
+        <span className="message-text message-text-with-time">
+          {renderTextWithLinks(message.text)}
           <span className="message-time message-time-inline">{getMessageFooterLabel(message)}</span>
-        </div>
+        </span>
       )
     }
 

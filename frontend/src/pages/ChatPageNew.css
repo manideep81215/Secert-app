@@ -554,6 +554,9 @@
   width: 100%;
   position: relative;
   touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .message.highlighted .message-content {
@@ -580,6 +583,7 @@
 }
 
 .message-content {
+  display: inline-block;
   width: fit-content;
   max-width: 85%;
   min-width: 0;
@@ -592,6 +596,15 @@
   animation: bubblePop 0.28s ease;
   touch-action: pan-y;
   will-change: transform;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.message-content *:not(input):not(textarea) {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .message-content.has-media {
@@ -761,16 +774,11 @@
   word-break: normal;
 }
 
-.message-text-row {
-  display: flex;
-  align-items: flex-end;
-  gap: 0.45rem;
-  width: 100%;
-  max-width: 100%;
-}
-
-.message-text-row .message-text {
-  flex: 1 1 auto;
+.message-text-with-time {
+  display: block;
+  position: relative;
+  padding-right: 3.2rem;
+  padding-bottom: 0.15rem;
   min-width: 0;
 }
 
@@ -914,11 +922,13 @@
 }
 
 .message-time-inline {
-  margin-top: 0;
-  flex: 0 0 auto;
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  margin: 0;
+  display: inline-block;
   white-space: nowrap;
   line-height: 1.1;
-  align-self: flex-end;
 }
 
 .message-reaction-badge {
@@ -1974,21 +1984,21 @@
   }
 
   .message-content {
-    width: auto;
-    max-width: 68vw;
+    width: fit-content;
+    max-width: 74vw;
   }
 
   .chat-container .message-content {
-    width: auto;
-    max-width: 68vw;
+    width: fit-content;
+    max-width: 74vw;
   }
 
   .chat-container .message.user .message-content {
-    max-width: 68vw;
+    max-width: 74vw;
   }
 
   .chat-container .message.other .message-content {
-    max-width: 62vw;
+    max-width: 70vw;
   }
 
   .chat-container .message-content.has-media {
@@ -2197,17 +2207,17 @@
   }
 
   .message-content {
-    width: auto;
-    max-width: 58vw;
+    width: fit-content;
+    max-width: 72vw;
     padding: 0.5rem 0.82rem;
   }
 
   .chat-container .message.user .message-content {
-    max-width: 58vw;
+    max-width: 72vw;
   }
 
   .chat-container .message.other .message-content {
-    max-width: 56vw;
+    max-width: 68vw;
   }
 
   .input-wrapper {
@@ -2549,7 +2559,7 @@
 
 .chat-container .message-content {
   width: fit-content;
-  max-width: min(72%, 560px);
+  max-width: min(80%, 620px);
   min-width: 0;
   padding: 0.48rem 0.72rem;
 }
@@ -2558,10 +2568,6 @@
   white-space: pre-wrap;
   overflow-wrap: break-word;
   word-break: normal;
-}
-
-.chat-container .message-text-row {
-  gap: 0.38rem;
 }
 
 .chat-container .message-time-inline {
