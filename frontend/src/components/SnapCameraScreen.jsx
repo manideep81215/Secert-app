@@ -33,6 +33,11 @@ function parseZoomFactor(zoomValue) {
   return Number.isFinite(parsed) && parsed >= 1 ? parsed : 1
 }
 
+function getOverlayZoomScale(zoomFactor) {
+  const safeZoom = Math.max(1, Number(zoomFactor || 1))
+  return clamp(Math.sqrt(safeZoom), 1, 2.35)
+}
+
 function getNineBySixteenCrop(sourceWidth, sourceHeight) {
   const sourceAspect = sourceWidth / sourceHeight
   const targetAspect = SNAP_CAPTURE_WIDTH / SNAP_CAPTURE_HEIGHT
@@ -158,19 +163,6 @@ function getSelectedMediaKind(inputFile) {
   return null
 }
 
-function countdown(secs) {
-  return new Promise((resolve) => {
-    let count = secs
-    const interval = window.setInterval(() => {
-      count -= 1
-      if (count <= 0) {
-        window.clearInterval(interval)
-        resolve()
-      }
-    }, 1000)
-  })
-}
-
 function buildOverlayItem(type, content, existingCount) {
   const boundedCount = Math.max(0, Number(existingCount || 0))
   const offsetIndex = boundedCount % 4
@@ -265,6 +257,55 @@ function isCancellationError(error) {
   return message.includes('cancel')
 }
 
+function scoreVideoInputDevice(device, preferFront) {
+  const label = String(device?.label || '').trim().toLowerCase()
+  let score = 0
+
+  if (preferFront) {
+    if (/front|user|selfie|facetime/.test(label)) score += 120
+    if (/back|rear|environment|world/.test(label)) score -= 160
+  } else {
+    if (/back|rear|environment|world/.test(label)) score += 120
+    if (/wide|ultra[\s-]?wide|main|primary|standard|1x|0\.5x/.test(label)) score += 80
+    if (/tele|zoom|periscope|macro|depth/.test(label)) score -= 180
+    if (/front|user|selfie|facetime/.test(label)) score -= 220
+  }
+
+  return score
+}
+
+async function findPreferredVideoDeviceId(preferFront) {
+  if (typeof navigator === 'undefined' || !navigator.mediaDevices?.enumerateDevices) {
+    return ''
+  }
+
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices()
+    const videoInputs = devices.filter((device) => device.kind === 'videoinput')
+    if (videoInputs.length === 0) return ''
+
+    const ranked = [...videoInputs]
+      .map((device, index) => ({
+        deviceId: String(device.deviceId || ''),
+        index,
+        score: scoreVideoInputDevice(device, preferFront),
+      }))
+      .filter((entry) => entry.deviceId)
+      .sort((left, right) => {
+        if (right.score !== left.score) return right.score - left.score
+        return preferFront ? left.index - right.index : right.index - left.index
+      })
+
+    if (!ranked[0] || ranked[0].score <= 0) {
+      return ''
+    }
+
+    return ranked[0].deviceId
+  } catch {
+    return ''
+  }
+}
+
 export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSend }) {
   const [mode, setMode] = useState('camera')
   const [filter, setFilter] = useState('none')
@@ -280,26 +321,38 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
   const [drawingPaths, setDrawingPaths] = useState([])
   const [draftDrawingPath, setDraftDrawingPath] = useState(null)
   const [isDrawMode, setIsDrawMode] = useState(false)
+  const [overlayComposer, setOverlayComposer] = useState(null)
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
   const [recordingSeconds, setRecordingSeconds] = useState(0)
+  const [countdownSeconds, setCountdownSeconds] = useState(0)
+  const [isPreparingRecording, setIsPreparingRecording] = useState(false)
   const videoRef = useRef(null)
   const streamRef = useRef(null)
   const mediaRecorderRef = useRef(null)
   const recordedChunksRef = useRef([])
   const recordingTimerRef = useRef(null)
+  const countdownTimeoutRef = useRef(null)
+  const recordingWarmupTimeoutRef = useRef(null)
   const stopRecordingModeRef = useRef('preview')
   const mountedRef = useRef(false)
   const previewUrlRef = useRef(null)
   const libraryInputRef = useRef(null)
   const captureCanvasRef = useRef(null)
+  const livePreviewCanvasRef = useRef(null)
   const captureFrameRequestRef = useRef(0)
   const recordingOutputStreamRef = useRef(null)
   const stageRef = useRef(null)
   const dragOverlayRef = useRef(null)
+  const dragFrameRef = useRef(0)
+  const drawingFrameRef = useRef(0)
+  const drawingQueuedPointsRef = useRef([])
+  const drawingPointerIdRef = useRef(null)
   const drawingPathRef = useRef(null)
+  const overlayComposerInputRef = useRef(null)
   const zoomFactor = parseZoomFactor(zoom)
+  const overlayZoomScale = getOverlayZoomScale(zoomFactor)
   const isMobileDevice = isLikelyMobileDevice()
   const isNativeRuntime = Capacitor.isNativePlatform()
   const cameraToggleLabel = isMobileDevice ? 'Rotate Camera' : 'Flip'
@@ -323,10 +376,22 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
   }
 
   function clearOverlayEditing() {
+    stopOverlayDrag()
     setOverlayItems([])
     setDrawingPaths([])
     setDraftDrawingPath(null)
     drawingPathRef.current = null
+    drawingPointerIdRef.current = null
+    drawingQueuedPointsRef.current = []
+    if (drawingFrameRef.current) {
+      window.cancelAnimationFrame(drawingFrameRef.current)
+      drawingFrameRef.current = 0
+    }
+    if (dragFrameRef.current) {
+      window.cancelAnimationFrame(dragFrameRef.current)
+      dragFrameRef.current = 0
+    }
+    setOverlayComposer(null)
     setIsDrawMode(false)
   }
 
@@ -338,6 +403,7 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
 
   function drawOverlayItemsToCanvas(context, width, height, overlaySnapshot) {
     if (!context || !Array.isArray(overlaySnapshot)) return
+    const overlayScale = overlayZoomScale
 
     overlaySnapshot.forEach((item) => {
       const x = clamp(Number(item?.x || 0.5), 0, 1) * width
@@ -353,15 +419,15 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
       context.shadowOffsetY = Math.round(height * 0.005)
 
       if (item.type === 'emoji') {
-        context.font = `900 ${Math.round(width * 0.09)}px "Apple Color Emoji", "Segoe UI Emoji", sans-serif`
+        context.font = `900 ${Math.round(width * 0.09 * overlayScale)}px "Apple Color Emoji", "Segoe UI Emoji", sans-serif`
         context.fillText(content, x, y)
         context.restore()
         return
       }
 
       if (item.type === 'note') {
-        context.font = `800 ${Math.round(width * 0.036)}px "Segoe UI", sans-serif`
-        const maxWidth = width * 0.58
+        context.font = `800 ${Math.round(width * 0.036 * overlayScale)}px "Segoe UI", sans-serif`
+        const maxWidth = width * Math.min(0.82, 0.58 * overlayScale)
         const words = content.split(/\s+/).filter(Boolean)
         const lines = []
         let currentLine = ''
@@ -377,20 +443,20 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
         if (currentLine) lines.push(currentLine)
         if (lines.length === 0) lines.push(content)
 
-        const lineHeight = Math.round(width * 0.05)
+        const lineHeight = Math.round(width * 0.05 * overlayScale)
         const boxWidth = Math.min(
-          maxWidth + Math.round(width * 0.12),
+          maxWidth + Math.round(width * 0.12 * overlayScale),
           Math.max(
-            ...lines.map((line) => context.measureText(line).width + Math.round(width * 0.12)),
+            ...lines.map((line) => context.measureText(line).width + Math.round(width * 0.12 * overlayScale)),
           ),
         )
-        const boxHeight = (lines.length * lineHeight) + Math.round(height * 0.06)
+        const boxHeight = (lines.length * lineHeight) + Math.round(height * 0.06 * overlayScale)
         const boxX = x - (boxWidth / 2)
         const boxY = y - (boxHeight / 2)
-        const radius = Math.round(width * 0.03)
+        const radius = Math.round(width * 0.03 * overlayScale)
 
-        context.shadowBlur = Math.round(width * 0.02)
-        context.shadowOffsetY = Math.round(height * 0.008)
+        context.shadowBlur = Math.round(width * 0.02 * overlayScale)
+        context.shadowOffsetY = Math.round(height * 0.008 * overlayScale)
         context.fillStyle = 'rgba(255, 240, 112, 0.94)'
         context.beginPath()
         context.moveTo(boxX + radius, boxY)
@@ -408,17 +474,17 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
         context.shadowColor = 'transparent'
         context.fillStyle = '#1d1d1d'
         lines.forEach((line, index) => {
-          const lineY = boxY + Math.round(height * 0.032) + (index * lineHeight) + (lineHeight / 2)
+          const lineY = boxY + Math.round(height * 0.032 * overlayScale) + (index * lineHeight) + (lineHeight / 2)
           context.fillText(line, x, lineY)
         })
         context.restore()
         return
       }
 
-      context.font = `900 ${Math.round(width * 0.062)}px "Segoe UI", sans-serif`
+      context.font = `900 ${Math.round(width * 0.062 * overlayScale)}px "Segoe UI", sans-serif`
       context.fillStyle = '#ffffff'
       context.strokeStyle = 'rgba(0, 0, 0, 0.35)'
-      context.lineWidth = Math.max(4, Math.round(width * 0.01))
+      context.lineWidth = Math.max(4, Math.round(width * 0.01 * overlayScale))
       context.lineJoin = 'round'
       context.miterLimit = 2
       context.strokeText(content, x, y)
@@ -429,6 +495,7 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
 
   function drawPathsToCanvas(context, width, height, pathSnapshot) {
     if (!context || !Array.isArray(pathSnapshot)) return
+    const overlayScale = overlayZoomScale
 
     pathSnapshot.forEach((path) => {
       const points = Array.isArray(path?.points) ? path.points : []
@@ -436,7 +503,7 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
       context.save()
       context.beginPath()
       context.strokeStyle = path.color || OVERLAY_STROKE_COLOR
-      context.lineWidth = Math.max(6, Math.round(width * 0.008))
+      context.lineWidth = Math.max(6, Math.round(width * 0.008 * overlayScale))
       context.lineCap = 'round'
       context.lineJoin = 'round'
       points.forEach((point, index) => {
@@ -468,6 +535,69 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
     }
   }
 
+  function clearCountdownState() {
+    countdownTimeoutRef.current = null
+    if (mountedRef.current) {
+      setCountdownSeconds(0)
+    }
+  }
+
+  function clearRecordingWarmup() {
+    recordingWarmupTimeoutRef.current = null
+    if (mountedRef.current) {
+      setIsPreparingRecording(false)
+    }
+  }
+
+  function waitWithTimeout(timeoutRef, milliseconds) {
+    return new Promise((resolve) => {
+      const timerId = window.setTimeout(() => {
+        if (timeoutRef && timeoutRef.current === timerId) {
+          timeoutRef.current = null
+        }
+        resolve()
+      }, Math.max(0, Number(milliseconds || 0)))
+      if (timeoutRef) {
+        timeoutRef.current = timerId
+      }
+    })
+  }
+
+  async function waitForAnimationFrames(frameCount = 2) {
+    let remaining = Math.max(1, Number(frameCount || 1))
+    await new Promise((resolve) => {
+      const tick = () => {
+        remaining -= 1
+        if (remaining <= 0) {
+          resolve()
+          return
+        }
+        window.requestAnimationFrame(tick)
+      }
+      window.requestAnimationFrame(tick)
+    })
+  }
+
+  async function runCaptureCountdown(totalSeconds) {
+    const safeSeconds = Math.max(0, Number(totalSeconds || 0))
+    if (safeSeconds <= 0) {
+      if (mountedRef.current) {
+        setCountdownSeconds(0)
+      }
+      return true
+    }
+
+    for (let remaining = safeSeconds; remaining > 0; remaining -= 1) {
+      if (!mountedRef.current) return false
+      setCountdownSeconds(remaining)
+      await waitWithTimeout(countdownTimeoutRef, 1000)
+      if (!mountedRef.current) return false
+    }
+
+    setCountdownSeconds(0)
+    return true
+  }
+
   function ensureCaptureCanvas() {
     if (!captureCanvasRef.current && typeof document !== 'undefined') {
       const canvas = document.createElement('canvas')
@@ -478,16 +608,45 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
     return captureCanvasRef.current
   }
 
+  function syncLivePreviewCanvas(sourceCanvas) {
+    const previewCanvas = livePreviewCanvasRef.current
+    if (!previewCanvas || !sourceCanvas) return false
+
+    if (previewCanvas.width !== sourceCanvas.width) {
+      previewCanvas.width = sourceCanvas.width
+    }
+    if (previewCanvas.height !== sourceCanvas.height) {
+      previewCanvas.height = sourceCanvas.height
+    }
+
+    const previewContext = previewCanvas.getContext('2d')
+    if (!previewContext) return false
+    previewContext.clearRect(0, 0, previewCanvas.width, previewCanvas.height)
+    previewContext.drawImage(sourceCanvas, 0, 0, previewCanvas.width, previewCanvas.height)
+    return true
+  }
+
+  function clearLivePreviewCanvas() {
+    const previewCanvas = livePreviewCanvasRef.current
+    const previewContext = previewCanvas?.getContext?.('2d')
+    if (!previewCanvas || !previewContext) return
+    previewContext.clearRect(0, 0, previewCanvas.width, previewCanvas.height)
+  }
+
   function renderCaptureFrame() {
     const captureCanvas = ensureCaptureCanvas()
     const activeVideo = videoRef.current
     if (!captureCanvas || !activeVideo) return false
-    return drawVideoFrameToCanvas({
+    const didDraw = drawVideoFrameToCanvas({
       sourceVideo: activeVideo,
       targetCanvas: captureCanvas,
       mirror: frontCam,
       zoomFactor,
     })
+    if (didDraw) {
+      syncLivePreviewCanvas(captureCanvas)
+    }
+    return didDraw
   }
 
   function stopCaptureComposition() {
@@ -591,6 +750,8 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
 
   function stopPreview() {
     stopCaptureComposition()
+    clearCountdownState()
+    clearRecordingWarmup()
     void applyTorchState(false)
     if (mountedRef.current) {
       setTorchAvailable(false)
@@ -600,6 +761,7 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
     }
     streamRef.current?.getTracks?.().forEach((track) => track.stop())
     streamRef.current = null
+    clearLivePreviewCanvas()
   }
 
   function clearCapturedMedia(options = {}) {
@@ -617,12 +779,19 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
   async function startPreview() {
     try {
       stopPreview()
-      const buildConstraints = (withAudio) => ({
+      const buildConstraints = (withAudio, preferredDeviceId = '') => ({
         video: {
-          facingMode: frontCam ? 'user' : 'environment',
+          ...(preferredDeviceId
+            ? { deviceId: { exact: preferredDeviceId } }
+            : { facingMode: frontCam ? 'user' : 'environment' }),
           width: { ideal: SNAP_CAPTURE_WIDTH },
           height: { ideal: SNAP_CAPTURE_HEIGHT },
-          aspectRatio: { ideal: SNAP_CAPTURE_WIDTH / SNAP_CAPTURE_HEIGHT },
+          aspectRatio: {
+            ideal: SNAP_CAPTURE_WIDTH / SNAP_CAPTURE_HEIGHT,
+            min: SNAP_CAPTURE_WIDTH / SNAP_CAPTURE_HEIGHT,
+            max: SNAP_CAPTURE_WIDTH / SNAP_CAPTURE_HEIGHT,
+          },
+          resizeMode: 'crop-and-scale',
         },
         audio: withAudio
           ? {
@@ -639,6 +808,20 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
       } catch (error) {
         if (!wantsAudio) throw error
         stream = await navigator.mediaDevices.getUserMedia(buildConstraints(false))
+      }
+
+      const currentDeviceId = String(stream?.getVideoTracks?.()?.[0]?.getSettings?.()?.deviceId || '')
+      const preferredDeviceId = await findPreferredVideoDeviceId(frontCam)
+      if (preferredDeviceId && preferredDeviceId !== currentDeviceId) {
+        try {
+          const replacementStream = await navigator.mediaDevices.getUserMedia(
+            buildConstraints(wantsAudio, preferredDeviceId),
+          )
+          stream?.getTracks?.().forEach((track) => track.stop())
+          stream = replacementStream
+        } catch {
+          // Keep the original stream if switching lenses fails.
+        }
       }
 
       if (!mountedRef.current) {
@@ -705,7 +888,57 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
     setOverlayItems((prev) => [...prev, buildOverlayItem(type, normalizedContent, prev.length)])
   }
 
+  function getOverlayComposerPlaceholder(type) {
+    if (type === 'emoji') return 'Type emoji...'
+    if (type === 'note') return 'Write a note...'
+    return 'Type text...'
+  }
+
+  function getOverlayComposerDefaultValue(type) {
+    if (type === 'emoji') return '🙂'
+    return ''
+  }
+
+  function openOverlayComposer(type) {
+    setIsDrawMode(false)
+    setDraftDrawingPath(null)
+    drawingPathRef.current = null
+    drawingPointerIdRef.current = null
+    drawingQueuedPointsRef.current = []
+    if (drawingFrameRef.current) {
+      window.cancelAnimationFrame(drawingFrameRef.current)
+      drawingFrameRef.current = 0
+    }
+    setOverlayComposer({
+      type,
+      value: getOverlayComposerDefaultValue(type),
+    })
+  }
+
+  function closeOverlayComposer() {
+    setOverlayComposer(null)
+  }
+
+  function handleOverlayComposerChange(event) {
+    const nextValue = String(event?.target?.value || '')
+    setOverlayComposer((prev) => (prev ? { ...prev, value: nextValue } : prev))
+  }
+
+  function handleOverlayComposerSubmit(event) {
+    event?.preventDefault?.()
+    const composerType = String(overlayComposer?.type || '').trim()
+    const composerValue = String(overlayComposer?.value || '').trim()
+    if (!composerType || !composerValue) return
+    addOverlayItem(composerType, composerValue)
+    setOverlayComposer({
+      type: composerType,
+      value: getOverlayComposerDefaultValue(composerType),
+    })
+  }
+
   function promptForOverlay(type) {
+    openOverlayComposer(type)
+    if (typeof window !== 'undefined' && window.__USE_BROWSER_OVERLAY_PROMPT__ === true) {
     const promptCopy = (
       type === 'emoji'
         ? 'Add an emoji'
@@ -723,6 +956,7 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
     const response = window.prompt(promptCopy, defaultValue)
     if (!response) return
     addOverlayItem(type, response)
+    }
   }
 
   function getStagePoint(event) {
@@ -736,7 +970,47 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
     }
   }
 
+  function flushOverlayDragFrame() {
+    dragFrameRef.current = 0
+    const activeDrag = dragOverlayRef.current
+    if (!activeDrag?.latestPoint) return
+    const { id, offsetX, offsetY, latestPoint } = activeDrag
+    setOverlayItems((prev) => prev.map((item) => (
+      item.id === id
+        ? {
+            ...item,
+            x: clamp(latestPoint.x - offsetX, 0.08, 0.92),
+            y: clamp(latestPoint.y - offsetY, 0.08, 0.92),
+          }
+        : item
+    )))
+  }
+
   function stopOverlayDrag() {
+    if (dragFrameRef.current) {
+      window.cancelAnimationFrame(dragFrameRef.current)
+      dragFrameRef.current = 0
+    }
+    const activeDrag = dragOverlayRef.current
+    if (activeDrag?.latestPoint) {
+      const { id, offsetX, offsetY, latestPoint } = activeDrag
+      setOverlayItems((prev) => prev.map((item) => (
+        item.id === id
+          ? {
+              ...item,
+              x: clamp(latestPoint.x - offsetX, 0.08, 0.92),
+              y: clamp(latestPoint.y - offsetY, 0.08, 0.92),
+            }
+          : item
+      )))
+    }
+    if (activeDrag?.target && typeof activeDrag.target.releasePointerCapture === 'function' && activeDrag.pointerId != null) {
+      try {
+        activeDrag.target.releasePointerCapture(activeDrag.pointerId)
+      } catch {
+        // Ignore release failures from browsers that already cleared capture.
+      }
+    }
     dragOverlayRef.current = null
     window.removeEventListener('pointermove', handleOverlayDragMove)
     window.removeEventListener('pointerup', stopOverlayDrag)
@@ -745,19 +1019,16 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
 
   function handleOverlayDragMove(event) {
     if (!dragOverlayRef.current) return
+    if (dragOverlayRef.current.pointerId != null && event.pointerId !== dragOverlayRef.current.pointerId) return
+    event.preventDefault()
+    event.stopPropagation()
     const stagePoint = getStagePoint(event)
     if (!stagePoint) return
 
-    const { id, offsetX, offsetY } = dragOverlayRef.current
-    setOverlayItems((prev) => prev.map((item) => (
-      item.id === id
-        ? {
-            ...item,
-            x: clamp(stagePoint.x - offsetX, 0.08, 0.92),
-            y: clamp(stagePoint.y - offsetY, 0.08, 0.92),
-          }
-        : item
-    )))
+    dragOverlayRef.current.latestPoint = stagePoint
+    if (!dragFrameRef.current) {
+      dragFrameRef.current = window.requestAnimationFrame(flushOverlayDragFrame)
+    }
   }
 
   function handleOverlayPointerDown(event, item) {
@@ -767,10 +1038,21 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
     const stagePoint = getStagePoint(event)
     if (!stagePoint) return
 
+    if (typeof event.currentTarget?.setPointerCapture === 'function' && event.pointerId != null) {
+      try {
+        event.currentTarget.setPointerCapture(event.pointerId)
+      } catch {
+        // Ignore unsupported pointer-capture failures.
+      }
+    }
+
     dragOverlayRef.current = {
       id: item.id,
       offsetX: stagePoint.x - item.x,
       offsetY: stagePoint.y - item.y,
+      latestPoint: stagePoint,
+      pointerId: event.pointerId,
+      target: event.currentTarget,
     }
 
     window.addEventListener('pointermove', handleOverlayDragMove)
@@ -786,11 +1068,39 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
     setIsDrawMode((prev) => !prev)
     setDraftDrawingPath(null)
     drawingPathRef.current = null
+    drawingPointerIdRef.current = null
+    drawingQueuedPointsRef.current = []
+    setOverlayComposer(null)
+    if (drawingFrameRef.current) {
+      window.cancelAnimationFrame(drawingFrameRef.current)
+      drawingFrameRef.current = 0
+    }
+  }
+
+  function flushDraftDrawingPoints() {
+    drawingFrameRef.current = 0
+    if (!drawingPathRef.current || drawingQueuedPointsRef.current.length === 0) return
+    const queuedPoints = drawingQueuedPointsRef.current
+    drawingQueuedPointsRef.current = []
+    const updatedPath = {
+      ...drawingPathRef.current,
+      points: [...drawingPathRef.current.points, ...queuedPoints],
+    }
+    drawingPathRef.current = updatedPath
+    setDraftDrawingPath(updatedPath)
   }
 
   function handleDrawingPointerDown(event) {
     if (!isDrawMode) return
     event.preventDefault()
+    event.stopPropagation()
+    if (typeof event.currentTarget?.setPointerCapture === 'function' && event.pointerId != null) {
+      try {
+        event.currentTarget.setPointerCapture(event.pointerId)
+      } catch {
+        // Ignore unsupported pointer-capture failures.
+      }
+    }
     const stagePoint = getStagePoint(event)
     if (!stagePoint) return
     const nextPath = {
@@ -798,26 +1108,36 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
       color: OVERLAY_STROKE_COLOR,
       points: [stagePoint],
     }
+    drawingPointerIdRef.current = event.pointerId
+    drawingQueuedPointsRef.current = []
     drawingPathRef.current = nextPath
     setDraftDrawingPath(nextPath)
   }
 
   function handleDrawingPointerMove(event) {
     if (!isDrawMode || !drawingPathRef.current) return
+    if (drawingPointerIdRef.current != null && event.pointerId !== drawingPointerIdRef.current) return
     event.preventDefault()
+    event.stopPropagation()
     const stagePoint = getStagePoint(event)
     if (!stagePoint) return
-    const updatedPath = {
-      ...drawingPathRef.current,
-      points: [...drawingPathRef.current.points, stagePoint],
+    drawingQueuedPointsRef.current.push(stagePoint)
+    if (!drawingFrameRef.current) {
+      drawingFrameRef.current = window.requestAnimationFrame(flushDraftDrawingPoints)
     }
-    drawingPathRef.current = updatedPath
-    setDraftDrawingPath(updatedPath)
   }
 
-  function handleDrawingPointerUp() {
+  function handleDrawingPointerUp(event) {
     if (!isDrawMode || !drawingPathRef.current) return
+    if (event?.pointerId != null && drawingPointerIdRef.current != null && event.pointerId !== drawingPointerIdRef.current) return
+    if (drawingFrameRef.current) {
+      window.cancelAnimationFrame(drawingFrameRef.current)
+      drawingFrameRef.current = 0
+    }
+    flushDraftDrawingPoints()
     const completedPath = drawingPathRef.current
+    drawingPointerIdRef.current = null
+    drawingQueuedPointsRef.current = []
     drawingPathRef.current = null
     setDraftDrawingPath(null)
     if ((completedPath.points || []).length > 1) {
@@ -1061,6 +1381,17 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
   function stopVideoRecording({ discard = false } = {}) {
     const recorder = mediaRecorderRef.current
     stopRecordingModeRef.current = discard ? 'discard' : 'preview'
+    if (isPreparingRecording) {
+      clearRecordingWarmup()
+      stopRecordingTimer()
+      stopRecordingOutputStream()
+      if (mountedRef.current) {
+        setIsRecording(false)
+        setRecordingSeconds(0)
+      }
+      return
+    }
+
     if (!recorder) {
       stopRecordingTimer()
       stopRecordingOutputStream()
@@ -1082,7 +1413,8 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
   async function capturePhoto() {
     const timerSecs = timer === '3s' ? 3 : timer === '10s' ? 10 : 0
     if (timerSecs > 0) {
-      await countdown(timerSecs)
+      const completedCountdown = await runCaptureCountdown(timerSecs)
+      if (!completedCountdown) return
     }
 
     const activeVideo = await ensurePreviewReady()
@@ -1102,7 +1434,8 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
   async function startVideoRecording() {
     const timerSecs = timer === '3s' ? 3 : timer === '10s' ? 10 : 0
     if (timerSecs > 0) {
-      await countdown(timerSecs)
+      const completedCountdown = await runCaptureCountdown(timerSecs)
+      if (!completedCountdown) return
     }
 
     const activeVideo = await ensurePreviewReady()
@@ -1154,6 +1487,17 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
       stopVideoRecording({ discard: true })
     }
 
+    setIsPreparingRecording(true)
+    await waitForAnimationFrames(3)
+    await waitWithTimeout(recordingWarmupTimeoutRef, 1000)
+    if (!mountedRef.current || !streamRef.current) {
+      clearRecordingWarmup()
+      stopRecordingOutputStream()
+      return
+    }
+
+    renderCaptureFrame()
+    clearRecordingWarmup()
     mediaRecorderRef.current = recorder
     recorder.start(250)
     setIsRecording(true)
@@ -1165,6 +1509,10 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
   }
 
   async function handleShutterPress() {
+    if (isPreparingRecording) {
+      return
+    }
+
     if (isRecording) {
       stopVideoRecording()
       return
@@ -1282,6 +1630,15 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
   }, [])
 
   useEffect(() => {
+    if (!overlayComposer) return undefined
+    const focusTimer = window.setTimeout(() => {
+      overlayComposerInputRef.current?.focus?.()
+      overlayComposerInputRef.current?.select?.()
+    }, 40)
+    return () => window.clearTimeout(focusTimer)
+  }, [overlayComposer])
+
+  useEffect(() => {
     void startPreview()
     return () => {
       stopVideoRecording({ discard: true })
@@ -1306,7 +1663,6 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
   }, [flash, frontCam, preview])
 
   const previewImageClassName = filter !== 'none' ? `filter-${filter}` : ''
-  const previewTransform = `${frontCam ? 'scaleX(-1) ' : ''}scale(${zoomFactor})`
 
   return (
     <div className="snap-screen">
@@ -1316,9 +1672,9 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
           autoPlay
           playsInline
           muted
-          className={`snap-video ${previewImageClassName}`}
-          style={{ transform: previewTransform }}
+          className="snap-source-video"
         />
+        <canvas ref={livePreviewCanvasRef} className={`snap-video ${previewImageClassName}`} />
 
         {preview && (
           <div className="snap-preview">
@@ -1351,7 +1707,7 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
                     d={pathToSvg(path.points)}
                     fill="none"
                     stroke={path.color || OVERLAY_STROKE_COLOR}
-                    strokeWidth="10"
+                    strokeWidth={String(Math.round(10 * overlayZoomScale))}
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   />
@@ -1366,6 +1722,7 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
                   style={{
                     left: `${clamp(Number(item.x || 0.5), 0, 1) * 100}%`,
                     top: `${clamp(Number(item.y || 0.5), 0, 1) * 100}%`,
+                    '--snap-overlay-scale': overlayZoomScale,
                   }}
                   onPointerDown={(event) => handleOverlayPointerDown(event, item)}
                   onDoubleClick={() => handleOverlayDoubleClick(item.id)}
@@ -1396,6 +1753,44 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
               <button type="button" onClick={() => promptForOverlay('note')}>Note</button>
             </div>
 
+            {overlayComposer && (
+              <form
+                className="snap-overlay-composer"
+                onSubmit={handleOverlayComposerSubmit}
+                onPointerDown={(event) => event.stopPropagation()}
+              >
+                {overlayComposer.type === 'note' ? (
+                  <textarea
+                    ref={overlayComposerInputRef}
+                    className="snap-overlay-composer-input snap-overlay-composer-textarea"
+                    value={overlayComposer.value}
+                    onChange={handleOverlayComposerChange}
+                    placeholder={getOverlayComposerPlaceholder(overlayComposer.type)}
+                    rows={3}
+                    maxLength={220}
+                  />
+                ) : (
+                  <input
+                    ref={overlayComposerInputRef}
+                    className="snap-overlay-composer-input"
+                    type="text"
+                    value={overlayComposer.value}
+                    onChange={handleOverlayComposerChange}
+                    placeholder={getOverlayComposerPlaceholder(overlayComposer.type)}
+                    maxLength={overlayComposer.type === 'emoji' ? 24 : 120}
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
+                  />
+                )}
+                <div className="snap-overlay-composer-actions">
+                  <button type="button" onClick={closeOverlayComposer}>Cancel</button>
+                  <button type="submit">Add</button>
+                </div>
+              </form>
+            )}
+
             {sent && (
               <div className="sent-overlay">
                 <div className="sent-check">OK</div>
@@ -1421,9 +1816,13 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
             <button className="icon-btn" onClick={() => setFilter('none')} type="button">Clear FX</button>
           </div>
 
-          {isRecording && (
-            <div className="recording-pill">
-              REC {recordingSeconds}s
+          {(countdownSeconds > 0 || isPreparingRecording || isRecording) && (
+            <div className={`recording-pill ${countdownSeconds > 0 ? 'timer-pill' : ''} ${isPreparingRecording ? 'preparing-pill' : ''}`}>
+              {countdownSeconds > 0
+                ? `Timer ${countdownSeconds}s`
+                : isPreparingRecording
+                  ? 'Preparing video...'
+                  : `REC ${recordingSeconds}s`}
             </div>
           )}
 
@@ -1433,7 +1832,7 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
                 key={value}
                 className={`timer-btn ${timer === value ? 'active' : ''}`}
                 onClick={() => setTimer(value)}
-                disabled={isRecording}
+                disabled={isRecording || isPreparingRecording}
                 type="button"
               >
                 {value}
@@ -1459,7 +1858,7 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
                 key={value}
                 className={`zoom-btn ${zoom === value ? 'active' : ''}`}
                 onClick={() => setZoom(value)}
-                disabled={isRecording}
+                disabled={isRecording || isPreparingRecording}
                 type="button"
               >
                 {value}
@@ -1474,7 +1873,7 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
                   key={value}
                   className={`mode-tab ${mode === value ? 'active' : ''}`}
                   onClick={() => setMode(value)}
-                  disabled={isRecording}
+                  disabled={isRecording || isPreparingRecording}
                   type="button"
                 >
                   {MODE_LABELS[value] || value.toUpperCase()}
@@ -1483,17 +1882,18 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
             </div>
 
             <div className="capture-row">
-              <button className="gallery-btn" onClick={handleLibraryButtonPress} type="button">Library</button>
+              <button className="gallery-btn" onClick={handleLibraryButtonPress} disabled={isRecording || isPreparingRecording} type="button">Library</button>
               <button
                 className={`shutter ${mode === 'video' ? 'video-mode' : ''} ${isRecording ? 'recording' : ''}`}
                 onClick={handleShutterPress}
-                aria-label={isRecording ? 'Stop video recording' : (mode === 'video' ? 'Start video recording' : 'Capture photo')}
+                aria-label={isPreparingRecording ? 'Preparing video recording' : (isRecording ? 'Stop video recording' : (mode === 'video' ? 'Start video recording' : 'Capture photo'))}
+                disabled={isPreparingRecording}
                 type="button"
               />
               <button
                 className="flip-btn"
                 onClick={() => setFront(!frontCam)}
-                disabled={isRecording}
+                disabled={isRecording || isPreparingRecording}
                 type="button"
               >
                 {cameraToggleLabel}
