@@ -5,6 +5,8 @@ import './SecretTapButton.css'
 
 const SECRET_TAP_TYPE = 'secret-tap'
 const SECRET_TAP_WINDOW_MS = 320
+const SECRET_TAP_LONG_PRESS_MS = 2000
+const TONY_USERNAME = 'tony'
 const SECRET_TAP_TARGETS = {
   tony: ['hihi', 'test'],
   hihi: ['tony'],
@@ -15,25 +17,42 @@ const SECRET_TAP_MESSAGES = {
   2: 'amma nanna unnaru',
   3: "can't stay Bye Good Night Baby",
 }
+const TONY_LONG_PRESS_MESSAGE = 'Aagu baby Ostha ,Avvatle matladadam'
 
 const normalizeUsername = (value) => String(value || '').trim().toLowerCase()
 
 function SecretTapButton({ username, socketRef }) {
   const tapCountRef = useRef(0)
   const tapTimerRef = useRef(null)
+  const longPressTimerRef = useRef(null)
   const isSendingRef = useRef(false)
+  const suppressNextClickRef = useRef(false)
+  const normalizedUsername = normalizeUsername(username)
+  const isTonySender = normalizedUsername === TONY_USERNAME
 
   const recipients = useMemo(() => {
-    const senderKey = normalizeUsername(username)
-    const mapped = SECRET_TAP_TARGETS[senderKey] || []
+    const mapped = SECRET_TAP_TARGETS[normalizedUsername] || []
     return Array.from(new Set(mapped.map((value) => normalizeUsername(value)).filter(Boolean)))
-  }, [username])
+  }, [normalizedUsername])
 
   const canUseSecretTap = recipients.length > 0
 
-  const sendSecretTapMessage = async (tapCount) => {
+  const clearTapTimer = () => {
+    if (tapTimerRef.current) {
+      clearTimeout(tapTimerRef.current)
+      tapTimerRef.current = null
+    }
+  }
+
+  const clearLongPressTimer = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current)
+      longPressTimerRef.current = null
+    }
+  }
+
+  const sendSecretTapMessage = async ({ text, tempKey, successToast }) => {
     const activeSocket = socketRef?.current
-    const text = SECRET_TAP_MESSAGES[tapCount]
 
     if (!text || !recipients.length) return
     if (!activeSocket?.connected) {
@@ -54,13 +73,15 @@ function SecretTapButton({ username, socketRef }) {
             toUsername,
             message: text,
             fromUsername: senderUsername,
-            tempId: `secret-tap-${timestamp}-${tapCount}-${index}`,
+            tempId: `secret-tap-${tempKey}-${timestamp}-${index}`,
             type: SECRET_TAP_TYPE,
           }),
         })
       })
 
-      toast.success(`You clicked ${tapCount} ${tapCount === 1 ? 'time' : 'times'}`)
+      if (successToast) {
+        toast.success(successToast)
+      }
     } finally {
       isSendingRef.current = false
     }
@@ -68,23 +89,30 @@ function SecretTapButton({ username, socketRef }) {
 
   const resolveTapSequence = (tapCount) => {
     tapCountRef.current = 0
-    if (tapTimerRef.current) {
-      clearTimeout(tapTimerRef.current)
-      tapTimerRef.current = null
+    clearTapTimer()
+    const successToast = `You clicked ${tapCount} ${tapCount === 1 ? 'time' : 'times'}`
+    if (isTonySender) {
+      toast.success(successToast)
+      return
     }
-    void sendSecretTapMessage(tapCount)
+    void sendSecretTapMessage({
+      text: SECRET_TAP_MESSAGES[tapCount],
+      tempKey: `tap-${tapCount}`,
+      successToast,
+    })
   }
 
   const handleClick = () => {
     if (!canUseSecretTap) return
+    if (suppressNextClickRef.current) {
+      suppressNextClickRef.current = false
+      return
+    }
 
     const nextTapCount = Math.min(3, Number(tapCountRef.current || 0) + 1)
     tapCountRef.current = nextTapCount
 
-    if (tapTimerRef.current) {
-      clearTimeout(tapTimerRef.current)
-      tapTimerRef.current = null
-    }
+    clearTapTimer()
 
     if (nextTapCount >= 3) {
       resolveTapSequence(3)
@@ -96,11 +124,31 @@ function SecretTapButton({ username, socketRef }) {
     }, SECRET_TAP_WINDOW_MS)
   }
 
+  const handlePointerDown = (event) => {
+    if (!isTonySender || !canUseSecretTap) return
+    if (event.pointerType === 'mouse' && event.button !== 0) return
+    suppressNextClickRef.current = false
+    clearLongPressTimer()
+    longPressTimerRef.current = setTimeout(() => {
+      suppressNextClickRef.current = true
+      clearTapTimer()
+      tapCountRef.current = 0
+      void sendSecretTapMessage({
+        text: TONY_LONG_PRESS_MESSAGE,
+        tempKey: 'long-press',
+        successToast: 'Long Pressed Successfully',
+      })
+    }, SECRET_TAP_LONG_PRESS_MS)
+  }
+
+  const handlePointerEnd = () => {
+    if (!isTonySender) return
+    clearLongPressTimer()
+  }
+
   useEffect(() => () => {
-    if (tapTimerRef.current) {
-      clearTimeout(tapTimerRef.current)
-      tapTimerRef.current = null
-    }
+    clearTapTimer()
+    clearLongPressTimer()
   }, [])
 
   if (!canUseSecretTap) return null
@@ -110,8 +158,12 @@ function SecretTapButton({ username, socketRef }) {
       type="button"
       className="secret-tap-btn"
       onClick={handleClick}
-      aria-label="Send hidden tap message"
-      title="Send hidden tap message"
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerEnd}
+      onPointerLeave={handlePointerEnd}
+      onPointerCancel={handlePointerEnd}
+      aria-label={isTonySender ? 'Hold to send hidden message' : 'Send hidden tap message'}
+      title={isTonySender ? 'Hold for 2 seconds to send hidden message' : 'Send hidden tap message'}
     >
       <img src={tapIcon} alt="" className="secret-tap-btn-icon" aria-hidden="true" />
     </button>
