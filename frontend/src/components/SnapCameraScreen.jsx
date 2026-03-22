@@ -13,11 +13,17 @@ const MODE_LABELS = {
 }
 const SNAP_CAPTURE_WIDTH = 1080
 const SNAP_CAPTURE_HEIGHT = 1920
+const SNAP_STREAM_REQUEST_WIDTH = 1920
+const SNAP_STREAM_REQUEST_HEIGHT = 1080
 const SNAP_CAPTURE_FPS = 30
 const SVG_PREVIEW_WIDTH = 1000
 const SVG_PREVIEW_HEIGHT = Math.round((SVG_PREVIEW_WIDTH * 16) / 9)
 const OVERLAY_STROKE_COLOR = 'rgba(255,255,255,0.96)'
 const OVERLAY_SHADOW_COLOR = 'rgba(0,0,0,0.45)'
+const OVERLAY_EDIT_TAP_THRESHOLD = 0.014
+const OVERLAY_MIN_SIZE = 0.65
+const OVERLAY_MAX_SIZE = 2.4
+const OVERLAY_SIZE_STEP = 0.12
 
 function createOverlayId() {
   return `overlay_${Date.now()}_${Math.random().toString(16).slice(2)}`
@@ -36,6 +42,20 @@ function parseZoomFactor(zoomValue) {
 function getOverlayZoomScale(zoomFactor) {
   const safeZoom = Math.max(1, Number(zoomFactor || 1))
   return clamp(Math.sqrt(safeZoom), 1, 2.35)
+}
+
+function getOverlayDefaultSize(type) {
+  if (type === 'emoji') return 1.1
+  if (type === 'note') return 1
+  return 1
+}
+
+function clampOverlayItemSize(sizeValue, type) {
+  const parsed = Number(sizeValue)
+  if (!Number.isFinite(parsed)) {
+    return getOverlayDefaultSize(type)
+  }
+  return clamp(parsed, OVERLAY_MIN_SIZE, OVERLAY_MAX_SIZE)
 }
 
 function getNineBySixteenCrop(sourceWidth, sourceHeight) {
@@ -163,13 +183,14 @@ function getSelectedMediaKind(inputFile) {
   return null
 }
 
-function buildOverlayItem(type, content, existingCount) {
+function buildOverlayItem(type, content, existingCount, size = null) {
   const boundedCount = Math.max(0, Number(existingCount || 0))
   const offsetIndex = boundedCount % 4
   return {
     id: createOverlayId(),
     type,
     content,
+    size: clampOverlayItemSize(size, type),
     x: 0.5,
     y: clamp(0.24 + (offsetIndex * 0.12), 0.18, 0.82),
   }
@@ -195,13 +216,41 @@ function loadImageElement(objectUrl) {
 
 function canvasToBlob(targetCanvas, type, quality) {
   return new Promise((resolve, reject) => {
-    targetCanvas.toBlob((blob) => {
-      if (blob) {
-        resolve(blob)
-      } else {
+    const finalizeWithDataUrlFallback = () => {
+      try {
+        const dataUrl = targetCanvas.toDataURL(type || 'image/jpeg', quality)
+        const segments = String(dataUrl || '').split(',')
+        if (segments.length < 2) {
+          reject(new Error('overlay-canvas-export-failed'))
+          return
+        }
+
+        const mimeMatch = /data:([^;]+)/.exec(segments[0])
+        const mimeType = String(mimeMatch?.[1] || type || 'image/jpeg').trim()
+        const byteCharacters = window.atob(segments[1])
+        const byteArray = new Uint8Array(byteCharacters.length)
+        for (let index = 0; index < byteCharacters.length; index += 1) {
+          byteArray[index] = byteCharacters.charCodeAt(index)
+        }
+
+        resolve(new Blob([byteArray], { type: mimeType }))
+      } catch {
         reject(new Error('overlay-canvas-export-failed'))
       }
-    }, type, quality)
+    }
+
+    if (typeof targetCanvas?.toBlob === 'function') {
+      targetCanvas.toBlob((blob) => {
+        if (blob) {
+          resolve(blob)
+          return
+        }
+        finalizeWithDataUrlFallback()
+      }, type, quality)
+      return
+    }
+
+    finalizeWithDataUrlFallback()
   })
 }
 
@@ -351,6 +400,9 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
   const drawingPointerIdRef = useRef(null)
   const drawingPathRef = useRef(null)
   const overlayComposerInputRef = useRef(null)
+  const deleteDropZoneRef = useRef(null)
+  const overlayPointerReleaseRef = useRef(null)
+  const [isDeleteDropActive, setIsDeleteDropActive] = useState(false)
   const zoomFactor = parseZoomFactor(zoom)
   const overlayZoomScale = getOverlayZoomScale(zoomFactor)
   const isMobileDevice = isLikelyMobileDevice()
@@ -380,9 +432,11 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
     setOverlayItems([])
     setDrawingPaths([])
     setDraftDrawingPath(null)
+    setIsDeleteDropActive(false)
     drawingPathRef.current = null
     drawingPointerIdRef.current = null
     drawingQueuedPointsRef.current = []
+    overlayPointerReleaseRef.current = null
     if (drawingFrameRef.current) {
       window.cancelAnimationFrame(drawingFrameRef.current)
       drawingFrameRef.current = 0
@@ -409,6 +463,7 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
       const x = clamp(Number(item?.x || 0.5), 0, 1) * width
       const y = clamp(Number(item?.y || 0.5), 0, 1) * height
       const content = String(item?.content || '').trim()
+      const itemScale = overlayScale * clampOverlayItemSize(item?.size, item?.type)
       if (!content) return
 
       context.save()
@@ -419,15 +474,15 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
       context.shadowOffsetY = Math.round(height * 0.005)
 
       if (item.type === 'emoji') {
-        context.font = `900 ${Math.round(width * 0.09 * overlayScale)}px "Apple Color Emoji", "Segoe UI Emoji", sans-serif`
+        context.font = `900 ${Math.round(width * 0.09 * itemScale)}px "Apple Color Emoji", "Segoe UI Emoji", sans-serif`
         context.fillText(content, x, y)
         context.restore()
         return
       }
 
       if (item.type === 'note') {
-        context.font = `800 ${Math.round(width * 0.036 * overlayScale)}px "Segoe UI", sans-serif`
-        const maxWidth = width * Math.min(0.82, 0.58 * overlayScale)
+        context.font = `800 ${Math.round(width * 0.036 * itemScale)}px "Segoe UI", sans-serif`
+        const maxWidth = width * Math.min(0.88, 0.58 * itemScale)
         const words = content.split(/\s+/).filter(Boolean)
         const lines = []
         let currentLine = ''
@@ -443,20 +498,20 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
         if (currentLine) lines.push(currentLine)
         if (lines.length === 0) lines.push(content)
 
-        const lineHeight = Math.round(width * 0.05 * overlayScale)
+        const lineHeight = Math.round(width * 0.05 * itemScale)
         const boxWidth = Math.min(
-          maxWidth + Math.round(width * 0.12 * overlayScale),
+          maxWidth + Math.round(width * 0.12 * itemScale),
           Math.max(
-            ...lines.map((line) => context.measureText(line).width + Math.round(width * 0.12 * overlayScale)),
+            ...lines.map((line) => context.measureText(line).width + Math.round(width * 0.12 * itemScale)),
           ),
         )
-        const boxHeight = (lines.length * lineHeight) + Math.round(height * 0.06 * overlayScale)
+        const boxHeight = (lines.length * lineHeight) + Math.round(height * 0.06 * itemScale)
         const boxX = x - (boxWidth / 2)
         const boxY = y - (boxHeight / 2)
-        const radius = Math.round(width * 0.03 * overlayScale)
+        const radius = Math.round(width * 0.03 * itemScale)
 
-        context.shadowBlur = Math.round(width * 0.02 * overlayScale)
-        context.shadowOffsetY = Math.round(height * 0.008 * overlayScale)
+        context.shadowBlur = Math.round(width * 0.02 * itemScale)
+        context.shadowOffsetY = Math.round(height * 0.008 * itemScale)
         context.fillStyle = 'rgba(255, 240, 112, 0.94)'
         context.beginPath()
         context.moveTo(boxX + radius, boxY)
@@ -474,17 +529,17 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
         context.shadowColor = 'transparent'
         context.fillStyle = '#1d1d1d'
         lines.forEach((line, index) => {
-          const lineY = boxY + Math.round(height * 0.032 * overlayScale) + (index * lineHeight) + (lineHeight / 2)
+          const lineY = boxY + Math.round(height * 0.032 * itemScale) + (index * lineHeight) + (lineHeight / 2)
           context.fillText(line, x, lineY)
         })
         context.restore()
         return
       }
 
-      context.font = `900 ${Math.round(width * 0.062 * overlayScale)}px "Segoe UI", sans-serif`
+      context.font = `900 ${Math.round(width * 0.062 * itemScale)}px "Segoe UI", sans-serif`
       context.fillStyle = '#ffffff'
       context.strokeStyle = 'rgba(0, 0, 0, 0.35)'
-      context.lineWidth = Math.max(4, Math.round(width * 0.01 * overlayScale))
+      context.lineWidth = Math.max(4, Math.round(width * 0.01 * itemScale))
       context.lineJoin = 'round'
       context.miterLimit = 2
       context.strokeText(content, x, y)
@@ -779,19 +834,26 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
   async function startPreview() {
     try {
       stopPreview()
+      if (isNativeRuntime && typeof Camera?.requestPermissions === 'function') {
+        try {
+          await Camera.requestPermissions({
+            permissions: ['camera', 'photos'],
+          })
+        } catch {
+          // Let getUserMedia surface the actual failure if permissions stay blocked.
+        }
+      }
       const buildConstraints = (withAudio, preferredDeviceId = '') => ({
         video: {
           ...(preferredDeviceId
             ? { deviceId: { exact: preferredDeviceId } }
             : { facingMode: frontCam ? 'user' : 'environment' }),
-          width: { ideal: SNAP_CAPTURE_WIDTH },
-          height: { ideal: SNAP_CAPTURE_HEIGHT },
-          aspectRatio: {
-            ideal: SNAP_CAPTURE_WIDTH / SNAP_CAPTURE_HEIGHT,
-            min: SNAP_CAPTURE_WIDTH / SNAP_CAPTURE_HEIGHT,
-            max: SNAP_CAPTURE_WIDTH / SNAP_CAPTURE_HEIGHT,
+          width: { ideal: SNAP_STREAM_REQUEST_WIDTH },
+          height: { ideal: SNAP_STREAM_REQUEST_HEIGHT },
+          frameRate: {
+            ideal: SNAP_CAPTURE_FPS,
+            max: SNAP_CAPTURE_FPS,
           },
-          resizeMode: 'crop-and-scale',
         },
         audio: withAudio
           ? {
@@ -885,7 +947,12 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
   function addOverlayItem(type, content) {
     const normalizedContent = String(content || '').trim()
     if (!normalizedContent) return
-    setOverlayItems((prev) => [...prev, buildOverlayItem(type, normalizedContent, prev.length)])
+    setOverlayItems((prev) => [...prev, buildOverlayItem(
+      type,
+      normalizedContent,
+      prev.length,
+      overlayComposer?.size,
+    )])
   }
 
   function getOverlayComposerPlaceholder(type) {
@@ -899,7 +966,7 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
     return ''
   }
 
-  function openOverlayComposer(type) {
+  function openOverlayComposer(type, existingItem = null) {
     setIsDrawMode(false)
     setDraftDrawingPath(null)
     drawingPathRef.current = null
@@ -910,8 +977,11 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
       drawingFrameRef.current = 0
     }
     setOverlayComposer({
+      sessionId: createOverlayId(),
       type,
-      value: getOverlayComposerDefaultValue(type),
+      itemId: String(existingItem?.id || '').trim() || null,
+      value: existingItem?.content ?? getOverlayComposerDefaultValue(type),
+      size: clampOverlayItemSize(existingItem?.size, type),
     })
   }
 
@@ -924,15 +994,44 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
     setOverlayComposer((prev) => (prev ? { ...prev, value: nextValue } : prev))
   }
 
+  function adjustOverlayComposerSize(direction) {
+    const delta = direction === 'down' ? -OVERLAY_SIZE_STEP : OVERLAY_SIZE_STEP
+    setOverlayComposer((prev) => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        size: clampOverlayItemSize(Number(prev.size || getOverlayDefaultSize(prev.type)) + delta, prev.type),
+      }
+    })
+  }
+
   function handleOverlayComposerSubmit(event) {
     event?.preventDefault?.()
     const composerType = String(overlayComposer?.type || '').trim()
     const composerValue = String(overlayComposer?.value || '').trim()
+    const editingItemId = String(overlayComposer?.itemId || '').trim()
+    const composerSize = clampOverlayItemSize(overlayComposer?.size, composerType)
     if (!composerType || !composerValue) return
+    if (editingItemId) {
+      setOverlayItems((prev) => prev.map((item) => (
+        item.id === editingItemId
+          ? {
+              ...item,
+              content: composerValue,
+              size: composerSize,
+            }
+          : item
+      )))
+      closeOverlayComposer()
+      return
+    }
     addOverlayItem(composerType, composerValue)
     setOverlayComposer({
+      sessionId: createOverlayId(),
       type: composerType,
+      itemId: null,
       value: getOverlayComposerDefaultValue(composerType),
+      size: clampOverlayItemSize(composerSize, composerType),
     })
   }
 
@@ -970,6 +1069,19 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
     }
   }
 
+  function isPointerInsideDeleteDropZone(pointerEventLike) {
+    const dropRect = deleteDropZoneRef.current?.getBoundingClientRect?.()
+    if (!dropRect) return false
+    const clientX = Number(pointerEventLike?.clientX || 0)
+    const clientY = Number(pointerEventLike?.clientY || 0)
+    return (
+      clientX >= dropRect.left
+      && clientX <= dropRect.right
+      && clientY >= dropRect.top
+      && clientY <= dropRect.bottom
+    )
+  }
+
   function flushOverlayDragFrame() {
     dragFrameRef.current = 0
     const activeDrag = dragOverlayRef.current
@@ -992,7 +1104,19 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
       dragFrameRef.current = 0
     }
     const activeDrag = dragOverlayRef.current
-    if (activeDrag?.latestPoint) {
+    if (activeDrag?.id) {
+      overlayPointerReleaseRef.current = {
+        id: activeDrag.id,
+        didMove: Boolean(activeDrag.didMove),
+        timestamp: Date.now(),
+      }
+    } else {
+      overlayPointerReleaseRef.current = null
+    }
+    const shouldDeleteOverlay = Boolean(activeDrag?.isInsideDeleteZone && activeDrag?.id)
+    if (shouldDeleteOverlay) {
+      setOverlayItems((prev) => prev.filter((item) => item.id !== activeDrag.id))
+    } else if (activeDrag?.latestPoint) {
       const { id, offsetX, offsetY, latestPoint } = activeDrag
       setOverlayItems((prev) => prev.map((item) => (
         item.id === id
@@ -1004,6 +1128,7 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
           : item
       )))
     }
+    setIsDeleteDropActive(false)
     if (activeDrag?.target && typeof activeDrag.target.releasePointerCapture === 'function' && activeDrag.pointerId != null) {
       try {
         activeDrag.target.releasePointerCapture(activeDrag.pointerId)
@@ -1026,6 +1151,14 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
     if (!stagePoint) return
 
     dragOverlayRef.current.latestPoint = stagePoint
+    const deltaX = stagePoint.x - Number(dragOverlayRef.current.startPoint?.x || 0)
+    const deltaY = stagePoint.y - Number(dragOverlayRef.current.startPoint?.y || 0)
+    if (Math.hypot(deltaX, deltaY) >= OVERLAY_EDIT_TAP_THRESHOLD) {
+      dragOverlayRef.current.didMove = true
+    }
+    const isInsideDeleteZone = isPointerInsideDeleteDropZone(event)
+    dragOverlayRef.current.isInsideDeleteZone = isInsideDeleteZone
+    setIsDeleteDropActive(isInsideDeleteZone)
     if (!dragFrameRef.current) {
       dragFrameRef.current = window.requestAnimationFrame(flushOverlayDragFrame)
     }
@@ -1050,7 +1183,10 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
       id: item.id,
       offsetX: stagePoint.x - item.x,
       offsetY: stagePoint.y - item.y,
+      startPoint: stagePoint,
       latestPoint: stagePoint,
+      didMove: false,
+      isInsideDeleteZone: false,
       pointerId: event.pointerId,
       target: event.currentTarget,
     }
@@ -1060,8 +1196,24 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
     window.addEventListener('pointercancel', stopOverlayDrag)
   }
 
-  function handleOverlayDoubleClick(itemId) {
-    setOverlayItems((prev) => prev.filter((item) => item.id !== itemId))
+  function handleOverlayItemClick(item) {
+    if (!item || (item.type !== 'text' && item.type !== 'note' && item.type !== 'emoji')) {
+      return
+    }
+
+    const releaseMeta = overlayPointerReleaseRef.current
+    if (
+      releaseMeta
+      && releaseMeta.id === item.id
+      && releaseMeta.didMove
+      && (Date.now() - Number(releaseMeta.timestamp || 0)) < 800
+    ) {
+      overlayPointerReleaseRef.current = null
+      return
+    }
+
+    overlayPointerReleaseRef.current = null
+    openOverlayComposer(item.type, item)
   }
 
   function handleDrawButtonPress() {
@@ -1170,7 +1322,7 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
     }
   }
 
-  async function composeVideoWithOverlays(inputFile, overlaySnapshot, pathSnapshot) {
+  async function composeVideoWithOverlays(inputFile, overlaySnapshot, pathSnapshot, renderOptions = {}) {
     const sourceUrl = URL.createObjectURL(inputFile)
     const video = document.createElement('video')
     video.preload = 'auto'
@@ -1253,6 +1405,7 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
           sourceWidth: video.videoWidth,
           sourceHeight: video.videoHeight,
           targetCanvas: outputCanvas,
+          mirror: Boolean(renderOptions?.mirror),
         })
         if (didDraw) {
           drawAllOverlaysToCanvas(outputCanvas, overlaySnapshot, pathSnapshot)
@@ -1344,13 +1497,22 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
       ...path,
       points: Array.isArray(path.points) ? path.points.map((point) => ({ ...point })) : [],
     }))
+    const shouldNormalizeSnapVideo = mediaType === 'video'
+      && /^snap_/i.test(String(inputFile?.name || '').trim())
 
-    if (overlaySnapshot.length === 0 && pathSnapshot.length === 0) {
+    if (overlaySnapshot.length === 0 && pathSnapshot.length === 0 && !shouldNormalizeSnapVideo) {
       return inputFile
     }
 
     if (mediaType === 'video') {
-      return composeVideoWithOverlays(inputFile, overlaySnapshot, pathSnapshot)
+      try {
+        return await composeVideoWithOverlays(inputFile, overlaySnapshot, pathSnapshot, {
+          mirror: Boolean(frontCam && shouldNormalizeSnapVideo),
+        })
+      } catch (error) {
+        console.error('Snap video overlay export failed:', error)
+        return inputFile
+      }
     }
 
     return composeImageWithOverlays(inputFile, overlaySnapshot, pathSnapshot)
@@ -1420,15 +1582,20 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
     const activeVideo = await ensurePreviewReady()
     const captureCanvas = ensureCaptureCanvas()
     if (!activeVideo || !captureCanvas) return
-    if (!renderCaptureFrame()) return
+    if (!renderCaptureFrame()) {
+      await waitForAnimationFrames(2)
+      if (!renderCaptureFrame()) return
+    }
 
-    captureCanvas.toBlob((blob) => {
-      if (!blob) return
+    try {
+      const blob = await canvasToBlob(captureCanvas, 'image/jpeg', 0.9)
       const snapFile = new File([blob], `snap_${Date.now()}.jpg`, {
         type: 'image/jpeg',
       })
       acceptCapturedPhoto(snapFile)
-    }, 'image/jpeg', 0.9)
+    } catch (error) {
+      console.error('Snap photo capture failed:', error)
+    }
   }
 
   async function startVideoRecording() {
@@ -1449,9 +1616,17 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
     if (!renderCaptureFrame()) return
 
     startCaptureComposition()
-    const canvasStream = captureCanvas.captureStream(SNAP_CAPTURE_FPS)
     const outputStream = new MediaStream()
-    canvasStream.getVideoTracks().forEach((track) => outputStream.addTrack(track))
+    const useCanvasStream = typeof captureCanvas.captureStream === 'function' && !isNativeRuntime
+    if (useCanvasStream) {
+      const canvasStream = captureCanvas.captureStream(SNAP_CAPTURE_FPS)
+      canvasStream.getVideoTracks().forEach((track) => outputStream.addTrack(track))
+    } else {
+      stream.getVideoTracks().forEach((track) => {
+        const clonedTrack = typeof track.clone === 'function' ? track.clone() : track
+        outputStream.addTrack(clonedTrack)
+      })
+    }
     stream.getAudioTracks().forEach((track) => {
       const clonedTrack = typeof track.clone === 'function' ? track.clone() : track
       outputStream.addTrack(clonedTrack)
@@ -1636,7 +1811,7 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
       overlayComposerInputRef.current?.select?.()
     }, 40)
     return () => window.clearTimeout(focusTimer)
-  }, [overlayComposer])
+  }, [overlayComposer?.sessionId])
 
   useEffect(() => {
     void startPreview()
@@ -1722,15 +1897,25 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
                   style={{
                     left: `${clamp(Number(item.x || 0.5), 0, 1) * 100}%`,
                     top: `${clamp(Number(item.y || 0.5), 0, 1) * 100}%`,
-                    '--snap-overlay-scale': overlayZoomScale,
+                    '--snap-overlay-scale': overlayZoomScale * clampOverlayItemSize(item?.size, item?.type),
                   }}
                   onPointerDown={(event) => handleOverlayPointerDown(event, item)}
-                  onDoubleClick={() => handleOverlayDoubleClick(item.id)}
+                  onClick={() => handleOverlayItemClick(item)}
                 >
                   {item.content}
                 </button>
               ))}
             </div>
+
+            {overlayItems.length > 0 && (
+              <div
+                ref={deleteDropZoneRef}
+                className={`snap-delete-dropzone ${isDeleteDropActive ? 'is-active' : ''}`}
+              >
+                <span className="snap-delete-dropzone-icon" aria-hidden="true">🗑</span>
+                <span>Delete</span>
+              </div>
+            )}
 
             <button className="send-btn" onClick={sendSnap} disabled={sending} type="button">
               {sending ? 'Sending' : 'Send'}
@@ -1786,7 +1971,16 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
                 )}
                 <div className="snap-overlay-composer-actions">
                   <button type="button" onClick={closeOverlayComposer}>Cancel</button>
-                  <button type="submit">Add</button>
+                  <button type="submit">{overlayComposer.itemId ? 'Save' : 'Add'}</button>
+                </div>
+                <div className="snap-overlay-size-controls">
+                  <span className="snap-overlay-size-label">
+                    Size {Math.round(clampOverlayItemSize(overlayComposer.size, overlayComposer.type) * 100)}%
+                  </span>
+                  <div className="snap-overlay-size-buttons">
+                    <button type="button" onClick={() => adjustOverlayComposerSize('down')}>A-</button>
+                    <button type="button" onClick={() => adjustOverlayComposerSize('up')}>A+</button>
+                  </div>
                 </div>
               </form>
             )}
