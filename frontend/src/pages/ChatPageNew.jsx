@@ -4388,7 +4388,6 @@ function ChatPageNew() {
       return (
         <span className="message-text message-text-with-time">
           <span className="message-text-content">{renderTextWithLinks(message.text)}</span>
-          <span className="message-time-spacer" aria-hidden="true" />
           <span className="message-time message-time-inline">{getMessageFooterLabel(message)}</span>
         </span>
       )

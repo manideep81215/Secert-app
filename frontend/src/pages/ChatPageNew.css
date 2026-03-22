@@ -775,21 +775,19 @@
 }
 
 .message-text-with-time {
-  display: inline-block;
-  position: relative;
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.12rem 0.32rem;
   min-width: 0;
   max-width: 100%;
 }
 
 .message-text-content {
-  display: inline;
-}
-
-.message-time-spacer {
-  display: inline-block;
-  width: 3.30rem;
-  height: 0.85rem;
-  pointer-events: none;
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  flex: 1 1 auto;
 }
 
 .message-link {
@@ -932,14 +930,14 @@
 }
 
 .message-time-inline {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  margin: 0;
-  padding-left: 0.28rem;
+  position: static;
+  margin: 0 0 0 auto;
+  padding-left: 0;
   display: inline-block;
   white-space: nowrap;
   line-height: 1.1;
+  text-align: right;
+  flex: 0 0 auto;
 }
 
 .message-reaction-badge {
@@ -2601,35 +2599,6 @@
 .chat-container .message-time-inline {
   font-size: 0.72rem;
   opacity: 0.78;
-}
-
-.chat-container .message-time-spacer {
-  width: 3.15rem;
-}
-
-.chat-container[data-native="true"] .message-text-with-time {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0.22rem;
-}
-
-.chat-container[data-native="true"] .message-text-content {
-  display: block;
-  min-width: 0;
-}
-
-.chat-container[data-native="true"] .message-time-spacer {
-  display: none;
-}
-
-.chat-container[data-native="true"] .message-time-inline {
-  position: static;
-  display: block;
-  align-self: flex-end;
-  margin-top: 0;
-  padding-left: 0;
-  line-height: 1;
 }
 
 .chat-container .message-image-preview {
