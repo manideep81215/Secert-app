@@ -3,7 +3,7 @@ import './SnapCamera.css'
 
 const FILTERS = ['none', 'warm', 'cool', 'vintage', 'fade', 'dark', 'gold']
 const TIMERS = ['off', '3s', '10s']
-const ZOOMS = ['0.5x', '1x', '2x', '5x']
+const ZOOMS = ['1x', '2x', '5x']
 const MODE_TABS = ['camera', 'video']
 const MODE_LABELS = {
   camera: 'PHOTO',
@@ -23,6 +23,12 @@ function createOverlayId() {
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value))
+}
+
+function parseZoomFactor(zoomValue) {
+  const normalized = String(zoomValue || '1x').trim().toLowerCase()
+  const parsed = Number.parseFloat(normalized.replace('x', ''))
+  return Number.isFinite(parsed) && parsed >= 1 ? parsed : 1
 }
 
 function getNineBySixteenCrop(sourceWidth, sourceHeight) {
@@ -54,13 +60,21 @@ function drawSourceToCanvas({
   sourceHeight,
   targetCanvas,
   mirror = false,
+  zoomFactor = 1,
 }) {
   if (!sourceWidth || !sourceHeight || !targetCanvas || !sourceElement) return false
 
   const context = targetCanvas.getContext('2d')
   if (!context) return false
 
-  const { sx, sy, sw, sh } = getNineBySixteenCrop(sourceWidth, sourceHeight)
+  const baseCrop = getNineBySixteenCrop(sourceWidth, sourceHeight)
+  const safeZoomFactor = Math.max(1, Number(zoomFactor || 1))
+  const zoomedWidth = baseCrop.sw / safeZoomFactor
+  const zoomedHeight = baseCrop.sh / safeZoomFactor
+  const sx = baseCrop.sx + ((baseCrop.sw - zoomedWidth) / 2)
+  const sy = baseCrop.sy + ((baseCrop.sh - zoomedHeight) / 2)
+  const sw = zoomedWidth
+  const sh = zoomedHeight
   context.save()
   context.clearRect(0, 0, targetCanvas.width, targetCanvas.height)
   if (mirror) {
@@ -82,7 +96,7 @@ function drawSourceToCanvas({
   return true
 }
 
-function drawVideoFrameToCanvas({ sourceVideo, targetCanvas, mirror = false }) {
+function drawVideoFrameToCanvas({ sourceVideo, targetCanvas, mirror = false, zoomFactor = 1 }) {
   const sourceWidth = Number(sourceVideo?.videoWidth || 0)
   const sourceHeight = Number(sourceVideo?.videoHeight || 0)
   return drawSourceToCanvas({
@@ -91,6 +105,7 @@ function drawVideoFrameToCanvas({ sourceVideo, targetCanvas, mirror = false }) {
     sourceHeight,
     targetCanvas,
     mirror,
+    zoomFactor,
   })
 }
 
@@ -229,6 +244,7 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
   const stageRef = useRef(null)
   const dragOverlayRef = useRef(null)
   const drawingPathRef = useRef(null)
+  const zoomFactor = parseZoomFactor(zoom)
 
   function clearPreviewUrl(url) {
     const value = String(url || '').trim()
@@ -411,6 +427,7 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
       sourceVideo: activeVideo,
       targetCanvas: captureCanvas,
       mirror: frontCam,
+      zoomFactor,
     })
   }
 
@@ -440,6 +457,33 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
     recordingOutputStreamRef.current = null
   }
 
+  async function applyNativeTrackZoom(nextZoomFactor) {
+    const videoTrack = streamRef.current?.getVideoTracks?.()?.[0]
+    if (!videoTrack || typeof videoTrack.getCapabilities !== 'function' || typeof videoTrack.applyConstraints !== 'function') {
+      return
+    }
+
+    try {
+      const capabilities = videoTrack.getCapabilities()
+      const zoomCapabilities = capabilities?.zoom
+      if (!zoomCapabilities) return
+
+      const minZoom = Number(zoomCapabilities.min || 1) || 1
+      const maxZoom = Number(zoomCapabilities.max || nextZoomFactor) || nextZoomFactor
+      const step = Number(zoomCapabilities.step || 0) || 0
+      let resolvedZoom = clamp(nextZoomFactor, minZoom, maxZoom)
+      if (step > 0) {
+        resolvedZoom = Math.round(resolvedZoom / step) * step
+      }
+
+      await videoTrack.applyConstraints({
+        advanced: [{ zoom: resolvedZoom }],
+      })
+    } catch {
+      // Ignore unsupported camera zoom failures and rely on digital zoom fallback.
+    }
+  }
+
   function stopPreview() {
     stopCaptureComposition()
     if (videoRef.current) {
@@ -463,8 +507,9 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
       const buildConstraints = (withAudio) => ({
         video: {
           facingMode: frontCam ? 'user' : 'environment',
-          width: { ideal: 1080 },
-          height: { ideal: 1920 },
+          width: { ideal: SNAP_CAPTURE_WIDTH },
+          height: { ideal: SNAP_CAPTURE_HEIGHT },
+          aspectRatio: { ideal: SNAP_CAPTURE_WIDTH / SNAP_CAPTURE_HEIGHT },
         },
         audio: withAudio
           ? {
@@ -493,6 +538,7 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
         videoRef.current.srcObject = stream
         await videoRef.current.play().catch(() => {})
       }
+      await applyNativeTrackZoom(zoomFactor)
       startCaptureComposition()
     } catch (error) {
       console.error('Camera preview error:', error)
@@ -1021,7 +1067,13 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
     }
   }, [frontCam, mode])
 
+  useEffect(() => {
+    void applyNativeTrackZoom(zoomFactor)
+    renderCaptureFrame()
+  }, [zoomFactor])
+
   const previewImageClassName = filter !== 'none' ? `filter-${filter}` : ''
+  const previewTransform = `${frontCam ? 'scaleX(-1) ' : ''}scale(${zoomFactor})`
 
   return (
     <div className="snap-screen">
@@ -1032,7 +1084,7 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
           playsInline
           muted
           className={`snap-video ${previewImageClassName}`}
-          style={{ transform: frontCam ? 'scaleX(-1)' : 'none' }}
+          style={{ transform: previewTransform }}
         />
 
         {preview && (
