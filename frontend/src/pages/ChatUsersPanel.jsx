@@ -1,10 +1,21 @@
 import { AnimatePresence, motion } from 'framer-motion'
 
+function InstagramIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <rect x="4.5" y="4.5" width="15" height="15" rx="4.2" />
+      <circle cx="12" cy="12" r="3.2" />
+      <circle cx="16.8" cy="7.3" r="1.1" />
+    </svg>
+  )
+}
+
 function ChatUsersPanel({
   filteredUsers,
   selectedUserId,
   searchQuery,
   onSearchQueryChange,
+  onOpenInstagram,
   onOpenGames,
   onStartNewChat,
   onSelectUser,
@@ -66,6 +77,14 @@ function ChatUsersPanel({
         <div className="users-header">
           <h2>Messages</h2>
           <div className="users-header-actions">
+            <button
+              className="btn-users-instagram"
+              onClick={onOpenInstagram}
+              title="Open Instagram reel"
+              aria-label="Open Instagram reel"
+            >
+              <InstagramIcon />
+            </button>
             <button className="btn-users-games" onClick={onOpenGames} title="Go to dashboard" aria-label="Go to dashboard">
               {'\uD83C\uDFAE'}
             </button>
@@ -100,6 +119,14 @@ function ChatUsersPanel({
       <div className="users-header">
         <h2>Messages</h2>
         <div className="users-header-actions">
+          <button
+            className="btn-users-instagram"
+            onClick={onOpenInstagram}
+            title="Open Instagram reel"
+            aria-label="Open Instagram reel"
+          >
+            <InstagramIcon />
+          </button>
           <button className="btn-users-games" onClick={onOpenGames} title="Go to dashboard" aria-label="Go to dashboard">
             {'\uD83C\uDFAE'}
           </button>

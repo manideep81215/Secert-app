@@ -4648,6 +4648,7 @@ function ChatPageNew() {
         selectedUserId={selectedUser?.id || null}
         searchQuery={searchQuery}
         onSearchQueryChange={setSearchQuery}
+        onOpenInstagram={() => navigate('/instagram-reel')}
         onOpenGames={() => navigate('/games')}
         onStartNewChat={() => setSelectedUser(filteredUsers[0] || null)}
         onSelectUser={handleSelectUserFromPanel}

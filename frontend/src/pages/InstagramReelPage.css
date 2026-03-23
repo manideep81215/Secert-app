@@ -1,0 +1,49 @@
+.instagram-reel-page {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  width: 100%;
+  background: #fff;
+}
+
+.instagram-reel-navbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: #111;
+  z-index: 999;
+}
+
+.instagram-reel-btn {
+  background: #333;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 6px 16px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.instagram-reel-content {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  background: #fafafa;
+}
+
+.instagram-open-btn {
+  background: linear-gradient(135deg, #f09433, #dc2743, #bc1888);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 14px 32px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.instagram-reel-hint {
+  color: #aaa;
+  font-size: 14px;
+}

@@ -14,6 +14,7 @@ import ChatInfoPage from './pages/ChatInfoPage'
 import RecapPage from './pages/RecapPage'
 import LoveTimers from './pages/LoveTimers'
 import ProfilePage from './pages/ProfilePage'
+import InstagramReelPage from './pages/InstagramReelPage'
 import PrivacyBlur from './components/PrivacyBlur'
 import { WS_CHAT_URL } from './config/apiConfig'
 import { resetFlowState, useFlowState } from './hooks/useFlowState'
@@ -86,6 +87,7 @@ function App() {
     normalizedRoutePath === '/profile' ||
     normalizedRoutePath === '/users' ||
     normalizedRoutePath.startsWith('/chat') ||
+    normalizedRoutePath.startsWith('/instagram-reel') ||
     normalizedRoutePath === '/timers'
 
   useEffect(() => {
@@ -506,6 +508,7 @@ function App() {
             <Route path="/chat/info" element={isAuthenticated ? <ChatInfoPage /> : <Navigate to="/auth" replace />} />
             <Route path="/timers" element={isAuthenticated ? <LoveTimers /> : <Navigate to="/auth" replace />} />
             <Route path="/profile" element={isAuthenticated ? <ProfilePage /> : <Navigate to="/auth" replace />} />
+            <Route path="/instagram-reel" element={isAuthenticated ? <InstagramReelPage /> : <Navigate to="/auth" replace />} />
             <Route path="*" element={<Navigate to="/auth" replace />} />
           </Routes>
         </div>
