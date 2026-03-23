@@ -214,21 +214,17 @@ public class ChatMessageController {
     }
 
     try {
-      LocalMediaStorageService.StoredLocalMedia stored = localMediaStorageService.store(file, mimeType);
-      String mediaUrl = ServletUriComponentsBuilder.fromCurrentContextPath()
-          .path(localMediaStorageService.toLocalMediaRoute(stored.storedName()))
-          .toUriString();
-      String fileName = file.getOriginalFilename() != null && !file.getOriginalFilename().isBlank()
-          ? file.getOriginalFilename()
-          : stored.storedName();
+      DriveMediaService.UploadResult uploaded = driveMediaService.uploadMedia(file, mimeType, mediaKind);
       return new MediaUploadResponse(
-          mediaUrl,
-          fileName,
-          mimeType,
-          mediaKind,
-          null,
-          null,
-          false);
+          uploaded.mediaUrl(),
+          uploaded.fileName(),
+          uploaded.mimeType(),
+          uploaded.mediaType(),
+          uploaded.mediaUrl(),
+          uploaded.driveFileId(),
+          true);
+    } catch (IllegalStateException exception) {
+      throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Unable to store media in drive");
     } catch (Exception exception) {
       throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Unable to store media");
     }
