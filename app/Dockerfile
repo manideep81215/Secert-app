@@ -13,6 +13,6 @@ COPY --from=build /app/target/app-0.0.1-SNAPSHOT.jar app.jar
 
 EXPOSE 8080
 
-ENV JAVA_OPTS="-Xms96m -Xmx280m -Xss512k -XX:MaxMetaspaceSize=96m -XX:MaxDirectMemorySize=64m -XX:+UseSerialGC -XX:+ExitOnOutOfMemoryError"
+ENV JAVA_OPTS="-Xms64m -Xmx176m -Xss320k -XX:MaxMetaspaceSize=128m -XX:MaxDirectMemorySize=24m -XX:ReservedCodeCacheSize=32m -XX:CICompilerCount=2 -XX:TieredStopAtLevel=1 -XX:+UseSerialGC -XX:+ExitOnOutOfMemoryError"
 
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -Dserver.port=${PORT:-8080} -jar /app/app.jar"]
