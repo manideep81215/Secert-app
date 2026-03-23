@@ -1,4 +1,4 @@
-import { Camera, CameraDirection, CameraResultType, CameraSource } from '@capacitor/camera'
+import { Camera, CameraResultType, CameraSource } from '@capacitor/camera'
 import { Capacitor } from '@capacitor/core'
 import { useEffect, useRef, useState } from 'react'
 import './SnapCamera.css'
@@ -385,32 +385,6 @@ async function createImageFileFromUrlCandidates(urlCandidates, fallbackPrefix = 
   throw new Error('snap-library-photo-read-failed')
 }
 
-function createImageFileFromDataUrl(dataUrl, fallbackPrefix = 'snap') {
-  const normalizedDataUrl = String(dataUrl || '').trim()
-  if (!normalizedDataUrl.startsWith('data:')) {
-    throw new Error('snap-camera-data-url-missing')
-  }
-
-  const segments = normalizedDataUrl.split(',')
-  if (segments.length < 2) {
-    throw new Error('snap-camera-data-url-invalid')
-  }
-
-  const mimeMatch = /^data:([^;]+)/i.exec(segments[0])
-  const mimeType = String(mimeMatch?.[1] || 'image/jpeg').trim() || 'image/jpeg'
-  const extension = getImageExtensionFromMimeType(mimeType)
-  const byteCharacters = window.atob(segments[1])
-  const byteArray = new Uint8Array(byteCharacters.length)
-  for (let index = 0; index < byteCharacters.length; index += 1) {
-    byteArray[index] = byteCharacters.charCodeAt(index)
-  }
-
-  return new File([byteArray], `${fallbackPrefix}_${Date.now()}.${extension}`, {
-    type: mimeType,
-    lastModified: Date.now(),
-  })
-}
-
 function isCancellationError(error) {
   const message = String(error?.message || error || '').trim().toLowerCase()
   return message.includes('cancel')
@@ -455,7 +429,8 @@ async function findPreferredVideoDeviceId(preferFront) {
         return preferFront ? left.index - right.index : right.index - left.index
       })
 
-    if (!ranked[0] || ranked[0].score <= 0) {
+    const hasLabeledVideoInput = videoInputs.some((device) => String(device?.label || '').trim().length > 0)
+    if (!ranked[0] || (ranked[0].score <= 0 && hasLabeledVideoInput)) {
       return ''
     }
 
@@ -487,7 +462,6 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
   const [recordingSeconds, setRecordingSeconds] = useState(0)
   const [countdownSeconds, setCountdownSeconds] = useState(0)
   const [isPreparingRecording, setIsPreparingRecording] = useState(false)
-  const [isNativePhotoFallbackActive, setIsNativePhotoFallbackActive] = useState(false)
   const videoRef = useRef(null)
   const streamRef = useRef(null)
   const mediaRecorderRef = useRef(null)
@@ -495,6 +469,7 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
   const recordingTimerRef = useRef(null)
   const countdownTimeoutRef = useRef(null)
   const recordingWarmupTimeoutRef = useRef(null)
+  const previewRetryTimeoutRef = useRef(null)
   const stopRecordingModeRef = useRef('preview')
   const mountedRef = useRef(false)
   const previewUrlRef = useRef(null)
@@ -730,6 +705,12 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
     }
   }
 
+  function clearPreviewRetryTimeout() {
+    if (!previewRetryTimeoutRef.current) return
+    window.clearTimeout(previewRetryTimeoutRef.current)
+    previewRetryTimeoutRef.current = null
+  }
+
   function waitWithTimeout(timeoutRef, milliseconds) {
     return new Promise((resolve) => {
       const timerId = window.setTimeout(() => {
@@ -930,6 +911,7 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
   }
 
   function stopPreview() {
+    clearPreviewRetryTimeout()
     stopCaptureComposition()
     clearCountdownState()
     clearRecordingWarmup()
@@ -958,11 +940,9 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
   }
 
   async function startPreview() {
+    clearPreviewRetryTimeout()
     try {
       stopPreview()
-      if (mountedRef.current) {
-        setIsNativePhotoFallbackActive(false)
-      }
       if (isNativeRuntime && typeof Camera?.requestPermissions === 'function') {
         try {
           await Camera.requestPermissions({
@@ -972,49 +952,112 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
           // Let getUserMedia surface the actual failure if permissions stay blocked.
         }
       }
+      if (isNativeRuntime && navigator.mediaDevices?.getUserMedia) {
+        try {
+          const micWarmupStream = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+            video: false,
+          })
+          micWarmupStream?.getTracks?.().forEach((track) => track.stop())
+        } catch {
+          // Ignore warm-up errors; the main getUserMedia call below handles failures.
+        }
+      }
       if (!navigator.mediaDevices?.getUserMedia) {
         throw new Error('camera-preview-api-unavailable')
       }
-      const buildConstraints = (withAudio, preferredDeviceId = '') => ({
-        video: {
-          ...(preferredDeviceId
-            ? { deviceId: { exact: preferredDeviceId } }
-            : { facingMode: frontCam ? 'user' : 'environment' }),
-          width: { ideal: SNAP_STREAM_REQUEST_WIDTH },
-          height: { ideal: SNAP_STREAM_REQUEST_HEIGHT },
-          frameRate: {
-            ideal: SNAP_CAPTURE_FPS,
-            max: SNAP_CAPTURE_FPS,
-          },
-        },
-        audio: withAudio
+
+      const createAudioConstraints = (withAudio) => (
+        withAudio
           ? {
               echoCancellation: true,
               noiseSuppression: true,
             }
-          : false,
+          : false
+      )
+
+      const createWebVideoConstraints = (preferredDeviceId = '') => ({
+        ...(preferredDeviceId
+          ? { deviceId: { exact: preferredDeviceId } }
+          : { facingMode: frontCam ? 'user' : 'environment' }),
+        width: { ideal: SNAP_STREAM_REQUEST_WIDTH },
+        height: { ideal: SNAP_STREAM_REQUEST_HEIGHT },
+        frameRate: {
+          ideal: SNAP_CAPTURE_FPS,
+          max: SNAP_CAPTURE_FPS,
+        },
       })
+
+      const createNativeVideoConstraintAttempts = () => {
+        const facingMode = frontCam ? 'user' : 'environment'
+        return [
+          {
+            facingMode,
+            width: { ideal: SNAP_STREAM_REQUEST_WIDTH },
+            height: { ideal: SNAP_STREAM_REQUEST_HEIGHT },
+            frameRate: {
+              ideal: SNAP_CAPTURE_FPS,
+              max: SNAP_CAPTURE_FPS,
+            },
+          },
+          {
+            facingMode,
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+          {
+            facingMode,
+          },
+        ]
+      }
+
+      const requestStreamWithAudioFallback = async (videoConstraints, withAudio) => {
+        try {
+          return await navigator.mediaDevices.getUserMedia({
+            video: videoConstraints,
+            audio: createAudioConstraints(withAudio),
+          })
+        } catch (error) {
+          if (!withAudio) throw error
+          return navigator.mediaDevices.getUserMedia({
+            video: videoConstraints,
+            audio: false,
+          })
+        }
+      }
 
       const wantsAudio = mode === 'video'
       let stream = null
-      try {
-        stream = await navigator.mediaDevices.getUserMedia(buildConstraints(wantsAudio))
-      } catch (error) {
-        if (!wantsAudio) throw error
-        stream = await navigator.mediaDevices.getUserMedia(buildConstraints(false))
-      }
+      let lastStreamError = null
 
-      const currentDeviceId = String(stream?.getVideoTracks?.()?.[0]?.getSettings?.()?.deviceId || '')
-      const preferredDeviceId = await findPreferredVideoDeviceId(frontCam)
-      if (preferredDeviceId && preferredDeviceId !== currentDeviceId) {
-        try {
-          const replacementStream = await navigator.mediaDevices.getUserMedia(
-            buildConstraints(wantsAudio, preferredDeviceId),
-          )
-          stream?.getTracks?.().forEach((track) => track.stop())
-          stream = replacementStream
-        } catch {
-          // Keep the original stream if switching lenses fails.
+      if (isNativeRuntime) {
+        for (const nativeVideoConstraints of createNativeVideoConstraintAttempts()) {
+          try {
+            stream = await requestStreamWithAudioFallback(nativeVideoConstraints, wantsAudio)
+            break
+          } catch (error) {
+            lastStreamError = error
+          }
+        }
+
+        if (!stream) {
+          throw lastStreamError || new Error('camera-preview-stream-unavailable')
+        }
+      } else {
+        stream = await requestStreamWithAudioFallback(createWebVideoConstraints(), wantsAudio)
+        const currentDeviceId = String(stream?.getVideoTracks?.()?.[0]?.getSettings?.()?.deviceId || '')
+        const preferredDeviceId = await findPreferredVideoDeviceId(frontCam)
+        if (preferredDeviceId && preferredDeviceId !== currentDeviceId) {
+          try {
+            const replacementStream = await requestStreamWithAudioFallback(
+              createWebVideoConstraints(preferredDeviceId),
+              wantsAudio,
+            )
+            stream?.getTracks?.().forEach((track) => track.stop())
+            stream = replacementStream
+          } catch {
+            // Keep the original stream if switching lenses fails.
+          }
         }
       }
 
@@ -1027,6 +1070,26 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
       if (videoRef.current) {
         videoRef.current.srcObject = stream
         await videoRef.current.play().catch(() => {})
+        await new Promise((resolve) => {
+          const activeVideo = videoRef.current
+          if (!activeVideo) {
+            resolve()
+            return
+          }
+          if (activeVideo.readyState >= 2) {
+            resolve()
+            return
+          }
+          let settled = false
+          const finish = () => {
+            if (settled) return
+            settled = true
+            activeVideo.removeEventListener('canplay', finish)
+            resolve()
+          }
+          activeVideo.addEventListener('canplay', finish, { once: true })
+          window.setTimeout(finish, 1500)
+        })
       }
       await applyNativeTrackZoom(zoomFactor)
       await applyTorchState(flash)
@@ -1034,9 +1097,15 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
     } catch (error) {
       if (mountedRef.current) {
         setTorchAvailable(false)
-        setIsNativePhotoFallbackActive(Boolean(isNativeRuntime && mode === 'camera'))
       }
       console.error('Camera preview error:', error)
+
+      if (!mountedRef.current || previewUrlRef.current || previewRetryTimeoutRef.current) return
+      previewRetryTimeoutRef.current = window.setTimeout(() => {
+        previewRetryTimeoutRef.current = null
+        if (!mountedRef.current || previewUrlRef.current) return
+        void startPreview()
+      }, 1000)
     }
   }
 
@@ -1078,42 +1147,6 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
     setFile(preparedFile)
     setCapturedType('video')
     replacePreviewUrl(URL.createObjectURL(preparedFile))
-  }
-
-  async function capturePhotoWithNativeCamera() {
-    if (!isNativeRuntime || typeof Camera?.getPhoto !== 'function') {
-      return false
-    }
-
-    try {
-      const photo = await Camera.getPhoto({
-        source: CameraSource.Camera,
-        resultType: CameraResultType.DataUrl,
-        quality: 92,
-        correctOrientation: true,
-        saveToGallery: false,
-        direction: frontCam ? CameraDirection.Front : CameraDirection.Rear,
-      })
-
-      const dataUrl = String(photo?.dataUrl || '').trim()
-      const nativePath = String(photo?.path || '').trim()
-      const webPath = String(photo?.webPath || '').trim()
-      const selectedPhoto = dataUrl
-        ? createImageFileFromDataUrl(dataUrl, 'snap')
-        : await createImageFileFromUrlCandidates([
-            webPath,
-            nativePath && typeof Capacitor.convertFileSrc === 'function'
-              ? Capacitor.convertFileSrc(nativePath)
-              : '',
-          ], 'snap')
-      acceptCapturedPhoto(selectedPhoto)
-      return true
-    } catch (error) {
-      if (!isCancellationError(error)) {
-        console.error('Snap native photo capture failed:', error)
-      }
-      return false
-    }
   }
 
   function addOverlayItem(type, content) {
@@ -1592,6 +1625,7 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
     video.preload = 'auto'
     video.playsInline = true
     video.setAttribute('playsinline', '')
+    video.crossOrigin = 'anonymous'
     video.volume = 0
     video.src = sourceUrl
 
@@ -1642,7 +1676,9 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
 
       const mediaStream = typeof video.captureStream === 'function'
         ? video.captureStream()
-        : null
+        : typeof video.mozCaptureStream === 'function'
+          ? video.mozCaptureStream()
+          : null
       const outputStream = outputCanvas.captureStream(SNAP_CAPTURE_FPS)
       mediaStream?.getAudioTracks?.().forEach((track) => outputStream.addTrack(track))
 
@@ -1846,17 +1882,11 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
     const activeVideo = await ensurePreviewReady()
     const captureCanvas = ensureCaptureCanvas()
     if (!activeVideo || !captureCanvas) {
-      if (isNativeRuntime) {
-        await capturePhotoWithNativeCamera()
-      }
       return
     }
     if (!renderCaptureFrame()) {
       await waitForAnimationFrames(2)
       if (!renderCaptureFrame()) {
-        if (isNativeRuntime) {
-          await capturePhotoWithNativeCamera()
-        }
         return
       }
     }
@@ -1869,9 +1899,6 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
       acceptCapturedPhoto(snapFile)
     } catch (error) {
       console.error('Snap photo capture failed:', error)
-      if (isNativeRuntime) {
-        await capturePhotoWithNativeCamera()
-      }
     }
   }
 
@@ -2056,7 +2083,7 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
       setSent(true)
       window.setTimeout(() => {
         setSent(false)
-        clearCapturedMedia({ restartPreview: false })
+        clearCapturedMedia({ restartPreview: true })
         onClose?.()
       }, 1500)
     } catch (error) {
@@ -2075,6 +2102,7 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
       stopPreview()
       stopCaptureComposition()
       stopRecordingOutputStream()
+      clearPreviewRetryTimeout()
       clearPreviewUrl(previewUrlRef.current)
       previewUrlRef.current = null
       captureCanvasRef.current = null
@@ -2306,12 +2334,6 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
             <button className="icon-btn" onClick={() => setFilter('none')} type="button">Clear FX</button>
           </div>
 
-          {isNativePhotoFallbackActive && mode === 'camera' && (
-            <div className="snap-native-camera-hint">
-              Live preview is unavailable here. Tap the shutter to open the native camera.
-            </div>
-          )}
-
           {(countdownSeconds > 0 || isPreparingRecording || isRecording) && (
             <div className={`recording-pill ${countdownSeconds > 0 ? 'timer-pill' : ''} ${isPreparingRecording ? 'preparing-pill' : ''}`}>
               {countdownSeconds > 0
@@ -2382,7 +2404,13 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
               <button
                 className={`shutter ${mode === 'video' ? 'video-mode' : ''} ${isRecording ? 'recording' : ''}`}
                 onClick={handleShutterPress}
-                aria-label={isPreparingRecording ? 'Preparing video recording' : (isRecording ? 'Stop video recording' : (mode === 'video' ? 'Start video recording' : 'Capture photo'))}
+                aria-label={
+                  isPreparingRecording
+                    ? 'Preparing video recording'
+                    : (isRecording
+                        ? 'Stop video recording'
+                        : (mode === 'video' ? 'Start video recording' : 'Capture photo'))
+                }
                 disabled={isPreparingRecording}
                 type="button"
               />

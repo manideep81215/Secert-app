@@ -6,6 +6,12 @@
     "CapacitorHttp": {
       "enabled": false
     },
+    "Camera": {
+      "permissions": [
+        "camera",
+        "photos"
+      ]
+    },
     "Keyboard": {
       "resize": "body",
       "resizeOnFullScreen": true
