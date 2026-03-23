@@ -116,11 +116,7 @@ public class ChatWebSocketController {
     entity.setMediaUrl(payload.mediaUrl());
     entity.setMimeType(payload.mimeType());
     String resolvedMediaType = resolveMediaType(payload.mediaType(), payload.type(), payload.mimeType());
-    boolean resolvedMovedToDrive = resolveMovedToDrive(payload.movedToDrive(), payload.mediaUrl(), payload.driveUrl());
     entity.setMediaType(resolvedMediaType);
-    entity.setMovedToDrive(resolvedMovedToDrive);
-    entity.setDriveUrl(resolvedMovedToDrive ? firstNonBlank(payload.driveUrl(), payload.mediaUrl()) : null);
-    entity.setDriveFileId(blankToNull(payload.driveFileId()));
     entity.setReplyText(payload.replyingTo() != null ? payload.replyingTo().text() : payload.replyText());
     entity.setReplySenderName(payload.replyingTo() != null ? payload.replyingTo().senderName() : payload.replySenderName());
     entity.setReplyMessageId(payload.replyingTo() != null ? payload.replyingTo().messageId() : payload.replyMessageId());
@@ -169,10 +165,7 @@ public class ChatWebSocketController {
             entity.getCreatedAt() != null ? entity.getCreatedAt().toEpochMilli() : Instant.now().toEpochMilli(),
             entity.isEdited(),
             entity.getEditedAt() != null ? entity.getEditedAt().toEpochMilli() : null,
-            entity.getMediaType(),
-            entity.getDriveUrl(),
-            entity.getDriveFileId(),
-            entity.isMovedToDrive()));
+            entity.getMediaType()));
 
     messagingTemplate.convertAndSendToUser(
         normalizedFrom,
@@ -657,28 +650,6 @@ public class ChatWebSocketController {
     return null;
   }
 
-  private boolean resolveMovedToDrive(Boolean movedToDrive, String mediaUrl, String driveUrl) {
-    if (Boolean.TRUE.equals(movedToDrive)) return true;
-    return isDriveUrl(mediaUrl) || isDriveUrl(driveUrl);
-  }
-
-  private boolean isDriveUrl(String value) {
-    String normalized = normalizeUsername(value);
-    return normalized.contains("drive.google.com/");
-  }
-
-  private String firstNonBlank(String first, String second) {
-    String one = blankToNull(first);
-    if (one != null) return one;
-    return blankToNull(second);
-  }
-
-  private String blankToNull(String value) {
-    if (value == null) return null;
-    String trimmed = value.trim();
-    return trimmed.isBlank() ? null : trimmed;
-  }
-
   private boolean hasChatRole(String username) {
     String normalized = normalizeUsername(username);
     if (normalized.isBlank()) return false;
@@ -708,10 +679,7 @@ public class ChatWebSocketController {
       String replyMediaUrl,
       String replyMimeType,
       String replyFileName,
-      String mediaType,
-      String driveUrl,
-      String driveFileId,
-      Boolean movedToDrive) {}
+      String mediaType) {}
 
   public record IncomingMessage(
       Long id,
@@ -733,10 +701,7 @@ public class ChatWebSocketController {
       Long createdAt,
       Boolean edited,
       Long editedAt,
-      String mediaType,
-      String driveUrl,
-      String driveFileId,
-      Boolean movedToDrive) {}
+      String mediaType) {}
 
   public record ReplyPreview(
       String text,

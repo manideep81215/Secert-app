@@ -42,16 +42,6 @@ public class ChatMessageEntity {
   @Column(length = 20)
   private String mediaType;
 
-  @Lob
-  @Column(columnDefinition = "LONGTEXT")
-  private String driveUrl;
-
-  @Column(length = 180)
-  private String driveFileId;
-
-  @Column(nullable = false)
-  private boolean movedToDrive = false;
-
   @Column(length = 120)
   private String mimeType;
 
@@ -155,30 +145,6 @@ public class ChatMessageEntity {
 
   public void setMediaType(String mediaType) {
     this.mediaType = mediaType;
-  }
-
-  public String getDriveUrl() {
-    return driveUrl;
-  }
-
-  public void setDriveUrl(String driveUrl) {
-    this.driveUrl = driveUrl;
-  }
-
-  public String getDriveFileId() {
-    return driveFileId;
-  }
-
-  public void setDriveFileId(String driveFileId) {
-    this.driveFileId = driveFileId;
-  }
-
-  public boolean isMovedToDrive() {
-    return movedToDrive;
-  }
-
-  public void setMovedToDrive(boolean movedToDrive) {
-    this.movedToDrive = movedToDrive;
   }
 
   public String getMimeType() {

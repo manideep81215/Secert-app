@@ -364,9 +364,6 @@ function ChatPageNew() {
         fileName: row?.fileName || null,
         mediaUrl: normalizeMediaUrl(row?.mediaUrl || null),
         mediaType: row?.mediaType || row?.type || null,
-        driveUrl: normalizeMediaUrl(row?.driveUrl || null),
-        driveFileId: row?.driveFileId || null,
-        movedToDrive: Boolean(row?.movedToDrive),
         mimeType: row?.mimeType || null,
         reaction: decodeReaction(row?.reaction),
         replyingTo: row?.replyText
@@ -413,9 +410,6 @@ function ChatPageNew() {
           fileName: row.fileName || null,
           mediaUrl: row.mediaUrl || null,
           mediaType: row.mediaType || row.type || null,
-          driveUrl: row.driveUrl || null,
-          driveFileId: row.driveFileId || null,
-          movedToDrive: Boolean(row.movedToDrive),
           mimeType: row.mimeType || null,
           reaction: row.reaction || null,
           replyingTo: row.replyingTo || null,
@@ -583,28 +577,6 @@ function ChatPageNew() {
       return `${API_BASE_URL}${url.slice('http://localhost:8080'.length)}`
     }
     return url
-  }
-  const isDriveMediaUrl = (url) => String(url || '').toLowerCase().includes('drive.google.com/')
-  const extractDriveFileId = (url) => {
-    const raw = String(url || '').trim()
-    if (!raw) return ''
-    const directMatch = raw.match(/\/file\/d\/([a-zA-Z0-9_-]+)/)
-    if (directMatch?.[1]) return directMatch[1]
-    const idMatch = raw.match(/[?&]id=([a-zA-Z0-9_-]+)/)
-    if (idMatch?.[1]) return idMatch[1]
-    return ''
-  }
-  const toDriveVideoPreviewUrl = (url) => {
-    const raw = String(url || '').trim()
-    if (!raw || !isDriveMediaUrl(raw)) return raw
-    if (raw.includes('/file/d/') && raw.includes('/preview')) return raw
-    const fileId = extractDriveFileId(raw)
-    if (!fileId) return raw
-    return `https://drive.google.com/file/d/${fileId}/preview`
-  }
-  const isDriveVideoMessage = (message) => {
-    if (!message || message.type !== 'video') return false
-    return isDriveMediaUrl(message.mediaUrl)
   }
   const isSecretTapMessageType = (messageType) => String(messageType || '').trim().toLowerCase() === SECRET_TAP_TYPE
   const getMessagePreview = (messageType, textValue, fileNameValue) => {
@@ -1795,7 +1767,7 @@ function ChatPageNew() {
     if (shouldDeferVideoThumbs) return undefined
     const videoUrls = [...new Set(
       messages
-        .filter((msg) => msg?.type === 'video' && msg?.mediaUrl && !isDriveMediaUrl(msg?.mediaUrl))
+        .filter((msg) => msg?.type === 'video' && msg?.mediaUrl)
         .map((msg) => String(msg.mediaUrl))
     )]
     if (videoUrls.length === 0) return undefined
@@ -2450,9 +2422,6 @@ function ChatPageNew() {
               fileName: data?.fileName || null,
               mediaUrl: normalizeMediaUrl(data?.mediaUrl || null),
               mediaType: data?.mediaType || data?.type || null,
-              driveUrl: normalizeMediaUrl(data?.driveUrl || null),
-              driveFileId: data?.driveFileId || null,
-              movedToDrive: Boolean(data?.movedToDrive),
               mimeType: data?.mimeType || null,
               reaction: decodeReaction(data?.reaction),
               replyingTo: data?.replyingTo || (data?.replyText
@@ -3445,9 +3414,6 @@ function ChatPageNew() {
       text: `Sent ${article} ${label}`,
       fileName: file.name,
       mediaUrl: localPreviewUrl,
-      driveUrl: null,
-      driveFileId: null,
-      movedToDrive: false,
       mimeType: file.type,
       timestamp: getTimeLabel(),
       createdAt: createdAtNow,
@@ -3543,10 +3509,7 @@ function ChatPageNew() {
     const uploadedUrl = normalizeMediaUrl(uploaded?.mediaUrl || localPreviewUrl)
     const uploadedMime = uploaded?.mimeType || uploadFile.type || null
     const uploadedFileName = uploaded?.fileName || uploadFile.name
-    const uploadedDriveUrl = normalizeMediaUrl(uploaded?.driveUrl || null)
     const uploadedMediaType = uploaded?.mediaType || resolvedType
-    const uploadedDriveFileId = uploaded?.driveFileId || null
-    const uploadedMovedToDrive = Boolean(uploaded?.movedToDrive)
 
     setMessages((prev) => prev.map((msg) => (
       msg.tempId === tempId
@@ -3554,9 +3517,6 @@ function ChatPageNew() {
             ...msg,
             mediaUrl: uploadedUrl,
             mediaType: uploadedMediaType,
-            driveUrl: uploadedDriveUrl,
-            driveFileId: uploadedDriveFileId,
-            movedToDrive: uploadedMovedToDrive,
             mimeType: uploadedMime,
             fileName: uploadedFileName,
             uploadPhase: 'uploading',
@@ -3590,9 +3550,6 @@ function ChatPageNew() {
           mediaType: uploadedMediaType,
           fileName: uploadedFileName,
           mediaUrl: uploadedUrl,
-          driveUrl: uploadedDriveUrl,
-          driveFileId: uploadedDriveFileId,
-          movedToDrive: uploadedMovedToDrive,
           mimeType: uploadedMime,
           replyingTo: buildReplyPayload(currentReply),
           replyText: toReplyText(currentReply) || null,
@@ -3846,9 +3803,6 @@ function ChatPageNew() {
         mediaType: message.mediaType || type,
         fileName: message.fileName || null,
         mediaUrl,
-        driveUrl: message.driveUrl || null,
-        driveFileId: message.driveFileId || null,
-        movedToDrive: Boolean(message.movedToDrive),
         mimeType: message.mimeType || null,
         replyingTo: buildReplyPayload(message.replyingTo),
         replyText: toReplyText(message.replyingTo) || null,
@@ -4305,23 +4259,6 @@ function ChatPageNew() {
       )
     }
     if (message.type === 'video') {
-      if (isDriveVideoMessage(message)) {
-        const previewUrl = toDriveVideoPreviewUrl(message.mediaUrl)
-        return (
-          <div className="message-drive-video-shell">
-            <iframe
-              className="message-drive-video-frame"
-              src={previewUrl}
-              title={message.fileName || 'Video preview'}
-              allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
-              allowFullScreen
-              loading="lazy"
-              referrerPolicy="no-referrer-when-downgrade"
-            />
-          </div>
-        )
-      }
-
       const thumb = videoThumbMap[message.mediaUrl] || null
       return (
         <button
@@ -4787,7 +4724,6 @@ function ChatPageNew() {
         selectedUserId={selectedUser?.id || null}
         searchQuery={searchQuery}
         onSearchQueryChange={setSearchQuery}
-        onOpenInstagram={() => navigate('/instagram-reel')}
         onOpenGames={() => navigate('/games')}
         onStartNewChat={() => setSelectedUser(filteredUsers[0] || null)}
         onSelectUser={handleSelectUserFromPanel}
@@ -5270,18 +5206,7 @@ function ChatPageNew() {
             >
               <div className="image-preview-title">{activeMediaPreview.type === 'video' ? 'Preview video' : 'Preview image'}</div>
               {activeMediaPreview.type === 'video' ? (
-                isDriveMediaUrl(activeMediaPreview.url) ? (
-                  <iframe
-                    className="media-preview-drive-frame"
-                    src={toDriveVideoPreviewUrl(activeMediaPreview.url)}
-                    title={activeMediaPreview.name || 'Video preview'}
-                    allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
-                    allowFullScreen
-                    loading="lazy"
-                  />
-                ) : (
-                  <video className="media-preview-video" src={activeMediaPreview.url} controls autoPlay playsInline />
-                )
+                <video className="media-preview-video" src={activeMediaPreview.url} controls autoPlay playsInline />
               ) : (
                 <img src={activeMediaPreview.url} alt={activeMediaPreview.name} className="image-preview-full" />
               )}

@@ -135,33 +135,6 @@
   place-items: center;
 }
 
-.btn-users-instagram {
-  width: 2.2rem;
-  height: 2.2rem;
-  border: none;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #fd1d1d 0%, #e1306c 45%, #f77737 100%);
-  color: #fff;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  display: grid;
-  place-items: center;
-  padding: 0;
-}
-
-.btn-users-instagram svg {
-  width: 1rem;
-  height: 1rem;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-}
-
-.btn-users-instagram:hover {
-  transform: scale(1.05);
-  box-shadow: 0 4px 12px rgba(225, 48, 108, 0.35);
-}
-
 .btn-users-games:hover {
   transform: scale(1.05);
   box-shadow: 0 4px 12px rgba(76, 175, 80, 0.35);
@@ -921,22 +894,6 @@
   max-width: min(380px, 100%);
   border-radius: 0.8rem;
   display: block;
-}
-
-.message-drive-video-shell {
-  width: min(210px, 100%);
-  border-radius: 0.8rem;
-  overflow: hidden;
-  background: #101010;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-}
-
-.message-drive-video-frame {
-  width: 100%;
-  aspect-ratio: 9 / 16;
-  border: 0;
-  display: block;
-  background: #101010;
 }
 
 .message-audio-preview {
@@ -2412,11 +2369,6 @@
   border-bottom: 4px solid var(--btn-shadow);
 }
 
-.chat-container .btn-users-instagram {
-  background: linear-gradient(to bottom, var(--btn-orange-top), var(--btn-orange-bot));
-  border-bottom: 4px solid var(--btn-shadow);
-}
-
 .chat-container .users-search input {
   border: 3px solid #6c4329;
   background: linear-gradient(180deg, #8f5f3d, #734727);
@@ -2891,14 +2843,6 @@
 .media-preview-video {
   width: 100%;
   max-height: 68vh;
-  border-radius: 10px;
-  border: 1px solid #dcc390;
-  background: #101010;
-}
-
-.media-preview-drive-frame {
-  width: 100%;
-  height: min(68vh, 520px);
   border-radius: 10px;
   border: 1px solid #dcc390;
   background: #101010;

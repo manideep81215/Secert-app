@@ -14,10 +14,6 @@ import com.game.app.model.ChatMessageEntity;
 
 public interface ChatMessageRepository extends JpaRepository<ChatMessageEntity, Long> {
 
-  List<ChatMessageEntity> findTop200ByMovedToDriveFalseAndMediaTypeInAndCreatedAtBeforeOrderByCreatedAtAsc(
-      List<String> mediaTypes,
-      Instant cutoff);
-
   boolean existsByMediaUrlEndingWith(String suffix);
 
   @Query("""

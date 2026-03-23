@@ -7,12 +7,8 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.time.Instant;
-import java.nio.file.Files;
-import java.nio.file.Path;
 
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.FileSystemResource;
-import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ContentDisposition;
@@ -44,9 +40,7 @@ import com.game.app.repository.MobilePushTokenRepository;
 import com.game.app.repository.UserRepository;
 import com.game.app.service.ChatAnalyticsService;
 import com.game.app.service.ChatCheckEventService;
-import com.game.app.service.DriveMediaService;
 import com.game.app.service.JwtTokenService;
-import com.game.app.service.LocalMediaStorageService;
 import com.game.app.service.PushNotificationService;
 import com.game.app.websocket.ChatWebSocketController;
 
@@ -63,8 +57,6 @@ public class ChatMessageController {
   private final ChatAnalyticsService chatAnalyticsService;
   private final ChatCheckEventService chatCheckEventService;
   private final SimpMessagingTemplate messagingTemplate;
-  private final DriveMediaService driveMediaService;
-  private final LocalMediaStorageService localMediaStorageService;
   private final long maxMediaUploadBytes;
   private final long maxMediaDownloadBytes;
 
@@ -76,8 +68,6 @@ public class ChatMessageController {
       ChatAnalyticsService chatAnalyticsService,
       ChatCheckEventService chatCheckEventService,
       SimpMessagingTemplate messagingTemplate,
-      DriveMediaService driveMediaService,
-      LocalMediaStorageService localMediaStorageService,
       @Value("${app.chat.media.max-bytes:12582912}") long maxMediaUploadBytes,
       @Value("${app.chat.media.max-download-bytes:12582912}") long maxMediaDownloadBytes) {
     this.chatMessageRepository = chatMessageRepository;
@@ -89,8 +79,6 @@ public class ChatMessageController {
     this.chatAnalyticsService = chatAnalyticsService;
     this.chatCheckEventService = chatCheckEventService;
     this.messagingTemplate = messagingTemplate;
-    this.driveMediaService = driveMediaService;
-    this.localMediaStorageService = localMediaStorageService;
     this.maxMediaUploadBytes = Math.max(1L * 1024L * 1024L, maxMediaUploadBytes);
     this.maxMediaDownloadBytes = Math.max(1L * 1024L * 1024L, maxMediaDownloadBytes);
   }
@@ -184,47 +172,22 @@ public class ChatMessageController {
           "Media exceeds " + toMediaUploadLimitLabel() + " limit");
     }
 
-    if (shouldStoreMediaInDatabase(mediaKind)) {
-      try {
-        ChatMediaEntity media = new ChatMediaEntity();
-        media.setFileName(file.getOriginalFilename() != null ? file.getOriginalFilename() : "media");
-        media.setMimeType(mimeType);
-        media.setData(file.getBytes());
-        media = chatMediaRepository.save(media);
-
-        String mediaUrl = ServletUriComponentsBuilder.fromCurrentContextPath()
-            .path("/api/app/messages/media/{id}")
-            .buildAndExpand(media.getId())
-            .toUriString();
-        return new MediaUploadResponse(
-            mediaUrl,
-            media.getFileName(),
-            media.getMimeType(),
-            "voice",
-            null,
-            null,
-            false);
-      } catch (Exception exception) {
-        throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Unable to store voice media");
-      }
-    }
-
-    if (!driveMediaService.isConfigured()) {
-      throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Drive media storage is not configured");
-    }
-
     try {
-      DriveMediaService.UploadResult uploaded = driveMediaService.uploadMedia(file, mimeType, mediaKind);
+      ChatMediaEntity media = new ChatMediaEntity();
+      media.setFileName(file.getOriginalFilename() != null ? file.getOriginalFilename() : "media");
+      media.setMimeType(mimeType);
+      media.setData(file.getBytes());
+      media = chatMediaRepository.save(media);
+
+      String mediaUrl = ServletUriComponentsBuilder.fromCurrentContextPath()
+          .path("/api/app/messages/media/{id}")
+          .buildAndExpand(media.getId())
+          .toUriString();
       return new MediaUploadResponse(
-          uploaded.mediaUrl(),
-          uploaded.fileName(),
-          uploaded.mimeType(),
-          uploaded.mediaType(),
-          uploaded.mediaUrl(),
-          uploaded.driveFileId(),
-          true);
-    } catch (IllegalStateException exception) {
-      throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Unable to store media in drive");
+          mediaUrl,
+          media.getFileName(),
+          media.getMimeType(),
+          mediaKind);
     } catch (Exception exception) {
       throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Unable to store media");
     }
@@ -278,83 +241,6 @@ public class ChatMessageController {
     }
 
     return response.body(data);
-  }
-
-  @GetMapping("/media/local/{storedName:.+}")
-  public ResponseEntity<Resource> getLocalMedia(
-      @PathVariable String storedName,
-      @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String ifNoneMatch) {
-    Path localPath;
-    try {
-      localPath = localMediaStorageService.resolveStoredPath(storedName);
-    } catch (Exception exception) {
-      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Media not found");
-    }
-
-    if (!Files.exists(localPath) || !Files.isRegularFile(localPath)) {
-      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Media not found");
-    }
-
-    long fileSize;
-    try {
-      fileSize = Files.size(localPath);
-    } catch (Exception exception) {
-      throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Unable to read media");
-    }
-    if (fileSize > maxMediaDownloadBytes) {
-      throw new ResponseStatusException(
-          HttpStatus.PAYLOAD_TOO_LARGE,
-          "Media exceeds " + toMediaDownloadLimitLabel() + " delivery limit");
-    }
-
-    String fileName = localPath.getFileName().toString();
-    String mimeType;
-    try {
-      mimeType = Files.probeContentType(localPath);
-    } catch (Exception ignored) {
-      mimeType = null;
-    }
-    if (mimeType == null || mimeType.isBlank()) {
-      mimeType = MediaType.APPLICATION_OCTET_STREAM_VALUE;
-    }
-
-    MediaType contentType;
-    try {
-      contentType = MediaType.parseMediaType(mimeType);
-    } catch (Exception ignored) {
-      contentType = MediaType.APPLICATION_OCTET_STREAM;
-    }
-    boolean inline = mimeType.startsWith("image/") || mimeType.startsWith("video/") || mimeType.startsWith("audio/");
-
-    String etag;
-    try {
-      long modifiedAt = Files.getLastModifiedTime(localPath).toMillis();
-      etag = "\"chat-local-media-" + fileName + "-" + fileSize + "-" + modifiedAt + "\"";
-    } catch (Exception exception) {
-      etag = "\"chat-local-media-" + fileName + "-" + fileSize + "\"";
-    }
-    String cacheControl = "private, max-age=604800";
-
-    if (ifNoneMatch != null && ifNoneMatch.contains(etag)) {
-      return ResponseEntity.status(HttpStatus.NOT_MODIFIED)
-          .header(HttpHeaders.CACHE_CONTROL, cacheControl)
-          .header(HttpHeaders.ETAG, etag)
-          .build();
-    }
-
-    ResponseEntity.BodyBuilder response = ResponseEntity.ok()
-        .contentLength(fileSize)
-        .contentType(contentType)
-        .header(HttpHeaders.CACHE_CONTROL, cacheControl)
-        .header(HttpHeaders.ETAG, etag);
-
-    if (!inline) {
-      response.header(
-          HttpHeaders.CONTENT_DISPOSITION,
-          ContentDisposition.attachment().filename(fileName, StandardCharsets.UTF_8).build().toString());
-    }
-
-    return response.body(new FileSystemResource(localPath));
   }
 
   @PostMapping("/notification-reply")
@@ -422,10 +308,7 @@ public class ChatMessageController {
             createdAt.toEpochMilli(),
             entity.isEdited(),
             entity.getEditedAt() != null ? entity.getEditedAt().toEpochMilli() : null,
-            entity.getMediaType(),
-            entity.getDriveUrl(),
-            entity.getDriveFileId(),
-            entity.isMovedToDrive()));
+            entity.getMediaType()));
 
     pushNotificationService.notifyUser(
         toUsername,
@@ -458,10 +341,7 @@ public class ChatMessageController {
         row.getReplyMediaUrl(),
         row.getReplyMimeType(),
         row.getReplyFileName(),
-        row.getMediaType(),
-        row.getDriveUrl(),
-        row.getDriveFileId(),
-        row.isMovedToDrive());
+        row.getMediaType());
   }
 
   private UserEntity requireAuthUser(String authHeader) {
@@ -490,10 +370,6 @@ public class ChatMessageController {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Chat access is allowed only for chat role users");
     }
     return user;
-  }
-
-  private boolean shouldStoreMediaInDatabase(String mediaKind) {
-    return "voice".equalsIgnoreCase(mediaKind);
   }
 
   private String normalizeMediaKind(String mediaKind, String mimeType) {
@@ -609,10 +485,7 @@ public class ChatMessageController {
       String replyMediaUrl,
       String replyMimeType,
       String replyFileName,
-      String mediaType,
-      String driveUrl,
-      String driveFileId,
-      Boolean movedToDrive) {
+      String mediaType) {
   }
 
   public record ConversationPageDto(
@@ -647,9 +520,6 @@ public class ChatMessageController {
       String mediaUrl,
       String fileName,
       String mimeType,
-      String mediaType,
-      String driveUrl,
-      String driveFileId,
-      Boolean movedToDrive) {
+      String mediaType) {
   }
 }

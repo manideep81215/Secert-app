@@ -14,7 +14,6 @@ import ChatInfoPage from './pages/ChatInfoPage'
 import RecapPage from './pages/RecapPage'
 import LoveTimers from './pages/LoveTimers'
 import ProfilePage from './pages/ProfilePage'
-import InstagramReelPage from './pages/InstagramReelPage'
 import PrivacyBlur from './components/PrivacyBlur'
 import { WS_CHAT_URL } from './config/apiConfig'
 import { resetFlowState, useFlowState } from './hooks/useFlowState'
@@ -30,7 +29,6 @@ import {
   clearNativePushRegistration,
   syncNativePushRegistration,
 } from './lib/nativePush'
-import { ensurePushSubscription } from './lib/pushSubscription'
 import './App.css'
 
 const SECRET_TAP_TYPE = 'secret-tap'
@@ -87,7 +85,6 @@ function App() {
     normalizedRoutePath === '/profile' ||
     normalizedRoutePath === '/users' ||
     normalizedRoutePath.startsWith('/chat') ||
-    normalizedRoutePath.startsWith('/instagram-reel') ||
     normalizedRoutePath === '/timers'
 
   useEffect(() => {
@@ -351,56 +348,6 @@ function App() {
   }
 
   useEffect(() => {
-    if (!flow?.token) return
-
-    const cap = typeof window !== 'undefined' ? window.Capacitor : null
-    const isNativeRuntime = typeof cap?.isNativePlatform === 'function'
-      ? cap.isNativePlatform()
-      : cap?.getPlatform?.() === 'android' || cap?.getPlatform?.() === 'ios'
-    if (isNativeRuntime) return
-
-    let disposed = false
-    let inFlight = false
-
-    const syncPushSubscription = async () => {
-      if (disposed || inFlight) return
-      if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return
-      inFlight = true
-      try {
-        await ensurePushSubscription(flow.token)
-      } catch {
-        // Ignore push subscription setup failures.
-      } finally {
-        inFlight = false
-      }
-    }
-
-    const onVisibility = () => {
-      if (document.visibilityState === 'visible') {
-        syncPushSubscription()
-      }
-    }
-    const onSwMessage = (event) => {
-      if (event?.data?.type === 'push-subscription-change') {
-        syncPushSubscription()
-      }
-    }
-
-    syncPushSubscription()
-    window.addEventListener('focus', syncPushSubscription)
-    window.addEventListener('online', syncPushSubscription)
-    navigator.serviceWorker?.addEventListener?.('message', onSwMessage)
-    document.addEventListener('visibilitychange', onVisibility)
-    return () => {
-      disposed = true
-      window.removeEventListener('focus', syncPushSubscription)
-      window.removeEventListener('online', syncPushSubscription)
-      navigator.serviceWorker?.removeEventListener?.('message', onSwMessage)
-      document.removeEventListener('visibilitychange', onVisibility)
-    }
-  }, [flow?.token])
-
-  useEffect(() => {
     if (!flow?.token) return undefined
 
     const clearNow = () => {
@@ -508,7 +455,6 @@ function App() {
             <Route path="/chat/info" element={isAuthenticated ? <ChatInfoPage /> : <Navigate to="/auth" replace />} />
             <Route path="/timers" element={isAuthenticated ? <LoveTimers /> : <Navigate to="/auth" replace />} />
             <Route path="/profile" element={isAuthenticated ? <ProfilePage /> : <Navigate to="/auth" replace />} />
-            <Route path="/instagram-reel" element={isAuthenticated ? <InstagramReelPage /> : <Navigate to="/auth" replace />} />
             <Route path="*" element={<Navigate to="/auth" replace />} />
           </Routes>
         </div>

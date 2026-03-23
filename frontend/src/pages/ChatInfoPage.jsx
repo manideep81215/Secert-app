@@ -11,7 +11,6 @@ import {
   getNotificationPermissionState,
   setNotifyCutoff,
 } from '../lib/notifications'
-import { ensurePushSubscription } from '../lib/pushSubscription'
 import { syncNativePushRegistration } from '../lib/nativePush'
 import { getPushPublicKey, getPushStatus, sendTestPush, subscribeMobilePush } from '../services/pushApi'
 import { useFlowState } from '../hooks/useFlowState'
@@ -281,17 +280,6 @@ function ChatInfoPage() {
       } else {
         notify.success('Notifications enabled.')
       }
-      if (!isNativeRuntime && flow?.token) {
-        try {
-          const keyConfig = await getPushPublicKey()
-          const pushEnabled = Boolean(keyConfig?.enabled && keyConfig?.publicKey)
-          if (pushEnabled) {
-            await ensurePushSubscription(flow.token)
-          }
-        } catch {
-          // Ignore key-check failures during permission request.
-        }
-      }
       refreshPushDebug('permission')
       return
     }
@@ -445,14 +433,7 @@ function ChatInfoPage() {
 
       const serviceWorkerActive = Boolean(registration?.active)
 
-      let subscriptionError = ''
-      if (flow?.token && snapshot.notificationPermission === 'granted') {
-        try {
-          await ensurePushSubscription(flow.token)
-        } catch (error) {
-          subscriptionError = error?.message || 'Subscription setup failed.'
-        }
-      }
+      const subscriptionError = ''
 
       if (!registration && 'serviceWorker' in navigator) {
         registration = await navigator.serviceWorker.getRegistration('/sw.js')

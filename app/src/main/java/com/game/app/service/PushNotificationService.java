@@ -1,25 +1,18 @@
 package com.game.app.service;
 
-import java.math.BigInteger;
 import java.io.ByteArrayInputStream;
 import java.io.FileInputStream;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.charset.StandardCharsets;
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
-import java.security.interfaces.ECPrivateKey;
-import java.security.interfaces.ECPublicKey;
-import java.security.spec.ECGenParameterSpec;
 import java.util.Base64;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
@@ -28,9 +21,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import com.game.app.model.MobilePushTokenEntity;
-import com.game.app.model.PushSubscriptionEntity;
 import com.game.app.repository.MobilePushTokenRepository;
-import com.game.app.repository.PushSubscriptionRepository;
 import com.google.auth.oauth2.GoogleCredentials;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
@@ -41,26 +32,16 @@ import com.google.firebase.messaging.FirebaseMessagingException;
 import com.google.firebase.messaging.Message;
 import com.google.firebase.messaging.MessagingErrorCode;
 
-import nl.martijndwars.webpush.Notification;
-import nl.martijndwars.webpush.PushService;
-import nl.martijndwars.webpush.Urgency;
-
 @Service
 public class PushNotificationService {
 
   private static final Logger log = LoggerFactory.getLogger(PushNotificationService.class);
-  private static final int PUSH_TTL_SECONDS = 24 * 60 * 60;
-  private static final Urgency PUSH_URGENCY = Urgency.HIGH;
   private static final long FCM_TTL_MILLIS = 24L * 60L * 60L * 1000L;
   private static final String FCM_APP_NAME = "simp-games-quest-fcm";
   private static final String FCM_ANDROID_CHANNEL_ID = "chat_messages_v5";
   private static final String FCM_ANDROID_SMALL_ICON = "ic_stat_simp_games";
 
-  private final PushSubscriptionRepository pushSubscriptionRepository;
   private final MobilePushTokenRepository mobilePushTokenRepository;
-  private final String vapidPublicKey;
-  private final String vapidPrivateKey;
-  private final String vapidSubject;
   private final boolean fcmEnabled;
   private final String fcmCredentialsFile;
   private final String fcmCredentialsJson;
@@ -68,61 +49,45 @@ public class PushNotificationService {
   private volatile FirebaseMessaging firebaseMessaging;
 
   public PushNotificationService(
-      PushSubscriptionRepository pushSubscriptionRepository,
       MobilePushTokenRepository mobilePushTokenRepository,
-      @Value("${app.push.vapid.public-key:}") String vapidPublicKey,
-      @Value("${app.push.vapid.private-key:}") String vapidPrivateKey,
-      @Value("${app.push.vapid.subject:mailto:admin@example.com}") String vapidSubject,
       @Value("${app.push.fcm.enabled:true}") boolean fcmEnabled,
       @Value("${app.push.fcm.credentials-file:}") String fcmCredentialsFile,
       @Value("${app.push.fcm.credentials-json:}") String fcmCredentialsJson,
       @Value("${app.push.fcm.credentials-base64:}") String fcmCredentialsBase64) {
-    this.pushSubscriptionRepository = pushSubscriptionRepository;
     this.mobilePushTokenRepository = mobilePushTokenRepository;
-    String configuredPublic = vapidPublicKey != null ? vapidPublicKey.trim() : "";
-    String configuredPrivate = vapidPrivateKey != null ? vapidPrivateKey.trim() : "";
-    if (configuredPublic.isBlank() || configuredPrivate.isBlank()) {
-      VapidKeyPair generated = generateVapidKeyPair();
-      configuredPublic = generated.publicKey();
-      configuredPrivate = generated.privateKey();
-      log.warn("VAPID keys were not configured. Generated temporary runtime keys. For stable push after restart, set APP_PUSH_VAPID_PUBLIC_KEY and APP_PUSH_VAPID_PRIVATE_KEY.");
-      log.warn("Generated runtime VAPID public key: {}", configuredPublic);
-    }
-    this.vapidPublicKey = configuredPublic;
-    this.vapidPrivateKey = configuredPrivate;
-    this.vapidSubject = vapidSubject != null ? vapidSubject.trim() : "mailto:admin@example.com";
     this.fcmEnabled = fcmEnabled;
     this.fcmCredentialsFile = fcmCredentialsFile != null ? fcmCredentialsFile.trim() : "";
     this.fcmCredentialsJson = fcmCredentialsJson != null ? fcmCredentialsJson.trim() : "";
     this.fcmCredentialsBase64 = fcmCredentialsBase64 != null ? fcmCredentialsBase64.trim() : "";
   }
 
+  // Browser/PWA web-push is disabled by design.
   public boolean isPushEnabled() {
-    return !vapidPublicKey.isBlank() && !vapidPrivateKey.isBlank();
+    return false;
   }
 
+  // Browser/PWA web-push is disabled by design.
   public String getVapidPublicKey() {
-    return vapidPublicKey;
+    return "";
   }
 
   public boolean isFcmEnabled() {
     return getFirebaseMessaging() != null;
   }
 
+  // Browser/PWA web-push is disabled by design.
   public void saveSubscription(String username, String endpoint, String p256dh, String auth) {
-    String normalizedUser = normalizeUsername(username);
-    Optional<PushSubscriptionEntity> existing = pushSubscriptionRepository.findByEndpoint(endpoint);
-    PushSubscriptionEntity entity = existing.orElseGet(PushSubscriptionEntity::new);
-    entity.setUsername(normalizedUser);
-    entity.setEndpoint(endpoint);
-    entity.setP256dh(p256dh);
-    entity.setAuth(auth);
-    pushSubscriptionRepository.save(entity);
+    // No-op.
   }
 
+  // Browser/PWA web-push is disabled by design.
   public void removeSubscription(String username, String endpoint) {
-    if (endpoint == null || endpoint.isBlank()) return;
-    pushSubscriptionRepository.deleteByUsernameAndEndpoint(normalizeUsername(username), endpoint.trim());
+    // No-op.
+  }
+
+  // Browser/PWA web-push is disabled by design.
+  public long countSubscriptions(String username) {
+    return 0L;
   }
 
   public void saveMobileToken(String username, String token, String platform) {
@@ -153,52 +118,16 @@ public class PushNotificationService {
 
   public void notifyUser(String username, String title, String body, String url) {
     String normalizedUser = normalizeUsername(username);
-    boolean webPushEnabled = isPushEnabled();
-    boolean nativePushEnabled = getFirebaseMessaging() != null;
-    if (!webPushEnabled && !nativePushEnabled) return;
+    FirebaseMessaging messaging = getFirebaseMessaging();
+    if (messaging == null) return;
 
-    List<PushSubscriptionEntity> subscriptions = webPushEnabled
-        ? pushSubscriptionRepository.findByUsername(normalizedUser)
-        : List.of();
     List<MobilePushTokenEntity> mobileTokens = collapseMobileTokens(
         mobilePushTokenRepository.findByUsername(normalizedUser));
-    if (subscriptions.isEmpty() && mobileTokens.isEmpty()) return;
+    if (mobileTokens.isEmpty()) return;
 
-    String payload = buildPayload(title, body, url);
-    boolean mobilePushSent = false;
-
-    // Send native mobile push immediately for lowest delivery latency.
-    if (!mobileTokens.isEmpty()) {
-      FirebaseMessaging messaging = getFirebaseMessaging();
-      if (messaging != null) {
-        for (MobilePushTokenEntity mobileToken : mobileTokens) {
-          if (sendToMobileToken(messaging, mobileToken, title, body, url)) {
-            mobilePushSent = true;
-          }
-        }
-      }
+    for (MobilePushTokenEntity mobileToken : mobileTokens) {
+      sendToMobileToken(messaging, mobileToken, title, body, url);
     }
-
-    final boolean mobilePushDelivered = mobilePushSent;
-    CompletableFuture.runAsync(() -> {
-      if (subscriptions.isEmpty()) return;
-      // Avoid duplicate lock-screen notifications when native push already delivered.
-      // If native push failed for all tokens, web push acts as a fallback path.
-      if (mobilePushDelivered) return;
-      try {
-        PushService service = new PushService(vapidPublicKey, vapidPrivateKey, vapidSubject);
-        for (PushSubscriptionEntity subscription : subscriptions) {
-          sendToSubscription(service, subscription, payload);
-        }
-      } catch (Exception ignored) {
-        // Ignore web-push broadcast failures.
-      }
-    });
-  }
-
-  public long countSubscriptions(String username) {
-    String normalizedUser = normalizeUsername(username);
-    return pushSubscriptionRepository.findByUsername(normalizedUser).size();
   }
 
   public long countMobileTokens(String username) {
@@ -208,85 +137,30 @@ public class PushNotificationService {
 
   public PushSendResult sendTestNow(String username, String title, String body, String url) {
     String normalizedUser = normalizeUsername(username);
-    boolean webPushEnabled = isPushEnabled();
     FirebaseMessaging messaging = getFirebaseMessaging();
-    boolean nativePushEnabled = messaging != null;
-    if (!webPushEnabled && !nativePushEnabled) {
-      return new PushSendResult(false, 0, 0, "Push is not configured on server.");
+    if (messaging == null) {
+      return new PushSendResult(false, 0, 0, "FCM push is not configured on server.");
     }
 
-    List<PushSubscriptionEntity> subscriptions = webPushEnabled
-        ? pushSubscriptionRepository.findByUsername(normalizedUser)
-        : List.of();
-    List<MobilePushTokenEntity> mobileTokens = nativePushEnabled
-        ? collapseMobileTokens(mobilePushTokenRepository.findByUsername(normalizedUser))
-        : List.of();
-    if (subscriptions.isEmpty() && mobileTokens.isEmpty()) {
-      return new PushSendResult(false, 0, 0, "No active push target for this user.");
+    List<MobilePushTokenEntity> mobileTokens = collapseMobileTokens(
+        mobilePushTokenRepository.findByUsername(normalizedUser));
+    if (mobileTokens.isEmpty()) {
+      return new PushSendResult(false, 0, 0, "No active mobile push token for this user.");
     }
 
-    String payload = buildPayload(title, body, url);
     int attempted = 0;
     int sent = 0;
-
-    if (!mobileTokens.isEmpty() && messaging != null) {
-      for (MobilePushTokenEntity mobileToken : mobileTokens) {
-        attempted += 1;
-        if (sendToMobileToken(messaging, mobileToken, title, body, url)) {
-          sent += 1;
-        }
-      }
-    }
-
-    if (!subscriptions.isEmpty()) {
-      try {
-        PushService service = new PushService(vapidPublicKey, vapidPrivateKey, vapidSubject);
-        for (PushSubscriptionEntity subscription : subscriptions) {
-          attempted += 1;
-          if (sendToSubscription(service, subscription, payload)) {
-            sent += 1;
-          }
-        }
-      } catch (Exception error) {
-        String message = error.getMessage() != null ? error.getMessage() : "Push service error";
-        if (sent > 0) {
-          return new PushSendResult(true, attempted, sent, "Partially sent: " + message);
-        }
-        return new PushSendResult(false, attempted, sent, message);
+    for (MobilePushTokenEntity mobileToken : mobileTokens) {
+      attempted += 1;
+      if (sendToMobileToken(messaging, mobileToken, title, body, url)) {
+        sent += 1;
       }
     }
 
     if (sent > 0) {
       return new PushSendResult(true, attempted, sent, "Test push sent (" + sent + "/" + attempted + ").");
     }
-    return new PushSendResult(false, attempted, sent, "Push send failed for all active targets.");
-  }
-
-  private boolean sendToSubscription(PushService service, PushSubscriptionEntity subscription, String payload) {
-    try {
-      Notification notification = Notification.builder()
-          .endpoint(subscription.getEndpoint())
-          .userPublicKey(subscription.getP256dh())
-          .userAuth(subscription.getAuth())
-          .payload(payload.getBytes(StandardCharsets.UTF_8))
-          .ttl(PUSH_TTL_SECONDS)
-          .urgency(PUSH_URGENCY)
-          .build();
-      service.send(notification);
-      return true;
-    } catch (Exception sendError) {
-      String message = sendError.getMessage() != null ? sendError.getMessage() : "";
-      if (message.contains("410") || message.contains("404")) {
-        pushSubscriptionRepository.deleteById(subscription.getId());
-      }
-      return false;
-    }
-  }
-
-  private String buildPayload(String title, String body, String url) {
-    return "{\"title\":\"" + escapeJson(title)
-        + "\",\"body\":\"" + escapeJson(body)
-        + "\",\"url\":\"" + escapeJson(url) + "\"}";
+    return new PushSendResult(false, attempted, sent, "Push send failed for all active mobile tokens.");
   }
 
   private String normalizeUsername(String username) {
@@ -296,15 +170,6 @@ public class PushNotificationService {
   private String normalizePlatform(String platform) {
     if (platform == null || platform.isBlank()) return "android";
     return platform.trim().toLowerCase();
-  }
-
-  private String escapeJson(String value) {
-    if (value == null) return "";
-    return value
-        .replace("\\", "\\\\")
-        .replace("\"", "\\\"")
-        .replace("\n", "\\n")
-        .replace("\r", "\\r");
   }
 
   private FirebaseMessaging getFirebaseMessaging() {
@@ -470,43 +335,6 @@ public class PushNotificationService {
         || code == MessagingErrorCode.INVALID_ARGUMENT;
   }
 
-  private VapidKeyPair generateVapidKeyPair() {
-    try {
-      KeyPairGenerator generator = KeyPairGenerator.getInstance("EC");
-      generator.initialize(new ECGenParameterSpec("secp256r1"));
-      KeyPair keyPair = generator.generateKeyPair();
-
-      ECPublicKey publicKey = (ECPublicKey) keyPair.getPublic();
-      ECPrivateKey privateKey = (ECPrivateKey) keyPair.getPrivate();
-
-      byte[] x = toFixedLength(publicKey.getW().getAffineX(), 32);
-      byte[] y = toFixedLength(publicKey.getW().getAffineY(), 32);
-      byte[] uncompressed = new byte[65];
-      uncompressed[0] = 0x04;
-      System.arraycopy(x, 0, uncompressed, 1, 32);
-      System.arraycopy(y, 0, uncompressed, 33, 32);
-
-      byte[] privateRaw = toFixedLength(privateKey.getS(), 32);
-      Base64.Encoder encoder = Base64.getUrlEncoder().withoutPadding();
-      return new VapidKeyPair(
-          encoder.encodeToString(uncompressed),
-          encoder.encodeToString(privateRaw));
-    } catch (Exception error) {
-      throw new IllegalStateException("Failed to generate runtime VAPID key pair", error);
-    }
-  }
-
-  private byte[] toFixedLength(BigInteger value, int size) {
-    byte[] raw = value.toByteArray();
-    if (raw.length == size) return raw;
-    int offset = raw.length > size ? raw.length - size : 0;
-    int copyLength = Math.min(raw.length, size);
-    byte[] fixed = new byte[size];
-    System.arraycopy(raw, offset, fixed, size - copyLength, copyLength);
-    return fixed;
-  }
-
-  private record VapidKeyPair(String publicKey, String privateKey) {}
-
   public record PushSendResult(boolean success, int attempted, int sent, String message) {}
 }
+
