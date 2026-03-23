@@ -191,10 +191,11 @@ public class ChatMessageController {
   public ResponseEntity<byte[]> getMedia(
       @PathVariable Long id,
       @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String ifNoneMatch) {
-    Long mediaByteSize = chatMediaRepository.findDataSizeById(id);
-    if (mediaByteSize == null) {
+    Number mediaByteSizeValue = chatMediaRepository.findDataSizeById(id);
+    if (mediaByteSizeValue == null) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Media not found");
     }
+    long mediaByteSize = Math.max(0L, mediaByteSizeValue.longValue());
     if (mediaByteSize > maxMediaDownloadBytes) {
       throw new ResponseStatusException(
           HttpStatus.PAYLOAD_TOO_LARGE,

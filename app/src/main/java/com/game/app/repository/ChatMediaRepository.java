@@ -8,5 +8,5 @@ import com.game.app.model.ChatMediaEntity;
 
 public interface ChatMediaRepository extends JpaRepository<ChatMediaEntity, Long> {
   @Query(value = "SELECT OCTET_LENGTH(data) FROM chat_media WHERE id = :id", nativeQuery = true)
-  Long findDataSizeById(@Param("id") Long id);
+  Number findDataSizeById(@Param("id") Long id);
 }
