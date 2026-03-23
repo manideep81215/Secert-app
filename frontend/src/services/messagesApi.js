@@ -45,10 +45,14 @@ export async function getConversationSummaries(token) {
 
 export async function uploadMedia(token, file, options = {}) {
   const onProgress = typeof options?.onProgress === 'function' ? options.onProgress : null
+  const mediaKind = String(options?.mediaKind || '').trim().toLowerCase()
   const createForm = () => {
     const form = new FormData()
     const fileName = String(file?.name || `upload-${Date.now()}`).trim() || `upload-${Date.now()}`
     form.append('file', file, fileName)
+    if (mediaKind) {
+      form.append('kind', mediaKind)
+    }
     return form
   }
   const nativeRuntime = typeof window !== 'undefined' && Boolean(window?.Capacitor?.isNativePlatform?.())

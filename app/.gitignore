@@ -31,3 +31,7 @@ build/
 
 ### VS Code ###
 .vscode/
+
+# Service account secrets
+src/main/resources/*service-account*.json
+src/main/resources/simp-games-quest*.json

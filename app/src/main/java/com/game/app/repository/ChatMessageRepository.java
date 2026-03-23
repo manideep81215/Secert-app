@@ -14,6 +14,21 @@ import com.game.app.model.ChatMessageEntity;
 
 public interface ChatMessageRepository extends JpaRepository<ChatMessageEntity, Long> {
 
+  List<ChatMessageEntity> findTop200ByMovedToDriveFalseAndMediaTypeInAndCreatedAtBeforeOrderByCreatedAtAsc(
+      List<String> mediaTypes,
+      Instant cutoff);
+
+  boolean existsByMediaUrlEndingWith(String suffix);
+
+  @Query("""
+      SELECT m.mediaUrl FROM ChatMessageEntity m
+      WHERE m.createdAt < :cutoff
+        AND LOWER(COALESCE(m.type, '')) = 'voice'
+        AND m.mediaUrl IS NOT NULL
+        AND m.mediaUrl <> ''
+      """)
+  List<String> findVoiceMediaUrlsOlderThan(@Param("cutoff") Instant cutoff);
+
   @Query("""
       SELECT m FROM ChatMessageEntity m
       WHERE (m.fromUsername = :userA AND m.toUsername = :userB)

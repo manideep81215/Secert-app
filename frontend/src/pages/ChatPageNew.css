@@ -923,6 +923,22 @@
   display: block;
 }
 
+.message-drive-video-shell {
+  width: min(210px, 100%);
+  border-radius: 0.8rem;
+  overflow: hidden;
+  background: #101010;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.message-drive-video-frame {
+  width: 100%;
+  aspect-ratio: 9 / 16;
+  border: 0;
+  display: block;
+  background: #101010;
+}
+
 .message-audio-preview {
   width: min(320px, 100%);
 }
@@ -2875,6 +2891,14 @@
 .media-preview-video {
   width: 100%;
   max-height: 68vh;
+  border-radius: 10px;
+  border: 1px solid #dcc390;
+  background: #101010;
+}
+
+.media-preview-drive-frame {
+  width: 100%;
+  height: min(68vh, 520px);
   border-radius: 10px;
   border: 1px solid #dcc390;
   background: #101010;

@@ -115,6 +115,12 @@ public class ChatWebSocketController {
     entity.setFileName(payload.fileName());
     entity.setMediaUrl(payload.mediaUrl());
     entity.setMimeType(payload.mimeType());
+    String resolvedMediaType = resolveMediaType(payload.mediaType(), payload.type(), payload.mimeType());
+    boolean resolvedMovedToDrive = resolveMovedToDrive(payload.movedToDrive(), payload.mediaUrl(), payload.driveUrl());
+    entity.setMediaType(resolvedMediaType);
+    entity.setMovedToDrive(resolvedMovedToDrive);
+    entity.setDriveUrl(resolvedMovedToDrive ? firstNonBlank(payload.driveUrl(), payload.mediaUrl()) : null);
+    entity.setDriveFileId(blankToNull(payload.driveFileId()));
     entity.setReplyText(payload.replyingTo() != null ? payload.replyingTo().text() : payload.replyText());
     entity.setReplySenderName(payload.replyingTo() != null ? payload.replyingTo().senderName() : payload.replySenderName());
     entity.setReplyMessageId(payload.replyingTo() != null ? payload.replyingTo().messageId() : payload.replyMessageId());
@@ -139,32 +145,34 @@ public class ChatWebSocketController {
         new IncomingMessage(
             entity.getId(),
             normalizedFrom,
-            payload.message(),
-            payload.type(),
-            payload.fileName(),
-            payload.mediaUrl(),
-            payload.mimeType(),
+            entity.getMessage(),
+            entity.getType(),
+            entity.getFileName(),
+            entity.getMediaUrl(),
+            entity.getMimeType(),
             entity.getReaction(),
-            payload.replyingTo() != null
-                ? payload.replyingTo()
-                : buildReplyPreview(
-                    payload.replyText(),
-                    payload.replySenderName(),
-                    payload.replyMessageId(),
-                    payload.replyType(),
-                    payload.replyMediaUrl(),
-                    payload.replyMimeType(),
-                    payload.replyFileName()),
-            payload.replyText(),
-            payload.replySenderName(),
-            payload.replyMessageId(),
-            payload.replyType(),
-            payload.replyMediaUrl(),
-            payload.replyMimeType(),
-            payload.replyFileName(),
+            buildReplyPreview(
+                entity.getReplyText(),
+                entity.getReplySenderName(),
+                entity.getReplyMessageId(),
+                entity.getReplyType(),
+                entity.getReplyMediaUrl(),
+                entity.getReplyMimeType(),
+                entity.getReplyFileName()),
+            entity.getReplyText(),
+            entity.getReplySenderName(),
+            entity.getReplyMessageId(),
+            entity.getReplyType(),
+            entity.getReplyMediaUrl(),
+            entity.getReplyMimeType(),
+            entity.getReplyFileName(),
             entity.getCreatedAt() != null ? entity.getCreatedAt().toEpochMilli() : Instant.now().toEpochMilli(),
             entity.isEdited(),
-            entity.getEditedAt() != null ? entity.getEditedAt().toEpochMilli() : null));
+            entity.getEditedAt() != null ? entity.getEditedAt().toEpochMilli() : null,
+            entity.getMediaType(),
+            entity.getDriveUrl(),
+            entity.getDriveFileId(),
+            entity.isMovedToDrive()));
 
     messagingTemplate.convertAndSendToUser(
         normalizedFrom,
@@ -618,6 +626,59 @@ public class ChatWebSocketController {
     return trimmed;
   }
 
+  private String resolveMediaType(String mediaType, String type, String mimeType) {
+    String normalizedType = normalizeUsername(type);
+    if (normalizedType.isBlank()
+        || "text".equals(normalizedType)
+        || SECRET_TAP_TYPE.equals(normalizedType)) {
+      return null;
+    }
+    if ("image".equals(normalizedType)
+        || "video".equals(normalizedType)
+        || "voice".equals(normalizedType)
+        || "file".equals(normalizedType)) {
+      return normalizedType;
+    }
+
+    String normalizedMediaType = normalizeUsername(mediaType);
+    if ("photo".equals(normalizedMediaType)) return "image";
+    if ("audio".equals(normalizedMediaType)) return "voice";
+    if ("image".equals(normalizedMediaType)
+        || "video".equals(normalizedMediaType)
+        || "voice".equals(normalizedMediaType)
+        || "file".equals(normalizedMediaType)) {
+      return normalizedMediaType;
+    }
+
+    String normalizedMimeType = normalizeUsername(mimeType);
+    if (normalizedMimeType.startsWith("image/")) return "image";
+    if (normalizedMimeType.startsWith("video/")) return "video";
+    if (normalizedMimeType.startsWith("audio/")) return "voice";
+    return null;
+  }
+
+  private boolean resolveMovedToDrive(Boolean movedToDrive, String mediaUrl, String driveUrl) {
+    if (Boolean.TRUE.equals(movedToDrive)) return true;
+    return isDriveUrl(mediaUrl) || isDriveUrl(driveUrl);
+  }
+
+  private boolean isDriveUrl(String value) {
+    String normalized = normalizeUsername(value);
+    return normalized.contains("drive.google.com/");
+  }
+
+  private String firstNonBlank(String first, String second) {
+    String one = blankToNull(first);
+    if (one != null) return one;
+    return blankToNull(second);
+  }
+
+  private String blankToNull(String value) {
+    if (value == null) return null;
+    String trimmed = value.trim();
+    return trimmed.isBlank() ? null : trimmed;
+  }
+
   private boolean hasChatRole(String username) {
     String normalized = normalizeUsername(username);
     if (normalized.isBlank()) return false;
@@ -646,7 +707,11 @@ public class ChatWebSocketController {
       String replyType,
       String replyMediaUrl,
       String replyMimeType,
-      String replyFileName) {}
+      String replyFileName,
+      String mediaType,
+      String driveUrl,
+      String driveFileId,
+      Boolean movedToDrive) {}
 
   public record IncomingMessage(
       Long id,
@@ -667,7 +732,11 @@ public class ChatWebSocketController {
       String replyFileName,
       Long createdAt,
       Boolean edited,
-      Long editedAt) {}
+      Long editedAt,
+      String mediaType,
+      String driveUrl,
+      String driveFileId,
+      Boolean movedToDrive) {}
 
   public record ReplyPreview(
       String text,

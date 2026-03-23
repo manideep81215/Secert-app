@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Client } from '@stomp/stompjs'
 import SockJS from 'sockjs-client'
 import { useLocation, useNavigate } from 'react-router-dom'
+import { toast } from 'react-toastify'
 import { registerPlugin } from '@capacitor/core'
 import { Preferences } from '@capacitor/preferences'
 import { Haptics, ImpactStyle } from '@capacitor/haptics'
@@ -230,6 +231,7 @@ function ChatPageNew() {
   const hasOlderMessagesRef = useRef(false)
   const messageNodeMapRef = useRef({})
   const highlightClearTimerRef = useRef(null)
+  const heapPressureRef = useRef({ lastUsedBytes: 0, lastRatio: 0, lastWarnAt: 0 })
   const CLEAR_CUTOFFS_KEY = 'chat_clear_cutoffs_v1'
   const USERS_CACHE_KEY_PREFIX = 'chat_users_cache_v1:'
   const CONVERSATION_CACHE_KEY_PREFIX = 'chat_conversation_cache_v1:'
@@ -361,6 +363,10 @@ function ChatPageNew() {
         type: row?.type || null,
         fileName: row?.fileName || null,
         mediaUrl: normalizeMediaUrl(row?.mediaUrl || null),
+        mediaType: row?.mediaType || row?.type || null,
+        driveUrl: normalizeMediaUrl(row?.driveUrl || null),
+        driveFileId: row?.driveFileId || null,
+        movedToDrive: Boolean(row?.movedToDrive),
         mimeType: row?.mimeType || null,
         reaction: decodeReaction(row?.reaction),
         replyingTo: row?.replyText
@@ -406,6 +412,10 @@ function ChatPageNew() {
           type: row.type || null,
           fileName: row.fileName || null,
           mediaUrl: row.mediaUrl || null,
+          mediaType: row.mediaType || row.type || null,
+          driveUrl: row.driveUrl || null,
+          driveFileId: row.driveFileId || null,
+          movedToDrive: Boolean(row.movedToDrive),
           mimeType: row.mimeType || null,
           reaction: row.reaction || null,
           replyingTo: row.replyingTo || null,
@@ -573,6 +583,28 @@ function ChatPageNew() {
       return `${API_BASE_URL}${url.slice('http://localhost:8080'.length)}`
     }
     return url
+  }
+  const isDriveMediaUrl = (url) => String(url || '').toLowerCase().includes('drive.google.com/')
+  const extractDriveFileId = (url) => {
+    const raw = String(url || '').trim()
+    if (!raw) return ''
+    const directMatch = raw.match(/\/file\/d\/([a-zA-Z0-9_-]+)/)
+    if (directMatch?.[1]) return directMatch[1]
+    const idMatch = raw.match(/[?&]id=([a-zA-Z0-9_-]+)/)
+    if (idMatch?.[1]) return idMatch[1]
+    return ''
+  }
+  const toDriveVideoPreviewUrl = (url) => {
+    const raw = String(url || '').trim()
+    if (!raw || !isDriveMediaUrl(raw)) return raw
+    if (raw.includes('/file/d/') && raw.includes('/preview')) return raw
+    const fileId = extractDriveFileId(raw)
+    if (!fileId) return raw
+    return `https://drive.google.com/file/d/${fileId}/preview`
+  }
+  const isDriveVideoMessage = (message) => {
+    if (!message || message.type !== 'video') return false
+    return isDriveMediaUrl(message.mediaUrl)
   }
   const isSecretTapMessageType = (messageType) => String(messageType || '').trim().toLowerCase() === SECRET_TAP_TYPE
   const getMessagePreview = (messageType, textValue, fileNameValue) => {
@@ -914,6 +946,11 @@ function ChatPageNew() {
   }
   const MAX_MEDIA_BYTES = 12 * 1024 * 1024
   const MAX_MEDIA_MB = Math.max(1, Math.round(MAX_MEDIA_BYTES / (1024 * 1024)))
+  const HEAP_PRESSURE_CHECK_MS = 20000
+  const HEAP_PRESSURE_WARN_RATIO = 0.82
+  const HEAP_PRESSURE_CRITICAL_RATIO = 0.9
+  const HEAP_PRESSURE_MIN_GROWTH_BYTES = 12 * 1024 * 1024
+  const HEAP_PRESSURE_WARN_COOLDOWN_MS = 120000
   const inferMediaKind = (inputFile) => {
     const mime = (inputFile?.type || '').toLowerCase()
     const name = (inputFile?.name || '').toLowerCase()
@@ -1181,6 +1218,65 @@ function ChatPageNew() {
   useEffect(() => {
     statusMapRef.current = statusMap || {}
   }, [statusMap])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined
+    const supportsHeapTelemetry = Boolean(
+      window.performance?.memory
+      && Number(window.performance.memory.jsHeapSizeLimit || 0) > 0
+    )
+    if (!supportsHeapTelemetry) return undefined
+
+    const checkHeapPressure = () => {
+      if (document.visibilityState === 'hidden') return
+      const memory = window.performance?.memory
+      const usedBytes = Number(memory?.usedJSHeapSize || 0)
+      const heapLimitBytes = Number(memory?.jsHeapSizeLimit || 0)
+      if (!usedBytes || !heapLimitBytes) return
+
+      const currentRatio = usedBytes / heapLimitBytes
+      const previous = heapPressureRef.current || { lastUsedBytes: 0, lastRatio: 0, lastWarnAt: 0 }
+      const growthBytes = usedBytes - Number(previous.lastUsedBytes || 0)
+      const ratioGrowth = currentRatio - Number(previous.lastRatio || 0)
+      const now = Date.now()
+      const isGrowing = ratioGrowth >= 0.02 || growthBytes >= HEAP_PRESSURE_MIN_GROWTH_BYTES
+      const aboveWarn = currentRatio >= HEAP_PRESSURE_WARN_RATIO
+      const cooldownPassed = (now - Number(previous.lastWarnAt || 0)) >= HEAP_PRESSURE_WARN_COOLDOWN_MS
+
+      if (aboveWarn && isGrowing && cooldownPassed) {
+        const usedMb = Math.round(usedBytes / (1024 * 1024))
+        const limitMb = Math.round(heapLimitBytes / (1024 * 1024))
+        const usagePercent = Math.round(currentRatio * 100)
+        const growthMb = Math.max(0, Math.round(growthBytes / (1024 * 1024)))
+        const isCritical = currentRatio >= HEAP_PRESSURE_CRITICAL_RATIO
+        toast.warn(
+          isCritical
+            ? `RAM pressure critical: ${usagePercent}% (${usedMb}/${limitMb}MB).`
+            : `RAM pressure rising: ${usagePercent}% (${usedMb}/${limitMb}MB, +${growthMb}MB).`,
+          {
+            toastId: 'chat-heap-pressure',
+            autoClose: isCritical ? 9000 : 6500,
+          }
+        )
+        heapPressureRef.current = {
+          lastUsedBytes: usedBytes,
+          lastRatio: currentRatio,
+          lastWarnAt: now,
+        }
+        return
+      }
+
+      heapPressureRef.current = {
+        ...previous,
+        lastUsedBytes: usedBytes,
+        lastRatio: currentRatio,
+      }
+    }
+
+    const intervalId = window.setInterval(checkHeapPressure, HEAP_PRESSURE_CHECK_MS)
+    checkHeapPressure()
+    return () => window.clearInterval(intervalId)
+  }, [])
 
   useEffect(() => {
     const active = selectedUser?.username
@@ -1699,7 +1795,7 @@ function ChatPageNew() {
     if (shouldDeferVideoThumbs) return undefined
     const videoUrls = [...new Set(
       messages
-        .filter((msg) => msg?.type === 'video' && msg?.mediaUrl)
+        .filter((msg) => msg?.type === 'video' && msg?.mediaUrl && !isDriveMediaUrl(msg?.mediaUrl))
         .map((msg) => String(msg.mediaUrl))
     )]
     if (videoUrls.length === 0) return undefined
@@ -2353,6 +2449,10 @@ function ChatPageNew() {
               type: data?.type || null,
               fileName: data?.fileName || null,
               mediaUrl: normalizeMediaUrl(data?.mediaUrl || null),
+              mediaType: data?.mediaType || data?.type || null,
+              driveUrl: normalizeMediaUrl(data?.driveUrl || null),
+              driveFileId: data?.driveFileId || null,
+              movedToDrive: Boolean(data?.movedToDrive),
               mimeType: data?.mimeType || null,
               reaction: decodeReaction(data?.reaction),
               replyingTo: data?.replyingTo || (data?.replyText
@@ -3341,9 +3441,13 @@ function ChatPageNew() {
     setMessages((prev) => [...prev, {
       sender: 'user',
       type: resolvedType,
+      mediaType: resolvedType,
       text: `Sent ${article} ${label}`,
       fileName: file.name,
       mediaUrl: localPreviewUrl,
+      driveUrl: null,
+      driveFileId: null,
+      movedToDrive: false,
       mimeType: file.type,
       timestamp: getTimeLabel(),
       createdAt: createdAtNow,
@@ -3410,6 +3514,7 @@ function ChatPageNew() {
     let uploaded
     try {
       uploaded = await uploadMedia(flow.token, uploadFile, {
+        mediaKind: resolvedType,
         onProgress: (progress) => {
           updateTempMessage({
             uploadPhase: 'uploading',
@@ -3438,12 +3543,20 @@ function ChatPageNew() {
     const uploadedUrl = normalizeMediaUrl(uploaded?.mediaUrl || localPreviewUrl)
     const uploadedMime = uploaded?.mimeType || uploadFile.type || null
     const uploadedFileName = uploaded?.fileName || uploadFile.name
+    const uploadedDriveUrl = normalizeMediaUrl(uploaded?.driveUrl || null)
+    const uploadedMediaType = uploaded?.mediaType || resolvedType
+    const uploadedDriveFileId = uploaded?.driveFileId || null
+    const uploadedMovedToDrive = Boolean(uploaded?.movedToDrive)
 
     setMessages((prev) => prev.map((msg) => (
       msg.tempId === tempId
         ? {
             ...msg,
             mediaUrl: uploadedUrl,
+            mediaType: uploadedMediaType,
+            driveUrl: uploadedDriveUrl,
+            driveFileId: uploadedDriveFileId,
+            movedToDrive: uploadedMovedToDrive,
             mimeType: uploadedMime,
             fileName: uploadedFileName,
             uploadPhase: 'uploading',
@@ -3474,8 +3587,12 @@ function ChatPageNew() {
           message: previewLabel,
           tempId,
           type: resolvedType,
+          mediaType: uploadedMediaType,
           fileName: uploadedFileName,
           mediaUrl: uploadedUrl,
+          driveUrl: uploadedDriveUrl,
+          driveFileId: uploadedDriveFileId,
+          movedToDrive: uploadedMovedToDrive,
           mimeType: uploadedMime,
           replyingTo: buildReplyPayload(currentReply),
           replyText: toReplyText(currentReply) || null,
@@ -3726,8 +3843,12 @@ function ChatPageNew() {
         message: message.text || '',
         tempId: nextTempId,
         type,
+        mediaType: message.mediaType || type,
         fileName: message.fileName || null,
         mediaUrl,
+        driveUrl: message.driveUrl || null,
+        driveFileId: message.driveFileId || null,
+        movedToDrive: Boolean(message.movedToDrive),
         mimeType: message.mimeType || null,
         replyingTo: buildReplyPayload(message.replyingTo),
         replyText: toReplyText(message.replyingTo) || null,
@@ -4184,6 +4305,23 @@ function ChatPageNew() {
       )
     }
     if (message.type === 'video') {
+      if (isDriveVideoMessage(message)) {
+        const previewUrl = toDriveVideoPreviewUrl(message.mediaUrl)
+        return (
+          <div className="message-drive-video-shell">
+            <iframe
+              className="message-drive-video-frame"
+              src={previewUrl}
+              title={message.fileName || 'Video preview'}
+              allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+              allowFullScreen
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
+            />
+          </div>
+        )
+      }
+
       const thumb = videoThumbMap[message.mediaUrl] || null
       return (
         <button
@@ -5132,7 +5270,18 @@ function ChatPageNew() {
             >
               <div className="image-preview-title">{activeMediaPreview.type === 'video' ? 'Preview video' : 'Preview image'}</div>
               {activeMediaPreview.type === 'video' ? (
-                <video className="media-preview-video" src={activeMediaPreview.url} controls autoPlay playsInline />
+                isDriveMediaUrl(activeMediaPreview.url) ? (
+                  <iframe
+                    className="media-preview-drive-frame"
+                    src={toDriveVideoPreviewUrl(activeMediaPreview.url)}
+                    title={activeMediaPreview.name || 'Video preview'}
+                    allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+                    allowFullScreen
+                    loading="lazy"
+                  />
+                ) : (
+                  <video className="media-preview-video" src={activeMediaPreview.url} controls autoPlay playsInline />
+                )
               ) : (
                 <img src={activeMediaPreview.url} alt={activeMediaPreview.name} className="image-preview-full" />
               )}
