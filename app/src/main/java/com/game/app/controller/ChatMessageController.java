@@ -8,6 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.time.Instant;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ContentDisposition;
@@ -56,6 +57,8 @@ public class ChatMessageController {
   private final ChatAnalyticsService chatAnalyticsService;
   private final ChatCheckEventService chatCheckEventService;
   private final SimpMessagingTemplate messagingTemplate;
+  private final long maxMediaUploadBytes;
+  private final long maxMediaDownloadBytes;
 
   public ChatMessageController(ChatMessageRepository chatMessageRepository, ChatMediaRepository chatMediaRepository,
       UserRepository userRepository,
@@ -64,7 +67,9 @@ public class ChatMessageController {
       PushNotificationService pushNotificationService,
       ChatAnalyticsService chatAnalyticsService,
       ChatCheckEventService chatCheckEventService,
-      SimpMessagingTemplate messagingTemplate) {
+      SimpMessagingTemplate messagingTemplate,
+      @Value("${app.chat.media.max-bytes:12582912}") long maxMediaUploadBytes,
+      @Value("${app.chat.media.max-download-bytes:12582912}") long maxMediaDownloadBytes) {
     this.chatMessageRepository = chatMessageRepository;
     this.chatMediaRepository = chatMediaRepository;
     this.userRepository = userRepository;
@@ -74,6 +79,8 @@ public class ChatMessageController {
     this.chatAnalyticsService = chatAnalyticsService;
     this.chatCheckEventService = chatCheckEventService;
     this.messagingTemplate = messagingTemplate;
+    this.maxMediaUploadBytes = Math.max(1L * 1024L * 1024L, maxMediaUploadBytes);
+    this.maxMediaDownloadBytes = Math.max(1L * 1024L * 1024L, maxMediaDownloadBytes);
   }
 
   @GetMapping("/conversation")
@@ -157,11 +164,10 @@ public class ChatMessageController {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "File is required");
     }
     String mimeType = normalizeMimeType(file.getContentType(), file.getOriginalFilename());
-    long maxBytes = 200L * 1024L * 1024L;
-    if (file.getSize() > maxBytes) {
+    if (file.getSize() > maxMediaUploadBytes) {
       throw new ResponseStatusException(
           HttpStatus.PAYLOAD_TOO_LARGE,
-          "Media exceeds 200MB limit");
+          "Media exceeds " + toMediaUploadLimitLabel() + " limit");
     }
 
     try {
@@ -185,6 +191,16 @@ public class ChatMessageController {
   public ResponseEntity<byte[]> getMedia(
       @PathVariable Long id,
       @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String ifNoneMatch) {
+    Long mediaByteSize = chatMediaRepository.findDataSizeById(id);
+    if (mediaByteSize == null) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Media not found");
+    }
+    if (mediaByteSize > maxMediaDownloadBytes) {
+      throw new ResponseStatusException(
+          HttpStatus.PAYLOAD_TOO_LARGE,
+          "Media exceeds " + toMediaDownloadLimitLabel() + " delivery limit");
+    }
+
     ChatMediaEntity media = chatMediaRepository.findById(id)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Media not found"));
     String mimeType = media.getMimeType() != null && !media.getMimeType().isBlank()
@@ -410,6 +426,16 @@ public class ChatMessageController {
     }
 
     return MediaType.APPLICATION_OCTET_STREAM_VALUE;
+  }
+
+  private String toMediaUploadLimitLabel() {
+    long megabytes = Math.max(1L, Math.round(maxMediaUploadBytes / (1024d * 1024d)));
+    return megabytes + "MB";
+  }
+
+  private String toMediaDownloadLimitLabel() {
+    long megabytes = Math.max(1L, Math.round(maxMediaDownloadBytes / (1024d * 1024d)));
+    return megabytes + "MB";
   }
 
   public record ConversationMessageDto(

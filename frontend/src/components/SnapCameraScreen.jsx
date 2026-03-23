@@ -11,11 +11,12 @@ const MODE_LABELS = {
   camera: 'PHOTO',
   video: 'VIDEO',
 }
-const SNAP_CAPTURE_WIDTH = 1080
-const SNAP_CAPTURE_HEIGHT = 1920
-const SNAP_STREAM_REQUEST_WIDTH = 1920
-const SNAP_STREAM_REQUEST_HEIGHT = 1080
-const SNAP_CAPTURE_FPS = 30
+const SNAP_CAPTURE_WIDTH = 720
+const SNAP_CAPTURE_HEIGHT = 1280
+const SNAP_STREAM_REQUEST_WIDTH = 1280
+const SNAP_STREAM_REQUEST_HEIGHT = 720
+const SNAP_CAPTURE_FPS = 18
+const SNAP_MAX_RECORDING_SECONDS = 12
 const SVG_PREVIEW_WIDTH = 1000
 const SVG_PREVIEW_HEIGHT = Math.round((SVG_PREVIEW_WIDTH * 16) / 9)
 const OVERLAY_STROKE_COLOR = 'rgba(255,255,255,0.96)'
@@ -478,6 +479,7 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
   const livePreviewCanvasRef = useRef(null)
   const captureFrameRequestRef = useRef(0)
   const recordingOutputStreamRef = useRef(null)
+  const recordingAutoStopRequestedRef = useRef(false)
   const stageRef = useRef(null)
   const dragOverlayRef = useRef(null)
   const dragFrameRef = useRef(0)
@@ -1798,6 +1800,8 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
       points: Array.isArray(path.points) ? path.points.map((point) => ({ ...point })) : [],
     }))
     const shouldNormalizeSnapVideo = mediaType === 'video'
+      && isNativeRuntime
+      && frontCam
       && /^snap_/i.test(String(inputFile?.name || '').trim())
 
     if (overlaySnapshot.length === 0 && pathSnapshot.length === 0 && !shouldNormalizeSnapVideo) {
@@ -1822,6 +1826,7 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
     const discardRecording = stopRecordingModeRef.current === 'discard'
     const chunks = [...recordedChunksRef.current]
     recordedChunksRef.current = []
+    recordingAutoStopRequestedRef.current = false
     mediaRecorderRef.current = null
     stopRecordingTimer()
     stopRecordingOutputStream()
@@ -1842,6 +1847,7 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
 
   function stopVideoRecording({ discard = false } = {}) {
     const recorder = mediaRecorderRef.current
+    recordingAutoStopRequestedRef.current = false
     stopRecordingModeRef.current = discard ? 'discard' : 'preview'
     if (isPreparingRecording) {
       clearRecordingWarmup()
@@ -1981,9 +1987,24 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
     recorder.start(250)
     setIsRecording(true)
     setRecordingSeconds(0)
+    recordingAutoStopRequestedRef.current = false
     stopRecordingTimer()
     recordingTimerRef.current = window.setInterval(() => {
-      setRecordingSeconds((prev) => prev + 1)
+      setRecordingSeconds((prev) => {
+        const next = prev + 1
+        if (next >= SNAP_MAX_RECORDING_SECONDS) {
+          if (!recordingAutoStopRequestedRef.current) {
+            recordingAutoStopRequestedRef.current = true
+            window.setTimeout(() => {
+              if (mountedRef.current) {
+                stopVideoRecording()
+              }
+            }, 0)
+          }
+          return SNAP_MAX_RECORDING_SECONDS
+        }
+        return next
+      })
     }, 1000)
   }
 
@@ -2340,7 +2361,7 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
                 ? `Timer ${countdownSeconds}s`
                 : isPreparingRecording
                   ? 'Preparing video...'
-                  : `REC ${recordingSeconds}s`}
+                  : `REC ${recordingSeconds}s / ${SNAP_MAX_RECORDING_SECONDS}s`}
             </div>
           )}
 

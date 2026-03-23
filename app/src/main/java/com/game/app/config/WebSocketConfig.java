@@ -18,15 +18,24 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
   private final WebSocketChannelInterceptor webSocketChannelInterceptor;
   private final List<String> allowedOriginPatterns;
+  private final int messageSizeLimitBytes;
+  private final int sendBufferSizeLimitBytes;
+  private final int sendTimeLimitMs;
 
   public WebSocketConfig(
       WebSocketChannelInterceptor webSocketChannelInterceptor,
-      @Value("${app.cors.allowed-origin-patterns:https://*.vercel.app,http://localhost:*}") String allowedOriginPatterns) {
+      @Value("${app.cors.allowed-origin-patterns:https://*.vercel.app,http://localhost:*}") String allowedOriginPatterns,
+      @Value("${app.websocket.message-size-limit-bytes:262144}") int messageSizeLimitBytes,
+      @Value("${app.websocket.send-buffer-size-limit-bytes:262144}") int sendBufferSizeLimitBytes,
+      @Value("${app.websocket.send-time-limit-ms:15000}") int sendTimeLimitMs) {
     this.webSocketChannelInterceptor = webSocketChannelInterceptor;
     this.allowedOriginPatterns = Arrays.stream(allowedOriginPatterns.split(","))
         .map(String::trim)
         .filter(value -> !value.isEmpty())
         .toList();
+    this.messageSizeLimitBytes = Math.max(16 * 1024, messageSizeLimitBytes);
+    this.sendBufferSizeLimitBytes = Math.max(16 * 1024, sendBufferSizeLimitBytes);
+    this.sendTimeLimitMs = Math.max(5_000, sendTimeLimitMs);
   }
 
   @Override
@@ -59,8 +68,8 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
   @Override
   public void configureWebSocketTransport(WebSocketTransportRegistration registration) {
     registration
-        .setMessageSizeLimit(15 * 1024 * 1024)
-        .setSendBufferSizeLimit(15 * 1024 * 1024)
-        .setSendTimeLimit(30_000);
+        .setMessageSizeLimit(messageSizeLimitBytes)
+        .setSendBufferSizeLimit(sendBufferSizeLimitBytes)
+        .setSendTimeLimit(sendTimeLimitMs);
   }
 }

@@ -912,7 +912,8 @@ function ChatPageNew() {
       notify.error('Copy failed')
     }
   }
-  const MAX_MEDIA_BYTES = 200 * 1024 * 1024
+  const MAX_MEDIA_BYTES = 12 * 1024 * 1024
+  const MAX_MEDIA_MB = Math.max(1, Math.round(MAX_MEDIA_BYTES / (1024 * 1024)))
   const inferMediaKind = (inputFile) => {
     const mime = (inputFile?.type || '').toLowerCase()
     const name = (inputFile?.name || '').toLowerCase()
@@ -3374,7 +3375,7 @@ function ChatPageNew() {
 
     let uploadFile = file
     if (needsCompression) {
-      notify.info('Large media detected. Compressing to fit 200MB limit...')
+      notify.info(`Large media detected. Compressing to fit ${MAX_MEDIA_MB}MB limit...`)
       const compressedResult = await compressMediaToLimit(uploadFile, resolvedType, maxBytes, (progress) => {
         updateTempMessage({
           uploadPhase: 'compressing',
@@ -3383,7 +3384,7 @@ function ChatPageNew() {
       })
       if (!compressedResult?.file) {
         updateTempMessage({ deliveryStatus: 'failed', uploadProgress: 100 })
-        notify.error('Upload must be below 200MB. Compression could not reduce this media enough.')
+        notify.error(`Upload must be below ${MAX_MEDIA_MB}MB. Compression could not reduce this media enough.`)
         return false
       }
       uploadFile = compressedResult.file
@@ -3402,7 +3403,7 @@ function ChatPageNew() {
 
     if (uploadFile.size > maxBytes) {
       updateTempMessage({ deliveryStatus: 'failed', uploadProgress: 100 })
-      notify.error('Upload must be below 200MB.')
+      notify.error(`Upload must be below ${MAX_MEDIA_MB}MB.`)
       return false
     }
 
@@ -3426,7 +3427,7 @@ function ChatPageNew() {
       }
       if (error?.response?.status === 413) {
         updateTempMessage({ deliveryStatus: 'failed', uploadProgress: 100 })
-        notify.error('File exceeds upload limit (200MB max).')
+        notify.error(`File exceeds upload limit (${MAX_MEDIA_MB}MB max).`)
         return false
       }
       updateTempMessage({ deliveryStatus: 'failed', uploadProgress: 100 })

@@ -9,9 +9,11 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.event.EventListener;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 
@@ -23,9 +25,13 @@ public class SnakeLadderWebSocketController {
 
   private final SimpMessagingTemplate messagingTemplate;
   private final Map<String, RoomState> rooms = new ConcurrentHashMap<>();
+  private final long roomTtlMs;
 
-  public SnakeLadderWebSocketController(SimpMessagingTemplate messagingTemplate) {
+  public SnakeLadderWebSocketController(
+      SimpMessagingTemplate messagingTemplate,
+      @Value("${app.games.snl.room-ttl-ms:3600000}") long roomTtlMs) {
     this.messagingTemplate = messagingTemplate;
+    this.roomTtlMs = Math.max(60_000L, roomTtlMs);
   }
 
   @MessageMapping("/snl.create")
@@ -189,6 +195,20 @@ public class SnakeLadderWebSocketController {
     for (RoomState state : rooms.values()) {
       synchronized (state) {
         removePlayerFromRoom(state, username);
+      }
+    }
+  }
+
+  @Scheduled(fixedDelayString = "${app.games.snl.room-prune-ms:60000}")
+  public void pruneStaleRooms() {
+    long now = Instant.now().toEpochMilli();
+    for (Map.Entry<String, RoomState> entry : rooms.entrySet()) {
+      RoomState state = entry.getValue();
+      if (state == null) continue;
+      Long updatedAt = state.updatedAt();
+      long lastUpdated = updatedAt == null ? now : updatedAt;
+      if (now - lastUpdated > roomTtlMs) {
+        rooms.remove(entry.getKey(), state);
       }
     }
   }
