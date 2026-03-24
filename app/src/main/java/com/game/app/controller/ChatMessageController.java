@@ -97,18 +97,6 @@ public class ChatMessageController {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Conversation username is required");
     }
 
-    if (page == null && size == null) {
-      List<ConversationMessageDto> allMessages = chatMessageRepository.findConversation(meUsername, otherUsername).stream()
-          .map((row) -> toDto(row, meUsername))
-          .toList();
-      return new ConversationPageDto(
-          allMessages,
-          0,
-          allMessages.size(),
-          false,
-          allMessages.size());
-    }
-
     int safePage = Math.max(0, page == null ? 0 : page);
     int safeSize = Math.min(200, Math.max(1, size == null ? 50 : size));
 
