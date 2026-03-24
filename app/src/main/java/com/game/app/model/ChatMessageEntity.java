@@ -42,6 +42,10 @@ public class ChatMessageEntity {
   @Column(length = 20)
   private String mediaType;
 
+  // Legacy compatibility for existing schema column.
+  @Column(name = "moved_to_drive", nullable = false)
+  private boolean legacyMediaMigratedFlag = false;
+
   @Column(length = 120)
   private String mimeType;
 
@@ -145,6 +149,14 @@ public class ChatMessageEntity {
 
   public void setMediaType(String mediaType) {
     this.mediaType = mediaType;
+  }
+
+  public boolean isLegacyMediaMigratedFlag() {
+    return legacyMediaMigratedFlag;
+  }
+
+  public void setLegacyMediaMigratedFlag(boolean legacyMediaMigratedFlag) {
+    this.legacyMediaMigratedFlag = legacyMediaMigratedFlag;
   }
 
   public String getMimeType() {
