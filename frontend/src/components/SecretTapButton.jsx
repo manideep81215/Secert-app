@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'react-toastify'
 import tapIcon from '../assets/secret-tap-icon.png'
 import './SecretTapButton.css'
@@ -6,6 +6,11 @@ import './SecretTapButton.css'
 const SECRET_TAP_TYPE = 'secret-tap'
 const SECRET_TAP_WINDOW_MS = 320
 const SECRET_TAP_LONG_PRESS_MS = 2000
+const SECRET_TAP_RESET_DELAY_MS = 2000
+const SECRET_TAP_BURST_THRESHOLD = 10
+const SECRET_TAP_BURST_DURATION_MS = 420
+const SECRET_TAP_SCALE_STEP = 0.07
+const SECRET_TAP_SCALE_MAX = 1.95
 const TONY_USERNAME = 'tony'
 const HIHI_USERNAME = 'hihi'
 const SECRET_TAP_TARGETS = {
@@ -28,8 +33,12 @@ function SecretTapButton({ username, socketRef }) {
   const tapCountRef = useRef(0)
   const tapTimerRef = useRef(null)
   const longPressTimerRef = useRef(null)
+  const resetScaleTimerRef = useRef(null)
+  const burstTimerRef = useRef(null)
   const isSendingRef = useRef(false)
   const suppressNextClickRef = useRef(false)
+  const [hitCount, setHitCount] = useState(0)
+  const [isBursting, setIsBursting] = useState(false)
   const normalizedUsername = normalizeUsername(username)
   const isTonySender = normalizedUsername === TONY_USERNAME
   const isHihiSender = normalizedUsername === HIHI_USERNAME
@@ -63,6 +72,39 @@ function SecretTapButton({ username, socketRef }) {
     }
   }
 
+  const clearResetScaleTimer = () => {
+    if (resetScaleTimerRef.current) {
+      clearTimeout(resetScaleTimerRef.current)
+      resetScaleTimerRef.current = null
+    }
+  }
+
+  const clearBurstTimer = () => {
+    if (burstTimerRef.current) {
+      clearTimeout(burstTimerRef.current)
+      burstTimerRef.current = null
+    }
+  }
+
+  const scheduleScaleReset = (delayMs = SECRET_TAP_RESET_DELAY_MS) => {
+    clearResetScaleTimer()
+    resetScaleTimerRef.current = setTimeout(() => {
+      setHitCount(0)
+      resetScaleTimerRef.current = null
+    }, Math.max(0, Number(delayMs || 0)))
+  }
+
+  const triggerBurstReset = () => {
+    clearResetScaleTimer()
+    clearBurstTimer()
+    setIsBursting(true)
+    burstTimerRef.current = setTimeout(() => {
+      setIsBursting(false)
+      setHitCount(0)
+      burstTimerRef.current = null
+    }, SECRET_TAP_BURST_DURATION_MS)
+  }
+
   const sendSecretTapMessage = async ({ text, tempKey, successToast, targetRecipients = recipients }) => {
     const activeSocket = socketRef?.current
 
@@ -92,7 +134,8 @@ function SecretTapButton({ username, socketRef }) {
       })
 
       if (successToast) {
-        toast.success(successToast)
+        toast.success(successToast, { autoClose: SECRET_TAP_RESET_DELAY_MS })
+        scheduleScaleReset(SECRET_TAP_RESET_DELAY_MS)
       }
     } finally {
       isSendingRef.current = false
@@ -118,7 +161,8 @@ function SecretTapButton({ username, socketRef }) {
     const successToast = `You clicked ${safeTapCount} ${safeTapCount === 1 ? 'time' : 'times'}`
     const shouldSendTonyHihiDoubleTap = safeTapCount === 2 && canSendTonyHihiDoubleTap
     if (isTonySender && !shouldSendTonyHihiDoubleTap) {
-      toast.success(successToast)
+      toast.success(successToast, { autoClose: SECRET_TAP_RESET_DELAY_MS })
+      scheduleScaleReset(SECRET_TAP_RESET_DELAY_MS)
       return
     }
     void sendSecretTapMessage({
@@ -137,10 +181,19 @@ function SecretTapButton({ username, socketRef }) {
 
   const handleClick = () => {
     if (!canUseSecretTap) return
+    if (isBursting) return
     if (suppressNextClickRef.current) {
       suppressNextClickRef.current = false
       return
     }
+    clearResetScaleTimer()
+    setHitCount((prev) => {
+      const next = Number(prev || 0) + 1
+      if (next === SECRET_TAP_BURST_THRESHOLD) {
+        triggerBurstReset()
+      }
+      return next
+    })
 
     const nextTapCount = supportsExtendedTapCount
       ? Number(tapCountRef.current || 0) + 1
@@ -198,23 +251,31 @@ function SecretTapButton({ username, socketRef }) {
   useEffect(() => () => {
     clearTapTimer()
     clearLongPressTimer()
+    clearResetScaleTimer()
+    clearBurstTimer()
   }, [])
+
+  const currentScale = Math.min(1 + (hitCount * SECRET_TAP_SCALE_STEP), SECRET_TAP_SCALE_MAX)
 
   if (!canUseSecretTap) return null
 
   return (
     <button
       type="button"
-      className="secret-tap-btn"
+      className={`secret-tap-btn${isBursting ? ' is-burst' : ''}`}
       onClick={handleClick}
       onPointerDown={handlePointerDown}
       onPointerUp={handlePointerEnd}
       onPointerCancel={handlePointerEnd}
       onContextMenu={suppressImageCallout}
       onDragStart={suppressImageCallout}
-      aria-label={hasLongPressMessage ? 'Tap or hold to send hidden message' : 'Send hidden tap message'}
-      title={hasLongPressMessage ? 'Tap normally or hold for 2 seconds for the special message' : 'Send hidden tap message'}
+      aria-label="Quick action button"
+      title="Quick action button"
       draggable={false}
+      style={{
+        '--secret-tap-scale': currentScale,
+        '--secret-tap-burst-from': currentScale,
+      }}
     >
       <img src={tapIcon} alt="" className="secret-tap-btn-icon" aria-hidden="true" draggable={false} />
     </button>

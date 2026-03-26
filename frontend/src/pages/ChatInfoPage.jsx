@@ -24,6 +24,24 @@ const CLEAR_CUTOFFS_KEY = 'chat_clear_cutoffs_v1'
 const INFO_MEDIA_PAGE_SIZE = 50
 const INFO_MEDIA_PAGE_LIMIT = 120
 const MOBILE_PUSH_TOKEN_KEY = 'mobile_push_token_v1'
+const INFO_MEDIA_HISTORY_CACHE_TTL_MS = 30 * 1000
+const infoMediaHistoryCache = new Map()
+const infoMediaHistoryInFlight = new Map()
+
+function toConversationKeyPart(value) {
+  return String(value || '').trim().toLowerCase()
+}
+
+function readCachedInfoMediaHistory(conversationKey) {
+  if (!conversationKey) return null
+  const cached = infoMediaHistoryCache.get(conversationKey)
+  if (!cached) return null
+  if ((Date.now() - Number(cached.cachedAt || 0)) > INFO_MEDIA_HISTORY_CACHE_TTL_MS) {
+    infoMediaHistoryCache.delete(conversationKey)
+    return null
+  }
+  return cached.data || null
+}
 
 function ChatInfoPage() {
   const navigate = useNavigate()
@@ -132,8 +150,14 @@ function ChatInfoPage() {
     }
 
     const buildDedupeKey = (item) => {
+      const mediaUrl = String(item?.mediaUrl || '').trim()
+      const type = String(item?.type || 'file').trim().toLowerCase()
+      const createdAt = Number(item?.createdAt || 0)
+      if (mediaUrl && createdAt > 0) {
+        return `url:${mediaUrl}|type:${type}|time:${createdAt}`
+      }
       if (item?.messageId) return `id:${item.messageId}`
-      return `url:${item?.mediaUrl || ''}|type:${item?.type || ''}|name:${item?.fileName || ''}|time:${item?.createdAt || 0}`
+      return `url:${mediaUrl}|type:${type}|name:${String(item?.fileName || '').trim()}`
     }
 
     const loadFullMediaHistory = async () => {
@@ -142,48 +166,107 @@ function ChatInfoPage() {
       setMediaLoadError('')
 
       try {
-        const collectedMedia = new Map()
-        const collectedFiles = new Map()
-        seededMediaItems.forEach((row) => {
-          const normalized = normalizeMediaItem(row)
-          if (!normalized) return
-          collectedMedia.set(buildDedupeKey(normalized), normalized)
-        })
-        seededFileItems.forEach((row) => {
-          const normalized = normalizeFileItem(row)
-          if (!normalized) return
-          collectedFiles.set(buildDedupeKey(normalized), normalized)
-        })
+        const authKey = toConversationKeyPart(flow?.username)
+        const peerKey = toConversationKeyPart(selectedUser?.username)
+        const conversationKey = `${authKey}::${peerKey}`
 
-        for (let page = 0; page < INFO_MEDIA_PAGE_LIMIT; page += 1) {
-          if (cancelled) return
-          const result = await getConversation(flow.token, selectedUser.username, {
-            page,
-            size: INFO_MEDIA_PAGE_SIZE,
+        const mergeWithSeeded = (history) => {
+          const mergedMediaByKey = new Map()
+          const mergedFilesByKey = new Map()
+
+          seededMediaItems.forEach((row) => {
+            const normalized = normalizeMediaItem(row)
+            if (!normalized) return
+            mergedMediaByKey.set(buildDedupeKey(normalized), normalized)
           })
-          const rows = Array.isArray(result?.messages) ? result.messages : []
-          rows.forEach((row) => {
-            const normalizedMedia = normalizeMediaItem(row)
-            if (normalizedMedia) {
-              collectedMedia.set(buildDedupeKey(normalizedMedia), normalizedMedia)
-            }
-            const normalizedFile = normalizeFileItem(row)
-            if (normalizedFile) {
-              collectedFiles.set(buildDedupeKey(normalizedFile), normalizedFile)
-            }
+          seededFileItems.forEach((row) => {
+            const normalized = normalizeFileItem(row)
+            if (!normalized) return
+            mergedFilesByKey.set(buildDedupeKey(normalized), normalized)
           })
 
-          const hasMore = Boolean(result?.hasMore)
-          if (!hasMore || rows.length < INFO_MEDIA_PAGE_SIZE) break
+          const remoteMediaItems = Array.isArray(history?.mediaItems) ? history.mediaItems : []
+          const remoteFileItems = Array.isArray(history?.fileItems) ? history.fileItems : []
+          remoteMediaItems.forEach((item) => {
+            mergedMediaByKey.set(buildDedupeKey(item), item)
+          })
+          remoteFileItems.forEach((item) => {
+            mergedFilesByKey.set(buildDedupeKey(item), item)
+          })
+
+          const mergedMedia = [...mergedMediaByKey.values()]
+          mergedMedia.sort((left, right) => Number(right.createdAt || 0) - Number(left.createdAt || 0))
+          setMediaItems(mergedMedia)
+
+          const mergedFiles = [...mergedFilesByKey.values()]
+          mergedFiles.sort((left, right) => Number(right.createdAt || 0) - Number(left.createdAt || 0))
+          setFileItems(mergedFiles)
         }
 
+        const cachedHistory = readCachedInfoMediaHistory(conversationKey)
+        if (cachedHistory) {
+          if (!cancelled) {
+            mergeWithSeeded(cachedHistory)
+          }
+          return
+        }
+
+        let historyPromise = infoMediaHistoryInFlight.get(conversationKey)
+        if (!historyPromise) {
+          historyPromise = (async () => {
+            const remoteMediaByKey = new Map()
+            const remoteFilesByKey = new Map()
+
+            for (let page = 0; page < INFO_MEDIA_PAGE_LIMIT; page += 1) {
+              const result = await getConversation(flow.token, selectedUser.username, {
+                page,
+                size: INFO_MEDIA_PAGE_SIZE,
+              })
+              const rows = Array.isArray(result?.messages) ? result.messages : []
+              rows.forEach((row) => {
+                const normalizedMedia = normalizeMediaItem(row)
+                if (normalizedMedia) {
+                  remoteMediaByKey.set(buildDedupeKey(normalizedMedia), normalizedMedia)
+                }
+                const normalizedFile = normalizeFileItem(row)
+                if (normalizedFile) {
+                  remoteFilesByKey.set(buildDedupeKey(normalizedFile), normalizedFile)
+                }
+              })
+
+              const hasMore = Boolean(result?.hasMore)
+              if (!hasMore || rows.length < INFO_MEDIA_PAGE_SIZE) break
+            }
+
+            const mediaItemsList = [...remoteMediaByKey.values()]
+            mediaItemsList.sort((left, right) => Number(right.createdAt || 0) - Number(left.createdAt || 0))
+            const fileItemsList = [...remoteFilesByKey.values()]
+            fileItemsList.sort((left, right) => Number(right.createdAt || 0) - Number(left.createdAt || 0))
+
+            return {
+              mediaItems: mediaItemsList,
+              fileItems: fileItemsList,
+            }
+          })()
+            .then((history) => {
+              infoMediaHistoryCache.set(conversationKey, {
+                cachedAt: Date.now(),
+                data: history,
+              })
+              return history
+            })
+            .finally(() => {
+              if (infoMediaHistoryInFlight.get(conversationKey) === historyPromise) {
+                infoMediaHistoryInFlight.delete(conversationKey)
+              }
+            })
+
+          infoMediaHistoryInFlight.set(conversationKey, historyPromise)
+        }
+
+        const history = await historyPromise
         if (cancelled) return
-        const mergedMedia = [...collectedMedia.values()]
-        mergedMedia.sort((left, right) => Number(right.createdAt || 0) - Number(left.createdAt || 0))
-        setMediaItems(mergedMedia)
-        const mergedFiles = [...collectedFiles.values()]
-        mergedFiles.sort((left, right) => Number(right.createdAt || 0) - Number(left.createdAt || 0))
-        setFileItems(mergedFiles)
+        mergeWithSeeded(history)
       } catch {
         if (!cancelled) {
           setMediaLoadError('Could not load complete chat assets. Showing available data only.')
@@ -198,7 +281,7 @@ function ChatInfoPage() {
     return () => {
       cancelled = true
     }
-  }, [flow?.token, seededFileItems, seededMediaItems, selectedUser?.username])
+  }, [flow?.token, flow?.username, seededFileItems, seededMediaItems, selectedUser?.username])
 
   const triggerFileDownload = (url, fileName) => {
     const downloadUrl = String(url || '').trim()

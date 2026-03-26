@@ -1383,21 +1383,21 @@
   display: none;
 }
 
-.btn-snap {
-  background: #fffc00;
-  color: #222;
-  box-shadow: 0 4px 10px rgba(255, 252, 0, 0.32);
+.btn-game {
+  background: #e53935;
+  color: #fff;
+  box-shadow: 0 6px 14px rgba(229, 57, 53, 0.38);
+  width: 2.45rem;
+  height: 2.45rem;
 }
 
-.btn-snap:hover {
-  background: #fff54a;
+.btn-game:hover {
+  background: #f04f4b;
 }
 
-.btn-snap-image {
-  width: 1.18rem;
-  height: 1.18rem;
-  object-fit: contain;
-  display: block;
+.btn-game-icon {
+  line-height: 1;
+  font-size: 1.18rem;
 }
 
 .attach-desktop-btn {
@@ -1455,6 +1455,12 @@
 .attach-icon-camera {
   width: 1.1rem;
   height: 1.1rem;
+}
+
+.attach-icon-snap {
+  width: 1.06rem;
+  height: 1.06rem;
+  object-fit: contain;
 }
 
 .message-input-shell {
@@ -2532,22 +2538,22 @@
   font-size: 0.95rem;
 }
 
-.chat-container .btn-snap {
-  background: #fffc00;
-  border-color: #c49a1a;
-  box-shadow: 0 0 0 1px rgba(255, 252, 0, 0.24), 0 4px 10px rgba(255, 252, 0, 0.32);
+.chat-container .btn-game {
+  background: #e53935;
+  border-color: #b71c1c;
+  color: #fff;
+  box-shadow: 0 0 0 1px rgba(229, 57, 53, 0.28), 0 6px 14px rgba(183, 28, 28, 0.34);
   overflow: hidden;
+  width: 2.2rem;
+  height: 2.2rem;
 }
 
-.chat-container .btn-snap:hover {
-  background: #fff54a;
+.chat-container .btn-game:hover {
+  background: #f04f4b;
 }
 
-.chat-container .btn-snap-image {
-  width: 100%;
-  height: 100%;
-  padding: 0.12rem;
-  object-fit: contain;
+.chat-container .btn-game-icon {
+  font-size: 1.08rem;
 }
 
 .chat-container .message-input-shell {
@@ -3258,6 +3264,15 @@
     width: 1.62rem !important;
     height: 1.62rem !important;
     font-size: 0.82rem !important;
+  }
+
+  .chat-container[data-native="true"]:not(.mobile-users-open) .btn-game {
+    width: 1.86rem !important;
+    height: 1.86rem !important;
+  }
+
+  .chat-container[data-native="true"]:not(.mobile-users-open) .btn-game-icon {
+    font-size: 0.98rem !important;
   }
 
   .chat-container[data-native="true"]:not(.mobile-users-open) .message-input-shell {

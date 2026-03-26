@@ -5194,15 +5194,15 @@ function ChatPageNew() {
           <div className="input-wrapper">
             <div className="input-actions" ref={attachMenuRef}>
               <button
-                className="btn-action btn-snap"
+                className="btn-action btn-game"
                 onClick={(event) => {
                   event.stopPropagation()
-                  openSnapCamera()
+                  navigate('/games')
                 }}
-                title="Open Snap Camera"
-                aria-label="Open snap camera"
+                title="Open games"
+                aria-label="Open games"
               >
-                <img src={snapIcon} alt="" className="btn-snap-image" aria-hidden="true" />
+                <span className="btn-game-icon" aria-hidden="true">{icons.game}</span>
               </button>
               <button
                 className="btn-action btn-plus"
@@ -5228,6 +5228,9 @@ function ChatPageNew() {
               </button>
               {showAttachMenu && (
                 <div className="attach-dropdown">
+                  <button className="attach-item" onClick={openSnapCamera} title="Open Snap camera" aria-label="Open snap camera">
+                    <img src={snapIcon} alt="" className="attach-icon attach-icon-snap" aria-hidden="true" /> Snap
+                  </button>
                   <button className="attach-item" onClick={() => { mediaInputRef.current?.click(); setShowAttachMenu(false) }} title="Send Photo" aria-label="Send photo">
                     <PhotoAttachIcon className="attach-icon attach-icon-photo" /> Gallary
                   </button>
