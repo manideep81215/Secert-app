@@ -4893,23 +4893,29 @@ function ChatPageNew() {
             aria-label={selectedUser ? 'Open user details' : 'Select a user'}
             disabled={!selectedUser}
           >
-            <div className="chat-user-avatar">{selectedUser ? getAvatarLabel(getUserDisplayName(selectedUser)) : '?'}</div>
+            <div className={`chat-user-avatar ${selectedPresence.status === 'online' ? 'online' : 'offline'}`}>
+              {selectedUser ? getAvatarLabel(getUserDisplayName(selectedUser)) : '?'}
+            </div>
             <div className="chat-user-info">
               <span className="chat-user-name chat-user-name-btn">
                 {selectedUser ? getUserDisplayName(selectedUser) : 'Select a user'}
               </span>
               <div className={`chat-user-status ${selectedPresence.status === 'online' ? 'online' : 'offline'}`}>
-                {selectedPresence.status === 'online' ? 'online' : toLongLastSeen(selectedPresence.lastSeenAt)}
+                {selectedPresence.status === 'online'
+                  ? 'Active now'
+                  : (selectedPresence.lastSeenAt ? `Active ${toShortLastSeen(selectedPresence.lastSeenAt)}` : 'Active recently')}
               </div>
-              {selectedUser && (
-                <LovePercentageChip
-                  todayMessages={effectiveTodayMessages}
-                  yesterdayMessages={headerStats?.yesterdayMessages}
-                  dailyAverage={headerStats?.dailyAverage}
-                />
-              )}
             </div>
           </button>
+          {selectedUser && (
+            <div className="chat-header-center-chip">
+              <LovePercentageChip
+                todayMessages={effectiveTodayMessages}
+                yesterdayMessages={headerStats?.yesterdayMessages}
+                dailyAverage={headerStats?.dailyAverage}
+              />
+            </div>
+          )}
           <div className="chat-header-actions">
             <button
               className="btn-user-details"
