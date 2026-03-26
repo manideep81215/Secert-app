@@ -37,9 +37,9 @@ const configureNativeKeyboardBehavior = async () => {
     const KeyboardResize = mod?.KeyboardResize
     if (!Keyboard) return
 
-    // Use body resize on Android to prevent white gap above keyboard across screens.
-    if (KeyboardResize?.Body && Keyboard?.setResizeMode) {
-      await Keyboard.setResizeMode({ mode: KeyboardResize.Body })
+    // Keep WebView height stable on Android to prevent white gap above keyboard.
+    if (KeyboardResize?.None && Keyboard?.setResizeMode) {
+      await Keyboard.setResizeMode({ mode: KeyboardResize.None })
     }
     if (Keyboard?.setScroll) {
       await Keyboard.setScroll({ isDisabled: false })

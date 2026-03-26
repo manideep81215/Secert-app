@@ -76,6 +76,7 @@ const QUICK_REACTIONS = [
   { code: 'angry', emoji: '😡' },
   { code: 'like', emoji: '👍' },
 ]
+const PLACEHOLDER_REACTION_EMOJI = '😘'
 const REACTION_CODE_TO_EMOJI = QUICK_REACTIONS.reduce((acc, item) => ({ ...acc, [item.code]: item.emoji }), {})
 const REACTION_EMOJI_TO_CODE = QUICK_REACTIONS.reduce((acc, item) => ({ ...acc, [item.emoji]: item.code }), {})
 
@@ -4285,10 +4286,10 @@ function ChatPageNew() {
     if (!reactionTray || typeof window === 'undefined') return {}
     const trayMessage = getReactionTrayMessage()
     const trayWidth = 292
-    const trayHeight = isTouchDevice ? 62 : 54
-    const actionOffsetBelowPx = 46
-    const actionCardHeightPx = 132
-    const trayGapPx = 8
+    const trayHeight = isTouchDevice ? 48 : 48
+    const actionCardHeightPx = 270
+    const menuOffsetFromBubblePx = 64
+    const trayGapFromMessagePx = 8
     const pad = 8
     const messageNode = trayMessage?.messageKey ? messageNodeMapRef.current?.[trayMessage.messageKey] : null
     const bubbleNode = messageNode?.querySelector?.('.message-content') || null
@@ -4303,20 +4304,12 @@ function ChatPageNew() {
     const anchorTop = messageRect ? messageRect.top : reactionTray.y
     const anchorBottom = messageRect ? messageRect.bottom : reactionTray.y
     const bottomSpace = typeof window !== 'undefined' ? (window.innerHeight - anchorBottom) : 0
-    const actionPlacement = bottomSpace < actionCardHeightPx ? 'above' : 'below'
-    const aboveTop = Math.max(pad, anchorTop - trayHeight - 10)
-    const belowTop = Math.min(window.innerHeight - trayHeight - pad, anchorBottom + 6)
+    const actionPlacement = bottomSpace < (actionCardHeightPx + menuOffsetFromBubblePx) ? 'above' : 'below'
     const top = isTouchDevice
       ? (
           actionPlacement === 'above'
-            ? Math.max(pad, anchorTop - trayHeight - actionCardHeightPx - 16)
-            : Math.max(
-                pad,
-                Math.min(
-                  window.innerHeight - trayHeight - pad,
-                  anchorBottom + actionOffsetBelowPx - trayHeight - trayGapPx
-                )
-              )
+            ? Math.max(pad, anchorTop - trayGapFromMessagePx - trayHeight)
+            : Math.max(pad, Math.min(window.innerHeight - trayHeight - pad, anchorBottom + trayGapFromMessagePx))
         )
       : Math.max(pad, anchorTop - trayHeight - 10)
     return { left: `${left}px`, top: `${top}px` }
@@ -4371,6 +4364,11 @@ function ChatPageNew() {
 
     setReactionTray(null)
     setActiveMessageActionsKey(messageKey)
+  }
+
+  const handleCustomReactionPress = () => {
+    if (!reactionTray?.messageKey || typeof window === 'undefined') return
+    applyMessageReaction(reactionTray.messageKey, PLACEHOLDER_REACTION_EMOJI)
   }
 
   const renderMessageMedia = (message) => {
@@ -4809,6 +4807,7 @@ function ChatPageNew() {
     </div>
   )
   const reactionTrayMessage = reactionTray ? getReactionTrayMessage() : null
+  const isMessageOverlayOpen = Boolean(isTouchDevice && (reactionTray || activeMessageActionsKey))
 
   useEffect(() => {
     if (!isTouchDevice) return undefined
@@ -4841,7 +4840,7 @@ function ChatPageNew() {
         '--chat-keyboard-offset': `${Math.max(0, keyboardOffset || 0)}px`,
         '--chat-viewport-height': `${resolvedViewportHeight}px`,
         '--chat-safe-bottom': (isIosPlatform && !isKeyboardOpen) ? 'env(safe-area-inset-bottom)' : '0px',
-        '--chat-safe-top': isIosPlatform ? 'env(safe-area-inset-top)' : '0px',
+        '--chat-safe-top': (isIosPlatform || (isNativeRuntime && isAndroidPlatform)) ? 'env(safe-area-inset-top)' : '0px',
         '--chat-vv-top': `${Math.max(0, visualViewportTop)}px`,
         '--chat-vv-bottom': `${Math.max(0, visualViewportBottomGap)}px`,
       }}
@@ -5106,6 +5105,17 @@ function ChatPageNew() {
           </AnimatePresence>
           <div ref={messagesEndRef} />
         </motion.div>
+        {isMessageOverlayOpen && (
+          <button
+            type="button"
+            className="reaction-overlay-backdrop"
+            aria-label="Dismiss message actions"
+            onClick={() => {
+              setReactionTray(null)
+              setActiveMessageActionsKey(null)
+            }}
+          />
+        )}
         {reactionTray && (
           <div
             className={`reaction-tray ${isTouchDevice ? 'mobile-menu' : ''} ${reactionTrayMessage?.message?.sender === 'user' ? 'sent' : 'received'}`}
@@ -5128,6 +5138,15 @@ function ChatPageNew() {
                     {item.emoji}
                   </button>
                 ))}
+                <button
+                  type="button"
+                  className="reaction-tray-btn reaction-tray-btn-more"
+                  onClick={handleCustomReactionPress}
+                  aria-label={`React ${PLACEHOLDER_REACTION_EMOJI}`}
+                  title={`React ${PLACEHOLDER_REACTION_EMOJI}`}
+                >
+                  {PLACEHOLDER_REACTION_EMOJI}
+                </button>
               </div>
             </div>
           </div>

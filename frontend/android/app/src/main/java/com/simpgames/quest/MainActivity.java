@@ -5,6 +5,7 @@ import android.content.SharedPreferences;
 import android.os.Bundle;
 
 import com.getcapacitor.BridgeActivity;
+import androidx.core.view.WindowCompat;
 
 public class MainActivity extends BridgeActivity {
   private static final String CAPACITOR_STORAGE_GROUP = "CapacitorStorage";
@@ -15,6 +16,7 @@ public class MainActivity extends BridgeActivity {
   public void onCreate(Bundle savedInstanceState) {
     registerPlugin(OpenFilePlugin.class);
     super.onCreate(savedInstanceState);
+    WindowCompat.setDecorFitsSystemWindows(getWindow(), true);
     captureNotificationIntent(getIntent());
     deliverPendingNotificationRoute();
   }
@@ -30,6 +32,7 @@ public class MainActivity extends BridgeActivity {
   @Override
   public void onResume() {
     super.onResume();
+    WindowCompat.setDecorFitsSystemWindows(getWindow(), true);
     setAppForegroundState(true);
     deliverPendingNotificationRoute();
   }

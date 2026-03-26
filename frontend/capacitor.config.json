@@ -13,7 +13,7 @@
       ]
     },
     "Keyboard": {
-      "resize": "body",
+      "resize": "none",
       "resizeOnFullScreen": true
     },
     "PushNotifications": {
