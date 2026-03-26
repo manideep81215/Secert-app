@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Client } from '@stomp/stompjs'
 import SockJS from 'sockjs-client'
@@ -14,7 +14,7 @@ import {
 import { syncNativePushRegistration } from '../lib/nativePush'
 import { getPushPublicKey, getPushStatus, sendTestPush, subscribeMobilePush } from '../services/pushApi'
 import { useFlowState } from '../hooks/useFlowState'
-import { WS_CHAT_URL } from '../config/apiConfig'
+import { API_BASE_URL, WS_CHAT_URL } from '../config/apiConfig'
 import { getConversation } from '../services/messagesApi'
 import './ChatInfoPage.css'
 
@@ -43,6 +43,70 @@ function readCachedInfoMediaHistory(conversationKey) {
   return cached.data || null
 }
 
+function normalizeMediaUrl(url) {
+  const raw = String(url || '').trim()
+  if (!raw) return ''
+  if (/^(blob:|data:|content:|file:)/i.test(raw)) return raw
+  if (raw.startsWith('/')) return `${API_BASE_URL}${raw}`
+  if (/^https?:\/\/localhost:8080/i.test(raw)) {
+    return `${API_BASE_URL}${raw.replace(/^https?:\/\/localhost:8080/i, '')}`
+  }
+  if (/^https?:\/\/127\.0\.0\.1:8080/i.test(raw)) {
+    return `${API_BASE_URL}${raw.replace(/^https?:\/\/127\.0\.0\.1:8080/i, '')}`
+  }
+  if (!/^https?:\/\//i.test(raw) && API_BASE_URL) {
+    return `${API_BASE_URL}/${raw.replace(/^\/+/, '')}`
+  }
+  return raw
+}
+
+function getInfoItemCreatedAt(row) {
+  const createdAtRaw = row?.createdAt || row?.clientCreatedAt || row?.timestamp || null
+  const parsedCreatedAt = Number(createdAtRaw)
+  return Number.isFinite(parsedCreatedAt) && parsedCreatedAt > 0
+    ? parsedCreatedAt
+    : Date.parse(createdAtRaw || '') || 0
+}
+
+function normalizeInfoMediaItem(row) {
+  const type = String(row?.type || '').toLowerCase()
+  if (type !== 'image' && type !== 'video') return null
+  const mediaUrl = normalizeMediaUrl(row?.mediaUrl || '')
+  if (!mediaUrl) return null
+  return {
+    messageId: row?.messageId || row?.id || null,
+    type,
+    mediaUrl,
+    fileName: row?.fileName || null,
+    createdAt: getInfoItemCreatedAt(row),
+  }
+}
+
+function normalizeInfoFileItem(row) {
+  const type = String(row?.type || '').toLowerCase()
+  if (type !== 'file') return null
+  const mediaUrl = normalizeMediaUrl(row?.mediaUrl || '')
+  if (!mediaUrl) return null
+  return {
+    messageId: row?.messageId || row?.id || null,
+    mediaUrl,
+    fileName: row?.fileName || 'attachment',
+    mimeType: row?.mimeType || null,
+    createdAt: getInfoItemCreatedAt(row),
+  }
+}
+
+function buildInfoMediaDedupeKey(item) {
+  const mediaUrl = String(item?.mediaUrl || '').trim()
+  const type = String(item?.type || 'file').trim().toLowerCase()
+  const createdAt = Number(item?.createdAt || 0)
+  if (mediaUrl && createdAt > 0) {
+    return `url:${mediaUrl}|type:${type}|time:${createdAt}`
+  }
+  if (item?.messageId) return `id:${item.messageId}`
+  return `url:${mediaUrl}|type:${type}|name:${String(item?.fileName || '').trim()}`
+}
+
 function ChatInfoPage() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -54,16 +118,17 @@ function ChatInfoPage() {
   const selectedSeen = Boolean(location.state?.selectedSeen)
   const seededMediaItems = useMemo(() => {
     const rows = location.state?.mediaItems
-    return Array.isArray(rows) ? rows.filter((row) => row?.mediaUrl) : []
+    return Array.isArray(rows) ? rows.map((row) => normalizeInfoMediaItem(row)).filter(Boolean) : []
   }, [location.state?.mediaItems])
   const seededFileItems = useMemo(() => {
     const rows = location.state?.fileItems
-    return Array.isArray(rows) ? rows.filter((row) => row?.mediaUrl) : []
+    return Array.isArray(rows) ? rows.map((row) => normalizeInfoFileItem(row)).filter(Boolean) : []
   }, [location.state?.fileItems])
   const [mediaItems, setMediaItems] = useState(seededMediaItems)
   const [fileItems, setFileItems] = useState(seededFileItems)
   const [isMediaLoading, setIsMediaLoading] = useState(false)
   const [mediaLoadError, setMediaLoadError] = useState('')
+  const [resolvedMediaUrlMap, setResolvedMediaUrlMap] = useState({})
 
   const [notificationPermission, setNotificationPermission] = useState(
     () => location.state?.notificationPermission || getNotificationPermissionState()
@@ -83,6 +148,8 @@ function ChatInfoPage() {
   })
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [activeMediaPreview, setActiveMediaPreview] = useState(null)
+  const resolvedMediaUrlRef = useRef({})
+  const mediaFetchPromiseRef = useRef({})
   const cap = typeof window !== 'undefined' ? window.Capacitor : null
   const nativePlatform = typeof cap?.getPlatform === 'function' ? cap.getPlatform() : null
   const isNativeRuntime = typeof cap?.isNativePlatform === 'function'
@@ -109,56 +176,20 @@ function ChatInfoPage() {
   }, [seededFileItems])
 
   useEffect(() => {
+    return () => {
+      Object.values(resolvedMediaUrlRef.current).forEach((objectUrl) => {
+        if (!String(objectUrl || '').startsWith('blob:')) return
+        try {
+          URL.revokeObjectURL(objectUrl)
+        } catch {
+          // Ignore object URL cleanup failures.
+        }
+      })
+    }
+  }, [])
+
+  useEffect(() => {
     let cancelled = false
-
-    const normalizeMediaItem = (row) => {
-      const type = String(row?.type || '').toLowerCase()
-      if (type !== 'image' && type !== 'video') return null
-      const mediaUrl = String(row?.mediaUrl || '').trim()
-      if (!mediaUrl) return null
-      const createdAtRaw = row?.createdAt || row?.clientCreatedAt || row?.timestamp || null
-      const parsedCreatedAt = Number(createdAtRaw)
-      const createdAt = Number.isFinite(parsedCreatedAt) && parsedCreatedAt > 0
-        ? parsedCreatedAt
-        : Date.parse(createdAtRaw || '') || 0
-      return {
-        messageId: row?.messageId || row?.id || null,
-        type,
-        mediaUrl,
-        fileName: row?.fileName || null,
-        createdAt,
-      }
-    }
-
-    const normalizeFileItem = (row) => {
-      const type = String(row?.type || '').toLowerCase()
-      if (type !== 'file') return null
-      const mediaUrl = String(row?.mediaUrl || '').trim()
-      if (!mediaUrl) return null
-      const createdAtRaw = row?.createdAt || row?.clientCreatedAt || row?.timestamp || null
-      const parsedCreatedAt = Number(createdAtRaw)
-      const createdAt = Number.isFinite(parsedCreatedAt) && parsedCreatedAt > 0
-        ? parsedCreatedAt
-        : Date.parse(createdAtRaw || '') || 0
-      return {
-        messageId: row?.messageId || row?.id || null,
-        mediaUrl,
-        fileName: row?.fileName || 'attachment',
-        mimeType: row?.mimeType || null,
-        createdAt,
-      }
-    }
-
-    const buildDedupeKey = (item) => {
-      const mediaUrl = String(item?.mediaUrl || '').trim()
-      const type = String(item?.type || 'file').trim().toLowerCase()
-      const createdAt = Number(item?.createdAt || 0)
-      if (mediaUrl && createdAt > 0) {
-        return `url:${mediaUrl}|type:${type}|time:${createdAt}`
-      }
-      if (item?.messageId) return `id:${item.messageId}`
-      return `url:${mediaUrl}|type:${type}|name:${String(item?.fileName || '').trim()}`
-    }
 
     const loadFullMediaHistory = async () => {
       if (!selectedUser?.username || !flow?.token) return
@@ -175,23 +206,19 @@ function ChatInfoPage() {
           const mergedFilesByKey = new Map()
 
           seededMediaItems.forEach((row) => {
-            const normalized = normalizeMediaItem(row)
-            if (!normalized) return
-            mergedMediaByKey.set(buildDedupeKey(normalized), normalized)
+            mergedMediaByKey.set(buildInfoMediaDedupeKey(row), row)
           })
           seededFileItems.forEach((row) => {
-            const normalized = normalizeFileItem(row)
-            if (!normalized) return
-            mergedFilesByKey.set(buildDedupeKey(normalized), normalized)
+            mergedFilesByKey.set(buildInfoMediaDedupeKey(row), row)
           })
 
           const remoteMediaItems = Array.isArray(history?.mediaItems) ? history.mediaItems : []
           const remoteFileItems = Array.isArray(history?.fileItems) ? history.fileItems : []
           remoteMediaItems.forEach((item) => {
-            mergedMediaByKey.set(buildDedupeKey(item), item)
+            mergedMediaByKey.set(buildInfoMediaDedupeKey(item), item)
           })
           remoteFileItems.forEach((item) => {
-            mergedFilesByKey.set(buildDedupeKey(item), item)
+            mergedFilesByKey.set(buildInfoMediaDedupeKey(item), item)
           })
 
           const mergedMedia = [...mergedMediaByKey.values()]
@@ -224,13 +251,13 @@ function ChatInfoPage() {
               })
               const rows = Array.isArray(result?.messages) ? result.messages : []
               rows.forEach((row) => {
-                const normalizedMedia = normalizeMediaItem(row)
+                const normalizedMedia = normalizeInfoMediaItem(row)
                 if (normalizedMedia) {
-                  remoteMediaByKey.set(buildDedupeKey(normalizedMedia), normalizedMedia)
+                  remoteMediaByKey.set(buildInfoMediaDedupeKey(normalizedMedia), normalizedMedia)
                 }
-                const normalizedFile = normalizeFileItem(row)
+                const normalizedFile = normalizeInfoFileItem(row)
                 if (normalizedFile) {
-                  remoteFilesByKey.set(buildDedupeKey(normalizedFile), normalizedFile)
+                  remoteFilesByKey.set(buildInfoMediaDedupeKey(normalizedFile), normalizedFile)
                 }
               })
 
@@ -283,17 +310,94 @@ function ChatInfoPage() {
     }
   }, [flow?.token, flow?.username, seededFileItems, seededMediaItems, selectedUser?.username])
 
-  const triggerFileDownload = (url, fileName) => {
-    const downloadUrl = String(url || '').trim()
+  const getRenderableMediaUrl = (url) => {
+    const normalizedUrl = normalizeMediaUrl(url || '')
+    if (!normalizedUrl) return ''
+    return resolvedMediaUrlMap[normalizedUrl] || normalizedUrl
+  }
+
+  const ensureRenderableMediaUrl = async (url) => {
+    const normalizedUrl = normalizeMediaUrl(url || '')
+    if (!normalizedUrl) return ''
+    if (/^(blob:|data:|content:|file:)/i.test(normalizedUrl)) return normalizedUrl
+    if (resolvedMediaUrlRef.current[normalizedUrl]) return resolvedMediaUrlRef.current[normalizedUrl]
+    if (mediaFetchPromiseRef.current[normalizedUrl]) return mediaFetchPromiseRef.current[normalizedUrl]
+    const authToken = String(flow?.token || '').trim()
+    if (!authToken) return normalizedUrl
+
+    const pending = fetch(normalizedUrl, {
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`media-fetch-failed-${response.status}`)
+        const blob = await response.blob()
+        if (!(blob instanceof Blob) || !blob.size) throw new Error('media-fetch-empty')
+        const objectUrl = URL.createObjectURL(blob)
+        const previousUrl = resolvedMediaUrlRef.current[normalizedUrl]
+        if (previousUrl && previousUrl !== objectUrl && String(previousUrl).startsWith('blob:')) {
+          try {
+            URL.revokeObjectURL(previousUrl)
+          } catch {
+            // Ignore object URL cleanup failures.
+          }
+        }
+        resolvedMediaUrlRef.current[normalizedUrl] = objectUrl
+        setResolvedMediaUrlMap((prev) => {
+          if (prev[normalizedUrl] === objectUrl) return prev
+          return { ...prev, [normalizedUrl]: objectUrl }
+        })
+        return objectUrl
+      })
+      .catch(() => normalizedUrl)
+      .finally(() => {
+        delete mediaFetchPromiseRef.current[normalizedUrl]
+      })
+
+    mediaFetchPromiseRef.current[normalizedUrl] = pending
+    return pending
+  }
+
+  const handleOpenMediaPreview = async (item) => {
+    const fallbackUrl = normalizeMediaUrl(item?.mediaUrl || '')
+    if (!fallbackUrl) return
+    const renderableUrl = await ensureRenderableMediaUrl(fallbackUrl)
+    setActiveMediaPreview({
+      type: item?.type === 'video' ? 'video' : 'image',
+      url: renderableUrl || fallbackUrl,
+      sourceUrl: fallbackUrl,
+      name: item?.fileName || (item?.type === 'video' ? 'video' : 'image'),
+    })
+  }
+
+  const handleMediaAssetError = (url) => {
+    void ensureRenderableMediaUrl(url)
+  }
+
+  const triggerFileDownload = async (url, fileName) => {
+    const downloadUrl = normalizeMediaUrl(url || '')
     if (!downloadUrl) return
-    const anchor = document.createElement('a')
-    anchor.href = downloadUrl
-    anchor.download = fileName || 'attachment'
-    anchor.target = '_blank'
-    anchor.rel = 'noopener'
-    document.body.appendChild(anchor)
-    anchor.click()
-    anchor.remove()
+    const downloadName = fileName || 'attachment'
+    const authToken = String(flow?.token || '').trim()
+    try {
+      const response = await fetch(downloadUrl, {
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : undefined,
+      })
+      if (!response.ok) throw new Error(`download-failed-${response.status}`)
+      const blob = await response.blob()
+      const blobUrl = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = blobUrl
+      anchor.download = downloadName
+      anchor.rel = 'noreferrer'
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 4000)
+    } catch {
+      window.open(downloadUrl, '_blank', 'noopener,noreferrer')
+    }
   }
 
   const formatUsername = (name) => {
@@ -635,7 +739,7 @@ function ChatInfoPage() {
     const videoUrls = [...new Set(
       mediaItems
         .filter((item) => item?.type === 'video' && item?.mediaUrl)
-        .map((item) => String(item.mediaUrl || '').trim())
+        .map((item) => String(getRenderableMediaUrl(item.mediaUrl) || '').trim())
         .filter(Boolean)
     )]
     if (!videoUrls.length) return undefined
@@ -725,7 +829,7 @@ function ChatInfoPage() {
       cancelled = true
       window.clearTimeout(timeoutId)
     }
-  }, [mediaItems, videoThumbMap, isNativeRuntime])
+  }, [mediaItems, resolvedMediaUrlMap, videoThumbMap, isNativeRuntime])
 
   useEffect(() => {
     const syncPermission = () => setNotificationPermission(getNotificationPermissionState())
@@ -882,18 +986,27 @@ function ChatInfoPage() {
                 type="button"
                 className="chat-info-media-item"
                 title={msg.fileName || (msg.type === 'image' ? 'Image' : 'Video')}
-                onClick={() => setActiveMediaPreview({
-                  type: msg.type === 'video' ? 'video' : 'image',
-                  url: msg.mediaUrl,
-                  name: msg.fileName || (msg.type === 'video' ? 'video' : 'image'),
-                })}
+                onClick={() => { void handleOpenMediaPreview(msg) }}
               >
                 {msg.type === 'image' ? (
-                  <img className="chat-info-media-thumb" src={msg.mediaUrl} alt={msg.fileName || 'image'} loading="lazy" />
+                  <img
+                    className="chat-info-media-thumb"
+                    src={getRenderableMediaUrl(msg.mediaUrl)}
+                    alt={msg.fileName || 'image'}
+                    loading="lazy"
+                    onError={() => handleMediaAssetError(msg.mediaUrl)}
+                  />
                 ) : thumb ? (
                   <img className="chat-info-media-thumb" src={thumb} alt={msg.fileName || 'video thumbnail'} loading="lazy" />
                 ) : (
-                  <video className="chat-info-media-thumb chat-info-video-thumb" src={msg.mediaUrl} preload="metadata" muted playsInline />
+                  <video
+                    className="chat-info-media-thumb chat-info-video-thumb"
+                    src={getRenderableMediaUrl(msg.mediaUrl)}
+                    preload="metadata"
+                    muted
+                    playsInline
+                    onError={() => handleMediaAssetError(msg.mediaUrl)}
+                  />
                 )}
                 <span className="chat-info-media-badge">{msg.type === 'video' ? 'Video' : 'Image'}</span>
               </button>
@@ -939,9 +1052,18 @@ function ChatInfoPage() {
                 <img src={activeMediaPreview.url} alt={activeMediaPreview.name} className="image-preview-full" />
               )}
               <div className="image-preview-actions">
-                <a href={activeMediaPreview.url} download={activeMediaPreview.name || (activeMediaPreview.type === 'video' ? 'video' : 'image')} className="image-preview-send">
+                <button
+                  type="button"
+                  className="image-preview-send"
+                  onClick={() => {
+                    void triggerFileDownload(
+                      activeMediaPreview.sourceUrl || activeMediaPreview.url,
+                      activeMediaPreview.name || (activeMediaPreview.type === 'video' ? 'video' : 'image')
+                    )
+                  }}
+                >
                   Download
-                </a>
+                </button>
                 <button type="button" className="image-preview-cancel" onClick={() => setActiveMediaPreview(null)}>Close</button>
               </div>
             </motion.div>

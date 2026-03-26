@@ -4419,8 +4419,9 @@ function ChatPageNew() {
 
   const renderMessageReplyContext = (message) => {
     if (!message?.replyingTo) return null
+    const isReplyingToYou = isCurrentChatUser(message.replyingTo?.senderName)
     return (
-      <div className="message-reply-context">
+      <div className={`message-reply-context ${isReplyingToYou ? 'reply-target-you' : 'reply-target-other'}`}>
         <div className="reply-label message-reply-label">{getReplyContextLabel(message)}</div>
         <div className="message-reply-quote">
           <span className="message-reply-quote-bar" aria-hidden="true" />
@@ -5217,7 +5218,7 @@ function ChatPageNew() {
             <AnimatePresence>
               {replyingTo && (
                 <motion.div
-                  className="reply-preview"
+                  className={`reply-preview ${isCurrentChatUser(replyingTo?.senderName) ? 'reply-target-you' : 'reply-target-other'}`}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 10 }}
@@ -5251,7 +5252,7 @@ function ChatPageNew() {
             </div>
           )}
           {renderReplyInsideComposer && replyingTo && (
-            <div className="reply-preview reply-preview-inline">
+            <div className={`reply-preview reply-preview-inline ${isCurrentChatUser(replyingTo?.senderName) ? 'reply-target-you' : 'reply-target-other'}`}>
               <div className="reply-info">
                 <span className="reply-label composer-reply-label">{getComposerReplyLabel(replyingTo)}:</span>
                 <span className="reply-msg">{renderReplyContent(replyingTo, 'composer')}</span>
