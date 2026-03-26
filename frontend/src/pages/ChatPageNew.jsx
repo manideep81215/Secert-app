@@ -4282,18 +4282,47 @@ function ChatPageNew() {
     clearPendingMessageTap()
   }, [])
 
+  const getMessageOverlayMetrics = (message, messageKey, messageFailed = false) => {
+    if (typeof window === 'undefined' || !messageKey) {
+      return { actionPlacement: 'below', messageRect: null }
+    }
+    const messageNode = messageNodeMapRef.current?.[messageKey]
+    const bubbleNode = messageNode?.querySelector?.('.message-content') || null
+    const messageRect = bubbleNode?.getBoundingClientRect?.() || messageNode?.getBoundingClientRect?.() || null
+    if (!messageRect) {
+      return { actionPlacement: 'below', messageRect: null }
+    }
+    const messagesAreaRect = messagesAreaRef.current?.getBoundingClientRect?.() || null
+    const boundsTop = messagesAreaRect ? Math.max(0, messagesAreaRect.top) : 0
+    const boundsBottom = messagesAreaRect
+      ? Math.min(window.innerHeight, messagesAreaRect.bottom)
+      : window.innerHeight
+    const bottomSpace = Math.max(0, boundsBottom - messageRect.bottom)
+    const topSpace = Math.max(0, messageRect.top - boundsTop)
+    const actionCount = 3 + ((message?.sender === 'user' && (messageFailed || canEditMessage(message))) ? 1 : 0)
+    const actionButtonHeightPx = isTouchDevice ? 46 : 36
+    const actionCardHeightPx = isTouchDevice
+      ? (12 + (actionCount * actionButtonHeightPx))
+      : 132
+    const menuOffsetFromBubblePx = isTouchDevice ? 64 : 10
+    const requiredSpacePx = actionCardHeightPx + menuOffsetFromBubblePx
+    const actionPlacement = bottomSpace >= requiredSpacePx
+      ? 'below'
+      : (topSpace >= requiredSpacePx ? 'above' : (bottomSpace >= topSpace ? 'below' : 'above'))
+    return { actionPlacement, messageRect }
+  }
+
   const getReactionTrayStyle = () => {
     if (!reactionTray || typeof window === 'undefined') return {}
     const trayMessage = getReactionTrayMessage()
     const trayWidth = 292
-    const trayHeight = isTouchDevice ? 48 : 48
-    const actionCardHeightPx = 270
-    const menuOffsetFromBubblePx = 64
+    const trayHeight = 48
     const trayGapFromMessagePx = 8
     const pad = 8
-    const messageNode = trayMessage?.messageKey ? messageNodeMapRef.current?.[trayMessage.messageKey] : null
-    const bubbleNode = messageNode?.querySelector?.('.message-content') || null
-    const messageRect = bubbleNode?.getBoundingClientRect?.() || messageNode?.getBoundingClientRect?.() || null
+    const overlayMetrics = trayMessage
+      ? getMessageOverlayMetrics(trayMessage.message, trayMessage.messageKey, trayMessage.messageFailed)
+      : null
+    const messageRect = overlayMetrics?.messageRect || null
     const anchorX = messageRect
       ? (messageRect.left + (messageRect.width / 2))
       : reactionTray.x
@@ -4303,8 +4332,7 @@ function ChatPageNew() {
     )
     const anchorTop = messageRect ? messageRect.top : reactionTray.y
     const anchorBottom = messageRect ? messageRect.bottom : reactionTray.y
-    const bottomSpace = typeof window !== 'undefined' ? (window.innerHeight - anchorBottom) : 0
-    const actionPlacement = bottomSpace < (actionCardHeightPx + menuOffsetFromBubblePx) ? 'above' : 'below'
+    const actionPlacement = overlayMetrics?.actionPlacement || 'below'
     const top = isTouchDevice
       ? (
           actionPlacement === 'above'
@@ -4369,6 +4397,37 @@ function ChatPageNew() {
   const handleCustomReactionPress = () => {
     if (!reactionTray?.messageKey || typeof window === 'undefined') return
     applyMessageReaction(reactionTray.messageKey, PLACEHOLDER_REACTION_EMOJI)
+  }
+
+  const isCurrentChatUser = (username) => {
+    const normalized = toUserKey(String(username || '').replace(/^@+/, '').trim())
+    const me = toUserKey(flow.username || '')
+    return Boolean(normalized && me && normalized === me)
+  }
+
+  const getReplyContextLabel = (message) => (
+    isCurrentChatUser(message?.replyingTo?.senderName)
+      ? 'Replied to you'
+      : 'Replied to him'
+  )
+
+  const getComposerReplyLabel = (reply) => (
+    isCurrentChatUser(reply?.senderName)
+      ? 'Replying to you'
+      : 'Replying to him'
+  )
+
+  const renderMessageReplyContext = (message) => {
+    if (!message?.replyingTo) return null
+    return (
+      <div className="message-reply-context">
+        <div className="reply-label message-reply-label">{getReplyContextLabel(message)}</div>
+        <div className="message-reply-quote">
+          <span className="message-reply-quote-bar" aria-hidden="true" />
+          <div className="reply-text message-reply-quote-content">{renderReplyContent(message.replyingTo, 'bubble')}</div>
+        </div>
+      </div>
+    )
   }
 
   const renderMessageMedia = (message) => {
@@ -4755,18 +4814,12 @@ function ChatPageNew() {
       },
     }
   }
-  const getMessageActionsPlacement = (messageKey) => {
+  const getMessageActionsPlacement = (message, messageKey, messageFailed) => {
     if (typeof window === 'undefined' || !messageKey) return 'below'
-    const messageNode = messageNodeMapRef.current?.[messageKey]
-    const bubbleNode = messageNode?.querySelector?.('.message-content') || null
-    const rect = bubbleNode?.getBoundingClientRect?.() || messageNode?.getBoundingClientRect?.() || null
-    if (!rect) return 'below'
-    const estimatedCardHeight = 132
-    const bottomSpace = window.innerHeight - rect.bottom
-    return bottomSpace < estimatedCardHeight ? 'above' : 'below'
+    return getMessageOverlayMetrics(message, messageKey, messageFailed).actionPlacement
   }
   const renderMessageActions = (message, messageKey, messageFailed) => (
-    <div className={`message-actions ${activeMessageActionsKey === messageKey ? 'active' : ''} ${getMessageActionsPlacement(messageKey)}`}>
+    <div className={`message-actions ${activeMessageActionsKey === messageKey ? 'active' : ''} ${getMessageActionsPlacement(message, messageKey, messageFailed)}`}>
       <div className="message-actions-header">{getMessageFooterLabel(message)}</div>
       <button
         className="btn-copy"
@@ -4982,6 +5035,7 @@ function ChatPageNew() {
                 onClick={(event) => handleMessageTap(event, message, messageKey)}
               >
                 <div className="message-bubble-shell">
+                  {renderMessageReplyContext(message)}
                   <div
                     className={`message-content ${message.type === 'image' || message.type === 'video' ? 'has-media' : ''}`}
                     style={swipeProps.bubbleStyle}
@@ -4992,22 +5046,16 @@ function ChatPageNew() {
                     {message.sender === 'user' && message.deliveryStatus === 'failed' && (
                       <span className="message-upload-failed" title="Failed">!</span>
                     )}
-                    {message.replyingTo && (
-                      <div className="message-reply-context">
-                        <div className="reply-label">Replying to {message.replyingTo.senderName ? `@${formatUsername(message.replyingTo.senderName)}` : 'message'}:</div>
-                        <div className="reply-text">{renderReplyContent(message.replyingTo, 'bubble')}</div>
-                      </div>
-                    )}
                     {renderMessageBody(message)}
-                    {shouldShowSeenInline && index === lastOutgoingIndex && activeMessageActionsKey !== messageKey && (
-                      <span className="message-seen-inline">Seen</span>
-                    )}
                     {message.reaction && (
                       <span className="message-reaction-badge" aria-label={`Reaction ${message.reaction}`}>
                         {message.reaction}
                       </span>
                     )}
                   </div>
+                  {shouldShowSeenInline && index === lastOutgoingIndex && activeMessageActionsKey !== messageKey && (
+                    <span className="message-seen-inline">Seen</span>
+                  )}
                 </div>
                 {renderMessageActions(message, messageKey, messageFailed)}
               </div>
@@ -5038,6 +5086,7 @@ function ChatPageNew() {
                   {...messageMotionProps}
                 >
                   <div className="message-bubble-shell">
+                    {renderMessageReplyContext(message)}
                     <div
                       className={`message-content ${message.type === 'image' || message.type === 'video' ? 'has-media' : ''}`}
                       style={swipeProps.bubbleStyle}
@@ -5048,22 +5097,16 @@ function ChatPageNew() {
                       {message.sender === 'user' && message.deliveryStatus === 'failed' && (
                         <span className="message-upload-failed" title="Failed">!</span>
                       )}
-                      {message.replyingTo && (
-                        <div className="message-reply-context">
-                          <div className="reply-label">Replying to {message.replyingTo.senderName ? `@${formatUsername(message.replyingTo.senderName)}` : 'message'}:</div>
-                          <div className="reply-text">{renderReplyContent(message.replyingTo, 'bubble')}</div>
-                        </div>
-                      )}
                       {renderMessageBody(message)}
-                      {shouldShowSeenInline && index === lastOutgoingIndex && activeMessageActionsKey !== messageKey && (
-                        <span className="message-seen-inline">Seen</span>
-                      )}
                       {message.reaction && (
                         <span className="message-reaction-badge" aria-label={`Reaction ${message.reaction}`}>
                           {message.reaction}
                         </span>
                       )}
                     </div>
+                    {shouldShowSeenInline && index === lastOutgoingIndex && activeMessageActionsKey !== messageKey && (
+                      <span className="message-seen-inline">Seen</span>
+                    )}
                   </div>
                   {renderMessageActions(message, messageKey, messageFailed)}
                 </motion.div>
@@ -5180,7 +5223,7 @@ function ChatPageNew() {
                   exit={{ opacity: 0, y: 10 }}
                 >
                   <div className="reply-info">
-                    <span className="reply-label">Replying to @{formatUsername(replyingTo.senderName)}:</span>
+                    <span className="reply-label composer-reply-label">{getComposerReplyLabel(replyingTo)}:</span>
                     <span className="reply-msg">{renderReplyContent(replyingTo, 'composer')}</span>
                   </div>
                   <button className="btn-cancel-reply" onClick={() => setReplyingTo(null)}>X</button>
@@ -5210,7 +5253,7 @@ function ChatPageNew() {
           {renderReplyInsideComposer && replyingTo && (
             <div className="reply-preview reply-preview-inline">
               <div className="reply-info">
-                <span className="reply-label">Replying to @{formatUsername(replyingTo.senderName)}:</span>
+                <span className="reply-label composer-reply-label">{getComposerReplyLabel(replyingTo)}:</span>
                 <span className="reply-msg">{renderReplyContent(replyingTo, 'composer')}</span>
               </div>
               <button className="btn-cancel-reply" onClick={() => setReplyingTo(null)}>X</button>
