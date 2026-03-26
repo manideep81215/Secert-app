@@ -3361,3 +3361,66 @@
     height: 1.05rem !important;
   }
 }
+
+/* Instagram-like composer sizing */
+.chat-container .input-area {
+  padding: 10px 12px !important;
+}
+
+.chat-container .input-wrapper {
+  gap: 10px !important;
+  align-items: center !important;
+}
+
+.chat-container .input-actions {
+  gap: 10px !important;
+}
+
+.chat-container .btn-action,
+.chat-container .btn-send,
+.chat-container .btn-voice-inline,
+.chat-container .btn-voice-cancel {
+  width: 30px !important;
+  height: 30px !important;
+}
+
+.chat-container .btn-game {
+  width: 36px !important;
+  height: 36px !important;
+}
+
+.chat-container .btn-action,
+.chat-container .btn-send,
+.chat-container .btn-plus,
+.chat-container .btn-game-icon {
+  font-size: 24px !important;
+  line-height: 1 !important;
+}
+
+.chat-container .attach-icon,
+.chat-container .voice-action-icon {
+  width: 24px !important;
+  height: 24px !important;
+}
+
+.chat-container .message-input-shell {
+  min-height: 44px !important;
+  height: 44px !important;
+  border-radius: 22px !important;
+  padding: 0 10px !important;
+}
+
+.chat-container .message-input {
+  height: 100% !important;
+  font-size: 14px !important;
+  padding: 0 14px !important;
+}
+
+@media (max-width: 920px) {
+  .chat-container .input-area {
+    padding-top: 10px !important;
+    padding-right: max(12px, env(safe-area-inset-right)) !important;
+    padding-bottom: calc(10px + var(--chat-safe-bottom, 0px)) !important;
+    padding-left: max(12px, env(safe-area-inset-left)) !important;
+  }
+}
