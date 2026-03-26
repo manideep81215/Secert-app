@@ -56,7 +56,10 @@ const MESSAGE_REPLY_SWIPE_CANCEL_Y_PX = 52
 const TYPING_STALE_MS = 1400
 const ONLINE_HEARTBEAT_MS = 30 * 1000
 const AUTO_REFRESH_DEBOUNCE_MS = 1200
-const TEXT_SEND_WAIT_MS = 8000
+const TEXT_SEND_WAIT_MS = 1500
+const MEDIA_SEND_WAIT_MS = 2000
+const SEND_ACK_TIMEOUT_MS = 12000
+const USERS_SUMMARY_TIMEOUT_MS = 2200
 const CONVERSATION_FETCH_RETRY_LIMIT = 4
 const CONVERSATION_PAGE_SIZE = 50
 const CONVERSATION_SCROLL_TOP_THRESHOLD = 140
@@ -348,7 +351,7 @@ function ChatPageNew() {
       // Ignore localStorage write failures.
     }
   }
-  const normalizeConversationRows = (rows, clearCutoff = 0) => (rows || [])
+  const normalizeConversationRows = (rows, clearCutoff = 0, conversationPeerUsername = '') => (rows || [])
     .filter((row) => {
       if (!clearCutoff) return true
       const createdAt = Number(row?.createdAt || row?.clientCreatedAt || 0)
@@ -357,6 +360,7 @@ function ChatPageNew() {
     })
     .map((row) => {
       const createdAt = Number(row?.createdAt || row?.clientCreatedAt || 0) || null
+      const peerKey = toUserKey(conversationPeerUsername)
       return {
         sender: row?.sender || 'other',
         text: row?.text || '',
@@ -378,6 +382,8 @@ function ChatPageNew() {
             }
           : (row?.replyingTo || null),
         senderName: formatUsername(row?.senderName),
+        peerUsername: peerKey || null,
+        tempId: row?.clientMessageId || row?.tempId || null,
         messageId: row?.id || row?.messageId || null,
         createdAt,
         clientCreatedAt: createdAt,
@@ -391,7 +397,7 @@ function ChatPageNew() {
       const raw = window.localStorage.getItem(getConversationCacheKey(peerUsername))
       const parsed = raw ? JSON.parse(raw) : []
       if (!Array.isArray(parsed)) return []
-      return normalizeConversationRows(parsed, clearCutoff)
+      return normalizeConversationRows(parsed, clearCutoff, peerUsername)
     } catch {
       return []
     }
@@ -403,6 +409,7 @@ function ChatPageNew() {
         .slice(-220)
         .map((row) => ({
           messageId: row.messageId || null,
+          clientMessageId: row.tempId || null,
           sender: row.sender || 'other',
           senderName: row.senderName || '',
           text: row.text || '',
@@ -724,10 +731,12 @@ function ChatPageNew() {
   }
   const getMessageCreatedAtMs = (message) => Number(message?.createdAt || message?.clientCreatedAt || 0)
   const isMessageFailed = (message) => message?.deliveryStatus === 'failed'
+  const isMessageQueued = (message) => message?.deliveryStatus === 'queued'
+  const isMessageRetryable = (message) => isMessageFailed(message) || isMessageQueued(message)
   const getMessageEditKey = (message) => {
     if (!message) return ''
-    if (message.tempId) return `temp:${message.tempId}`
     if (message.messageId) return `id:${message.messageId}`
+    if (message.tempId) return `temp:${message.tempId}`
     const created = getMessageCreatedAtMs(message)
     return `local:${message.sender || 'x'}:${created}:${message.senderName || ''}`
   }
@@ -859,7 +868,9 @@ function ChatPageNew() {
     const normalizedPeer = String(peerUsername || '').trim()
     if (!normalizedPeer) return
     const peerKey = toUserKey(normalizedPeer)
-    const stableRows = (nextRows || []).filter((row) => !(row?.tempId || row?.deliveryStatus === 'uploading'))
+    const stableRows = (nextRows || []).filter((row) => (
+      row?.deliveryStatus !== 'uploading' && row?.deliveryStatus !== 'queued' && row?.deliveryStatus !== 'failed'
+    ))
     conversationCacheRef.current[peerKey] = stableRows
     writeConversationCache(normalizedPeer, stableRows)
     const summary = summarizeConversationForList(stableRows)
@@ -871,7 +882,7 @@ function ChatPageNew() {
   }
   const canEditMessage = (message) => {
     if (!message || message.sender !== 'user') return false
-    if (isMessageFailed(message)) return false
+    if (isMessageRetryable(message)) return false
     if (message.type && message.type !== 'text') return false
     if (!message.messageId) return false
     const createdAt = getMessageCreatedAtMs(message)
@@ -880,6 +891,7 @@ function ChatPageNew() {
   }
   const getMessageFooterLabel = (message) => {
     if (isMessageFailed(message)) return `Not sent · ${message.timestamp}`
+    if (isMessageQueued(message)) return `Queued · reconnecting · ${message.timestamp}`
     if (message?.deliveryStatus === 'uploading') {
       const progress = Math.max(0, Math.min(100, Number(message?.uploadProgress || 0)))
       const rounded = Math.round(progress)
@@ -896,6 +908,9 @@ function ChatPageNew() {
     const leftId = Number(left.messageId || 0)
     const rightId = Number(right.messageId || 0)
     if (leftId > 0 && rightId > 0) return leftId === rightId
+    const leftTempId = String(left.tempId || '').trim()
+    const rightTempId = String(right.tempId || '').trim()
+    if (leftTempId && rightTempId) return leftTempId === rightTempId
 
     const leftCreatedAt = Number(left.createdAt || left.clientCreatedAt || 0)
     const rightCreatedAt = Number(right.createdAt || right.clientCreatedAt || 0)
@@ -1112,6 +1127,7 @@ function ChatPageNew() {
     let latest = 0
     for (const msg of messages) {
       if (msg?.sender !== 'user') continue
+      if (msg?.deliveryStatus === 'failed' || msg?.deliveryStatus === 'queued' || msg?.deliveryStatus === 'uploading') continue
       const createdAt = Number(msg?.createdAt || 0)
       if (createdAt > latest) latest = createdAt
     }
@@ -1129,7 +1145,8 @@ function ChatPageNew() {
     let count = 0
 
     for (const msg of messages) {
-      if (!msg || msg.deliveryStatus === 'failed') continue
+      if (!msg) continue
+      if (msg.deliveryStatus === 'uploading' || msg.deliveryStatus === 'queued' || msg.deliveryStatus === 'failed') continue
       let createdAtMs = Number(msg?.createdAt || msg?.clientCreatedAt || 0)
       if (!createdAtMs) continue
       if (createdAtMs > 0 && createdAtMs < 1_000_000_000_000) {
@@ -1903,10 +1920,10 @@ function ChatPageNew() {
 
     const loadUsersFromDb = async () => {
       try {
-        const [dbUsers, serverSummaries] = await Promise.all([
-          getAllUsers(flow.token),
-          getConversationSummaries(flow.token),
-        ])
+        const dbUsers = await getAllUsers(flow.token)
+        const serverSummaries = await getConversationSummaries(flow.token, {
+          timeoutMs: USERS_SUMMARY_TIMEOUT_MS,
+        }).catch(() => [])
         if (cancelled) return
         const me = (flow.username || '').toLowerCase()
         const cachedByKey = readUsersCache().reduce((acc, row) => {
@@ -2028,14 +2045,24 @@ function ChatPageNew() {
     nextConversationPageRef.current = 1
     if (Array.isArray(cachedRows) && cachedRows.length) {
       setMessages((prev) => {
-        const pendingUploads = (prev || []).filter((msg) =>
-          msg?.sender === 'user' &&
-          (msg?.deliveryStatus === 'uploading' || msg?.deliveryStatus === 'failed') &&
-          msg?.tempId
-        )
-        if (!pendingUploads.length) return cachedRows
-        return [...cachedRows, ...pendingUploads]
-      })
+          const existingTempIds = new Set(
+            (cachedRows || [])
+              .map((row) => String(row?.tempId || '').trim())
+              .filter((value) => value)
+          )
+          const pendingUploads = (prev || []).filter((msg) => {
+            const peerKey = toUserKey(msg?.peerUsername)
+            const tempIdValue = String(msg?.tempId || '').trim()
+            return msg?.sender === 'user'
+              && (msg?.deliveryStatus === 'uploading' || msg?.deliveryStatus === 'queued' || msg?.deliveryStatus === 'failed')
+              && tempIdValue
+              && peerKey
+              && peerKey === targetKey
+              && !existingTempIds.has(tempIdValue)
+          })
+          if (!pendingUploads.length) return cachedRows
+          return [...cachedRows, ...pendingUploads]
+        })
     }
     let cancelled = false
     let attempt = 0
@@ -2045,15 +2072,25 @@ function ChatPageNew() {
         if (cancelled) return
         if (toUserKey(selectedUserRef.current?.username) !== targetKey) return
         const rows = Array.isArray(result?.messages) ? result.messages : []
-        const normalized = normalizeConversationRows(rows, clearCutoff)
+        const normalized = normalizeConversationRows(rows, clearCutoff, targetUsername)
         conversationCacheRef.current[targetKey] = normalized
         writeConversationCache(targetUsername, normalized)
         setMessages((prev) => {
-          const pendingUploads = (prev || []).filter((msg) =>
-            msg?.sender === 'user' &&
-            (msg?.deliveryStatus === 'uploading' || msg?.deliveryStatus === 'failed') &&
-            msg?.tempId
+          const existingTempIds = new Set(
+            (normalized || [])
+              .map((row) => String(row?.tempId || '').trim())
+              .filter((value) => value)
           )
+          const pendingUploads = (prev || []).filter((msg) => {
+            const peerKey = toUserKey(msg?.peerUsername)
+            const tempIdValue = String(msg?.tempId || '').trim()
+            return msg?.sender === 'user'
+              && (msg?.deliveryStatus === 'uploading' || msg?.deliveryStatus === 'queued' || msg?.deliveryStatus === 'failed')
+              && tempIdValue
+              && peerKey
+              && peerKey === targetKey
+              && !existingTempIds.has(tempIdValue)
+          })
           if (!pendingUploads.length) return normalized
           return [...normalized, ...pendingUploads]
         })
@@ -2129,7 +2166,7 @@ function ChatPageNew() {
       if (toUserKey(selectedUserRef.current?.username) !== targetKey) return
 
       const clearCutoff = getConversationClearCutoff(targetUsername)
-      const olderRows = normalizeConversationRows(result?.messages || [], clearCutoff)
+      const olderRows = normalizeConversationRows(result?.messages || [], clearCutoff, targetUsername)
       setMessages((prev) => prependOlderMessages(olderRows, prev))
       setHasOlderMessages(Boolean(result?.hasMore))
       hasOlderMessagesRef.current = Boolean(result?.hasMore)
@@ -2153,7 +2190,9 @@ function ChatPageNew() {
 
   useEffect(() => {
     if (!flow.username || !selectedUser?.username || !messages?.length) return
-    const stableRows = messages.filter((row) => !(row?.tempId || row?.deliveryStatus === 'uploading'))
+    const stableRows = messages.filter((row) => (
+      row?.deliveryStatus !== 'uploading' && row?.deliveryStatus !== 'queued' && row?.deliveryStatus !== 'failed'
+    ))
     if (!stableRows.length) return
     conversationCacheRef.current[toUserKey(selectedUser.username)] = stableRows
     writeConversationCache(selectedUser.username, stableRows)
@@ -2407,6 +2446,7 @@ function ChatPageNew() {
             const text = data?.message
             if (!fromUsername || !text) return
             const fromUserKey = toUserKey(fromUsername)
+            const incomingClientMessageId = String(data?.clientMessageId || '').trim() || null
             const incomingCreatedAt = Number(data?.createdAt || Date.now())
             const clearCutoff = getConversationClearCutoff(fromUsername)
             if (clearCutoff && incomingCreatedAt <= clearCutoff) {
@@ -2439,6 +2479,8 @@ function ChatPageNew() {
               clientCreatedAt: incomingCreatedAt || Date.now(),
               timestamp: getTimeLabel(),
               senderName: formatUsername(fromUsername),
+              peerUsername: fromUserKey,
+              tempId: incomingClientMessageId,
               messageId: data?.id,
               edited: Boolean(data?.edited || data?.isEdited),
               editedAt: Number(data?.editedAt || 0) || null,
@@ -2467,7 +2509,12 @@ function ChatPageNew() {
             if (toUserKey(selectedUserRef.current?.username) === fromUserKey) {
               // Update existing message or add new one
               setMessages((prev) => {
-                const existingIndex = prev.findIndex((msg) => isSameIncomingMessage(msg, incoming))
+                const existingIndex = prev.findIndex((msg) => {
+                  if (incomingClientMessageId && msg?.tempId && String(msg.tempId) === incomingClientMessageId) {
+                    return true
+                  }
+                  return isSameIncomingMessage(msg, incoming)
+                })
                 if (existingIndex >= 0) {
                   const updated = [...prev]
                   updated[existingIndex] = {
@@ -2540,6 +2587,7 @@ function ChatPageNew() {
                   ? {
                       ...msg,
                       deliveryStatus: ack?.success ? 'sent' : 'failed',
+                      tempId: ack?.success ? null : msg.tempId,
                       messageId: ack?.messageId || ack?.id || msg.messageId || null,
                       createdAt: ack?.createdAt || msg.createdAt || null,
                       clientCreatedAt: ack?.createdAt || msg.clientCreatedAt || msg.createdAt || null,
@@ -3272,6 +3320,7 @@ function ChatPageNew() {
       createdAt: createdAtNow,
       clientCreatedAt: createdAtNow,
       senderName: formatUsername(flow.username || 'You'),
+      peerUsername: toUserKey(selectedUser.username),
       replyingTo,
       tempId,
       deliveryStatus: 'uploading',
@@ -3289,7 +3338,7 @@ function ChatPageNew() {
       )
     )
 
-    const isRealtimeReady = socketRef.current?.connected || await waitForSocketConnected(TEXT_SEND_WAIT_MS, 250)
+    const isRealtimeReady = socketRef.current?.connected || await waitForSocketConnected(TEXT_SEND_WAIT_MS, 200)
     const activeSocket = socketRef.current
     if (isRealtimeReady && activeSocket?.connected) {
       activeSocket.publish({
@@ -3310,13 +3359,16 @@ function ChatPageNew() {
           replyFileName: replyingTo?.fileName || null,
         }),
       })
+      if (sendAckTimeoutsRef.current[tempId]) {
+        clearTimeout(sendAckTimeoutsRef.current[tempId])
+      }
       sendAckTimeoutsRef.current[tempId] = setTimeout(() => {
-        setMessages((prev) => prev.map((msg) => (msg.tempId === tempId ? { ...msg, deliveryStatus: 'failed' } : msg)))
+        setMessages((prev) => prev.map((msg) => (msg.tempId === tempId ? { ...msg, deliveryStatus: 'queued' } : msg)))
         delete sendAckTimeoutsRef.current[tempId]
-      }, 10000)
+      }, SEND_ACK_TIMEOUT_MS)
     } else {
-      setMessages((prev) => prev.map((msg) => (msg.tempId === tempId ? { ...msg, deliveryStatus: 'failed' } : msg)))
-      notify.error('Realtime server disconnected. Message queued locally, tap resend when connection returns.')
+      setMessages((prev) => prev.map((msg) => (msg.tempId === tempId ? { ...msg, deliveryStatus: 'queued' } : msg)))
+      notify.warn('Realtime is reconnecting. Message queued and will retry automatically.')
     }
   }
 
@@ -3419,6 +3471,7 @@ function ChatPageNew() {
       createdAt: createdAtNow,
       clientCreatedAt: createdAtNow,
       senderName: formatUsername(flow.username || 'You'),
+      peerUsername: toUserKey(targetUser.username),
       replyingTo: currentReply,
       tempId,
       deliveryStatus: 'uploading',
@@ -3525,18 +3578,18 @@ function ChatPageNew() {
         : msg
     )))
 
-    const isRealtimeReady = await waitForSocketConnected(15000, 300)
+    const isRealtimeReady = await waitForSocketConnected(MEDIA_SEND_WAIT_MS, 200)
     if (!isRealtimeReady) {
-      updateTempMessage({ deliveryStatus: 'failed' })
-      notify.error('Media uploaded, but realtime is disconnected. Tap resend when connection returns.')
+      updateTempMessage({ deliveryStatus: 'queued' })
+      notify.warn('Media uploaded. Realtime is reconnecting, send is queued.')
       return true
     }
 
     try {
       const activeSocket = socketRef.current
       if (!activeSocket?.connected) {
-        updateTempMessage({ deliveryStatus: 'failed' })
-        notify.error('Media uploaded, but realtime is disconnected. Tap resend when connection returns.')
+        updateTempMessage({ deliveryStatus: 'queued' })
+        notify.warn('Media uploaded. Realtime is reconnecting, send is queued.')
         return true
       }
       activeSocket.publish({
@@ -3561,14 +3614,17 @@ function ChatPageNew() {
           replyFileName: currentReply?.fileName || null,
         }),
       })
+      if (sendAckTimeoutsRef.current[tempId]) {
+        clearTimeout(sendAckTimeoutsRef.current[tempId])
+      }
       sendAckTimeoutsRef.current[tempId] = setTimeout(() => {
-        setMessages((prev) => prev.map((msg) => (msg.tempId === tempId ? { ...msg, deliveryStatus: 'failed' } : msg)))
+        setMessages((prev) => prev.map((msg) => (msg.tempId === tempId ? { ...msg, deliveryStatus: 'queued' } : msg)))
         delete sendAckTimeoutsRef.current[tempId]
-      }, 12000)
+      }, SEND_ACK_TIMEOUT_MS)
     } catch (error) {
       console.error('Realtime publish failed after upload', error)
-      updateTempMessage({ deliveryStatus: 'failed' })
-      notify.error('Media uploaded, but send failed. Tap resend.')
+      updateTempMessage({ deliveryStatus: 'queued' })
+      notify.warn('Media uploaded. Realtime send will retry when connection is back.')
       return true
     }
     return true
@@ -3770,10 +3826,16 @@ function ChatPageNew() {
 
   const handleResendMessage = (message) => {
     if (!selectedUser || !message || message.sender !== 'user') return
-    if (!isMessageFailed(message)) return
+    if (!isMessageRetryable(message)) return
+    const selectedPeerKey = toUserKey(selectedUser.username)
+    const messagePeerKey = toUserKey(message.peerUsername)
+    if (!messagePeerKey || messagePeerKey !== selectedPeerKey) {
+      notify.error('Open the same chat to resend this message.')
+      return
+    }
     const activeSocket = socketRef.current
     if (!activeSocket?.connected) {
-      notify.error('Realtime server disconnected. Message not sent.')
+      notify.warn('Realtime is reconnecting. Message is queued.')
       return
     }
 
@@ -3785,10 +3847,10 @@ function ChatPageNew() {
       return
     }
 
-    const nextTempId = createTempId()
+    const nextTempId = message.tempId || createTempId()
     setMessages((prev) => prev.map((msg) => (
       isSameMessage(msg, messageKey)
-        ? { ...msg, tempId: nextTempId, deliveryStatus: 'uploading' }
+        ? { ...msg, tempId: nextTempId, peerUsername: selectedPeerKey, deliveryStatus: 'uploading' }
         : msg
     )))
 
@@ -3814,11 +3876,79 @@ function ChatPageNew() {
         replyFileName: message.replyingTo?.fileName || null,
       }),
     })
+    if (sendAckTimeoutsRef.current[nextTempId]) {
+      clearTimeout(sendAckTimeoutsRef.current[nextTempId])
+    }
     sendAckTimeoutsRef.current[nextTempId] = setTimeout(() => {
-      setMessages((prev) => prev.map((msg) => (msg.tempId === nextTempId ? { ...msg, deliveryStatus: 'failed' } : msg)))
+      setMessages((prev) => prev.map((msg) => (msg.tempId === nextTempId ? { ...msg, deliveryStatus: 'queued' } : msg)))
       delete sendAckTimeoutsRef.current[nextTempId]
-    }, 10000)
+    }, SEND_ACK_TIMEOUT_MS)
   }
+
+  useEffect(() => {
+    if (!socket?.connected || !selectedUser?.username) return
+    const activeSocket = socketRef.current
+    if (!activeSocket?.connected) return
+    const activePeerKey = toUserKey(selectedUser.username)
+    const retryableRows = (messagesRef.current || [])
+      .filter((msg) => (
+        msg?.sender === 'user'
+        && msg?.deliveryStatus === 'queued'
+        && msg?.tempId
+        && toUserKey(msg?.peerUsername) === activePeerKey
+      ))
+      .slice(-8)
+
+    if (!retryableRows.length) return
+
+    for (const msg of retryableRows) {
+      const retryTempId = msg.tempId
+      const type = msg.type || 'text'
+      const mediaUrl = msg.mediaUrl || null
+      if (type !== 'text' && (!mediaUrl || String(mediaUrl).startsWith('blob:'))) {
+        continue
+      }
+
+      setMessages((prev) => prev.map((row) => (
+        row?.tempId === retryTempId
+          ? { ...row, deliveryStatus: 'uploading', peerUsername: activePeerKey }
+          : row
+      )))
+
+      if (sendAckTimeoutsRef.current[retryTempId]) {
+        clearTimeout(sendAckTimeoutsRef.current[retryTempId])
+      }
+      sendAckTimeoutsRef.current[retryTempId] = setTimeout(() => {
+        setMessages((prev) => prev.map((row) => (
+          row?.tempId === retryTempId ? { ...row, deliveryStatus: 'queued' } : row
+        )))
+        delete sendAckTimeoutsRef.current[retryTempId]
+      }, SEND_ACK_TIMEOUT_MS)
+
+      activeSocket.publish({
+        destination: '/app/chat.send',
+        body: JSON.stringify({
+          toUsername: selectedUser.username,
+          fromUsername: flow.username,
+          message: msg.text || '',
+          tempId: retryTempId,
+          type,
+          mediaType: msg.mediaType || type,
+          fileName: msg.fileName || null,
+          mediaUrl,
+          mimeType: msg.mimeType || null,
+          replyingTo: buildReplyPayload(msg.replyingTo),
+          replyText: toReplyText(msg.replyingTo) || null,
+          replySenderName: msg.replyingTo?.senderName || null,
+          replyMessageId: msg.replyingTo?.messageId || null,
+          replyType: msg.replyingTo?.type || null,
+          replyMediaUrl: normalizeMediaUrl(msg.replyingTo?.mediaUrl || null),
+          replyMimeType: msg.replyingTo?.mimeType || null,
+          replyFileName: msg.replyingTo?.fileName || null,
+        }),
+      })
+    }
+  }, [socket?.connected, selectedUser?.username, flow.username])
 
   const handleStartEdit = (message) => {
     if (!canEditMessage(message)) {
@@ -3961,7 +4091,7 @@ function ChatPageNew() {
   }
 
   const triggerReplySwipe = (message) => {
-    if (!message || isMessageFailed(message)) return
+    if (!message || isMessageRetryable(message)) return
     Haptics.impact({ style: ImpactStyle.Light }).catch(() => {
       if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
         navigator.vibrate(18)
@@ -4200,7 +4330,7 @@ function ChatPageNew() {
     return {
       messageKey,
       message: messages[index],
-      messageFailed: isMessageFailed(messages[index]),
+      messageFailed: isMessageRetryable(messages[index]),
     }
   }
 
@@ -4826,7 +4956,7 @@ function ChatPageNew() {
           {shouldReduceMessageMotion ? (
             messages.map((message, index) => {
               const messageKey = getMessageUiKey(message, index)
-              const messageFailed = isMessageFailed(message)
+              const messageFailed = isMessageRetryable(message)
               const swipeProps = getMessageSwipeProps(message, messageKey)
               return (
               <div
@@ -4851,8 +4981,8 @@ function ChatPageNew() {
                     className={`message-content ${message.type === 'image' || message.type === 'video' ? 'has-media' : ''}`}
                     style={swipeProps.bubbleStyle}
                   >
-                    {message.sender === 'user' && message.deliveryStatus === 'uploading' && (
-                      <span className="message-upload-ring" title="Uploading" />
+                    {message.sender === 'user' && (message.deliveryStatus === 'uploading' || message.deliveryStatus === 'queued') && (
+                      <span className="message-upload-ring" title={message.deliveryStatus === 'queued' ? 'Queued' : 'Uploading'} />
                     )}
                     {message.sender === 'user' && message.deliveryStatus === 'failed' && (
                       <span className="message-upload-failed" title="Failed">!</span>
@@ -4881,7 +5011,7 @@ function ChatPageNew() {
             <AnimatePresence>
               {messages.map((message, index) => {
                 const messageKey = getMessageUiKey(message, index)
-                const messageFailed = isMessageFailed(message)
+                const messageFailed = isMessageRetryable(message)
                 const swipeProps = getMessageSwipeProps(message, messageKey)
                 return (
                 <motion.div
@@ -4907,8 +5037,8 @@ function ChatPageNew() {
                       className={`message-content ${message.type === 'image' || message.type === 'video' ? 'has-media' : ''}`}
                       style={swipeProps.bubbleStyle}
                     >
-                      {message.sender === 'user' && message.deliveryStatus === 'uploading' && (
-                        <span className="message-upload-ring" title="Uploading" />
+                      {message.sender === 'user' && (message.deliveryStatus === 'uploading' || message.deliveryStatus === 'queued') && (
+                        <span className="message-upload-ring" title={message.deliveryStatus === 'queued' ? 'Queued' : 'Uploading'} />
                       )}
                       {message.sender === 'user' && message.deliveryStatus === 'failed' && (
                         <span className="message-upload-failed" title="Failed">!</span>

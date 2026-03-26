@@ -21,13 +21,25 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
   private final int messageSizeLimitBytes;
   private final int sendBufferSizeLimitBytes;
   private final int sendTimeLimitMs;
+  private final int inboundCorePoolSize;
+  private final int inboundMaxPoolSize;
+  private final int inboundQueueCapacity;
+  private final int outboundCorePoolSize;
+  private final int outboundMaxPoolSize;
+  private final int outboundQueueCapacity;
 
   public WebSocketConfig(
       WebSocketChannelInterceptor webSocketChannelInterceptor,
       @Value("${app.cors.allowed-origin-patterns:https://*.vercel.app,http://localhost:*}") String allowedOriginPatterns,
       @Value("${app.websocket.message-size-limit-bytes:262144}") int messageSizeLimitBytes,
       @Value("${app.websocket.send-buffer-size-limit-bytes:262144}") int sendBufferSizeLimitBytes,
-      @Value("${app.websocket.send-time-limit-ms:15000}") int sendTimeLimitMs) {
+      @Value("${app.websocket.send-time-limit-ms:15000}") int sendTimeLimitMs,
+      @Value("${app.websocket.inbound-core-pool-size:4}") int inboundCorePoolSize,
+      @Value("${app.websocket.inbound-max-pool-size:12}") int inboundMaxPoolSize,
+      @Value("${app.websocket.inbound-queue-capacity:500}") int inboundQueueCapacity,
+      @Value("${app.websocket.outbound-core-pool-size:4}") int outboundCorePoolSize,
+      @Value("${app.websocket.outbound-max-pool-size:12}") int outboundMaxPoolSize,
+      @Value("${app.websocket.outbound-queue-capacity:500}") int outboundQueueCapacity) {
     this.webSocketChannelInterceptor = webSocketChannelInterceptor;
     this.allowedOriginPatterns = Arrays.stream(allowedOriginPatterns.split(","))
         .map(String::trim)
@@ -36,6 +48,12 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     this.messageSizeLimitBytes = Math.max(16 * 1024, messageSizeLimitBytes);
     this.sendBufferSizeLimitBytes = Math.max(16 * 1024, sendBufferSizeLimitBytes);
     this.sendTimeLimitMs = Math.max(5_000, sendTimeLimitMs);
+    this.inboundCorePoolSize = Math.max(2, inboundCorePoolSize);
+    this.inboundMaxPoolSize = Math.max(this.inboundCorePoolSize, inboundMaxPoolSize);
+    this.inboundQueueCapacity = Math.max(100, inboundQueueCapacity);
+    this.outboundCorePoolSize = Math.max(2, outboundCorePoolSize);
+    this.outboundMaxPoolSize = Math.max(this.outboundCorePoolSize, outboundMaxPoolSize);
+    this.outboundQueueCapacity = Math.max(100, outboundQueueCapacity);
   }
 
   @Override
@@ -62,7 +80,21 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
   @Override
   public void configureClientInboundChannel(ChannelRegistration registration) {
-    registration.interceptors(webSocketChannelInterceptor);
+    registration
+        .interceptors(webSocketChannelInterceptor)
+        .taskExecutor()
+        .corePoolSize(inboundCorePoolSize)
+        .maxPoolSize(inboundMaxPoolSize)
+        .queueCapacity(inboundQueueCapacity);
+  }
+
+  @Override
+  public void configureClientOutboundChannel(ChannelRegistration registration) {
+    registration
+        .taskExecutor()
+        .corePoolSize(outboundCorePoolSize)
+        .maxPoolSize(outboundMaxPoolSize)
+        .queueCapacity(outboundQueueCapacity);
   }
 
   @Override

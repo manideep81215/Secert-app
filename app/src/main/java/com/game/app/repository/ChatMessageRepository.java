@@ -2,6 +2,7 @@ package com.game.app.repository;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -13,6 +14,8 @@ import org.springframework.data.repository.query.Param;
 import com.game.app.model.ChatMessageEntity;
 
 public interface ChatMessageRepository extends JpaRepository<ChatMessageEntity, Long> {
+
+  Optional<ChatMessageEntity> findByFromUsernameAndClientMessageId(String fromUsername, String clientMessageId);
 
   boolean existsByMediaUrlEndingWith(String suffix);
 

@@ -36,8 +36,10 @@ export async function getConversation(token, withUsername, options = {}) {
   return hasPagination ? normalized : normalized.messages
 }
 
-export async function getConversationSummaries(token) {
+export async function getConversationSummaries(token, options = {}) {
+  const timeoutMs = Number(options?.timeoutMs || 0)
   const { data } = await messagesClient.get('/conversation-summaries', {
+    timeout: timeoutMs > 0 ? timeoutMs : messagesClient.defaults.timeout,
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
   })
   return Array.isArray(data) ? data : []

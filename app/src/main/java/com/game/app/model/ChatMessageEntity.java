@@ -7,12 +7,24 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.Lob;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 
 @Entity
-@Table(name = "chat_messages")
+@Table(
+    name = "chat_messages",
+    indexes = {
+        @Index(name = "idx_chat_messages_from_to_created", columnList = "from_username, to_username, created_at, id"),
+        @Index(name = "idx_chat_messages_to_from_created", columnList = "to_username, from_username, created_at, id"),
+        @Index(name = "idx_chat_messages_created", columnList = "created_at"),
+        @Index(name = "idx_chat_messages_from_client", columnList = "from_username, client_message_id")
+    },
+    uniqueConstraints = {
+        @UniqueConstraint(name = "uk_chat_messages_from_client", columnNames = {"from_username", "client_message_id"})
+    })
 public class ChatMessageEntity {
 
   @Id
@@ -41,6 +53,9 @@ public class ChatMessageEntity {
 
   @Column(length = 20)
   private String mediaType;
+
+  @Column(length = 120)
+  private String clientMessageId;
 
   // Legacy compatibility for existing schema column.
   @Column(name = "moved_to_drive", nullable = false)
@@ -149,6 +164,14 @@ public class ChatMessageEntity {
 
   public void setMediaType(String mediaType) {
     this.mediaType = mediaType;
+  }
+
+  public String getClientMessageId() {
+    return clientMessageId;
+  }
+
+  public void setClientMessageId(String clientMessageId) {
+    this.clientMessageId = clientMessageId;
   }
 
   public boolean isLegacyMediaMigratedFlag() {

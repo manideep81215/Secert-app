@@ -4,11 +4,11 @@ import java.security.Principal;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.springframework.context.event.EventListener;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpStatus;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.messaging.simp.user.SimpSession;
@@ -16,7 +16,6 @@ import org.springframework.messaging.simp.user.SimpUser;
 import org.springframework.messaging.simp.user.SimpUserRegistry;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Controller;
-import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 
 import com.game.app.model.ChatMessageEntity;
@@ -74,8 +73,7 @@ public class ChatWebSocketController {
 
   @MessageMapping("/chat.send")
   public void sendMessage(ChatMessage payload, Principal principal) {
-    if (payload == null || payload.toUsername() == null || payload.toUsername().isBlank()
-        || payload.message() == null || payload.message().isBlank()) {
+    if (payload == null || payload.toUsername() == null || payload.toUsername().isBlank()) {
       return;
     }
 
@@ -83,39 +81,59 @@ public class ChatWebSocketController {
     if (fromUsername == null || fromUsername.isBlank()) {
       return;
     }
+    String normalizedText = payload.message() != null ? payload.message().trim() : "";
+    if (normalizedText.isBlank()) {
+      sendAck(normalizeUsername(fromUsername), payload.tempId(), false, null, null);
+      return;
+    }
 
     String normalizedFrom = normalizeUsername(fromUsername);
     String normalizedTo = normalizeUsername(payload.toUsername());
+    String normalizedTempId = normalizeClientMessageId(payload.tempId());
     if (!hasChatRole(normalizedFrom)) {
-      messagingTemplate.convertAndSendToUser(
-          normalizedFrom,
-          "/queue/send-ack",
-          new SendAck(payload.tempId(), false, null, null));
+      sendAck(normalizedFrom, payload.tempId(), false, null, null);
       messagingTemplate.convertAndSendToUser(normalizedFrom, "/queue/errors", Map.of(
           "type", "forbidden",
           "message", "Chat access is allowed only for chat role users"));
       return;
     }
     if (!hasChatRole(normalizedTo)) {
-      messagingTemplate.convertAndSendToUser(
-          normalizedFrom,
-          "/queue/send-ack",
-          new SendAck(payload.tempId(), false, null, null));
+      sendAck(normalizedFrom, payload.tempId(), false, null, null);
       messagingTemplate.convertAndSendToUser(normalizedFrom, "/queue/errors", Map.of(
           "type", "forbidden",
           "message", "Recipient is not allowed to use chat"));
       return;
     }
+    if (normalizedTempId != null) {
+      ChatMessageEntity existing = chatMessageRepository
+          .findByFromUsernameAndClientMessageId(normalizedFrom, normalizedTempId)
+          .orElse(null);
+      if (existing != null) {
+        String existingTo = normalizeUsername(existing.getToUsername());
+        if (!normalizedTo.equals(existingTo)) {
+          sendAck(normalizedFrom, payload.tempId(), false, null, null);
+          messagingTemplate.convertAndSendToUser(normalizedFrom, "/queue/errors", Map.of(
+              "type", "invalid_message",
+              "message", "Message id conflict. Please retry sending."));
+          return;
+        }
+        sendAck(normalizedFrom, payload.tempId(), true, existing.getId(), toEpochMillis(existing.getCreatedAt()));
+        return;
+      }
+    }
+
+    String normalizedType = normalizeMessageType(payload.type());
 
     ChatMessageEntity entity = new ChatMessageEntity();
     entity.setFromUsername(normalizedFrom);
     entity.setToUsername(normalizedTo);
-    entity.setMessage(payload.message());
-    entity.setType(payload.type());
+    entity.setMessage(normalizedText);
+    entity.setType(normalizedType);
     entity.setFileName(payload.fileName());
     entity.setMediaUrl(payload.mediaUrl());
     entity.setMimeType(payload.mimeType());
-    String resolvedMediaType = resolveMediaType(payload.mediaType(), payload.type(), payload.mimeType());
+    entity.setClientMessageId(normalizedTempId);
+    String resolvedMediaType = resolveMediaType(payload.mediaType(), normalizedType, payload.mimeType());
     entity.setMediaType(resolvedMediaType);
     entity.setReplyText(payload.replyingTo() != null ? payload.replyingTo().text() : payload.replyText());
     entity.setReplySenderName(payload.replyingTo() != null ? payload.replyingTo().senderName() : payload.replySenderName());
@@ -130,54 +148,17 @@ public class ChatWebSocketController {
         : resolveOfflineTimestamp(normalizedTo);
     chatCheckEventService.trackOutgoingMessage(normalizedFrom, normalizedTo, receiverOfflineAt);
     try {
-      chatAnalyticsService.recordMessage(normalizedFrom, normalizedTo, payload.type(), entity.getCreatedAt());
+      chatAnalyticsService.recordMessage(normalizedFrom, normalizedTo, normalizedType, entity.getCreatedAt());
     } catch (Exception ignored) {
       // Keep message delivery non-blocking if analytics write fails.
     }
 
-    messagingTemplate.convertAndSendToUser(
-        normalizedTo,
-        "/queue/messages",
-        new IncomingMessage(
-            entity.getId(),
-            normalizedFrom,
-            entity.getMessage(),
-            entity.getType(),
-            entity.getFileName(),
-            entity.getMediaUrl(),
-            entity.getMimeType(),
-            entity.getReaction(),
-            buildReplyPreview(
-                entity.getReplyText(),
-                entity.getReplySenderName(),
-                entity.getReplyMessageId(),
-                entity.getReplyType(),
-                entity.getReplyMediaUrl(),
-                entity.getReplyMimeType(),
-                entity.getReplyFileName()),
-            entity.getReplyText(),
-            entity.getReplySenderName(),
-            entity.getReplyMessageId(),
-            entity.getReplyType(),
-            entity.getReplyMediaUrl(),
-            entity.getReplyMimeType(),
-            entity.getReplyFileName(),
-            entity.getCreatedAt() != null ? entity.getCreatedAt().toEpochMilli() : Instant.now().toEpochMilli(),
-            entity.isEdited(),
-            entity.getEditedAt() != null ? entity.getEditedAt().toEpochMilli() : null,
-            entity.getMediaType()));
+    long createdAtMillis = toEpochMillis(entity.getCreatedAt());
+    sendIncomingMessage(normalizedTo, normalizedFrom, entity, createdAtMillis);
+    sendAck(normalizedFrom, payload.tempId(), true, entity.getId(), createdAtMillis);
 
-    messagingTemplate.convertAndSendToUser(
-        normalizedFrom,
-        "/queue/send-ack",
-        new SendAck(
-            payload.tempId(),
-            true,
-            entity.getId(),
-            entity.getCreatedAt() != null ? entity.getCreatedAt().toEpochMilli() : Instant.now().toEpochMilli()));
-
-    String preview = notificationPreview(payload.message(), payload.type(), payload.fileName(), normalizedTo);
-    pushNotificationService.notifyUser(
+    String preview = notificationPreview(entity.getMessage(), entity.getType(), entity.getFileName(), normalizedTo);
+    notifyUserAsync(
         normalizedTo,
         "@" + normalizedFrom,
         preview,
@@ -587,8 +568,85 @@ public class ChatWebSocketController {
     return new ReplyPreview(replyText, replySenderName, replyMessageId, replyType, replyMediaUrl, replyMimeType, replyFileName);
   }
 
+  private void sendIncomingMessage(String normalizedTo, String normalizedFrom, ChatMessageEntity entity, long createdAtMillis) {
+    messagingTemplate.convertAndSendToUser(
+        normalizedTo,
+        "/queue/messages",
+        new IncomingMessage(
+            entity.getId(),
+            entity.getClientMessageId(),
+            normalizedFrom,
+            entity.getMessage(),
+            entity.getType(),
+            entity.getFileName(),
+            entity.getMediaUrl(),
+            entity.getMimeType(),
+            entity.getReaction(),
+            buildReplyPreview(
+                entity.getReplyText(),
+                entity.getReplySenderName(),
+                entity.getReplyMessageId(),
+                entity.getReplyType(),
+                entity.getReplyMediaUrl(),
+                entity.getReplyMimeType(),
+                entity.getReplyFileName()),
+            entity.getReplyText(),
+            entity.getReplySenderName(),
+            entity.getReplyMessageId(),
+            entity.getReplyType(),
+            entity.getReplyMediaUrl(),
+            entity.getReplyMimeType(),
+            entity.getReplyFileName(),
+            createdAtMillis,
+            entity.isEdited(),
+            entity.getEditedAt() != null ? entity.getEditedAt().toEpochMilli() : null,
+            entity.getMediaType()));
+  }
+
+  private void sendAck(String normalizedFrom, String tempId, boolean success, Long messageId, Long createdAt) {
+    if (normalizedFrom == null || normalizedFrom.isBlank()) {
+      return;
+    }
+    messagingTemplate.convertAndSendToUser(
+        normalizedFrom,
+        "/queue/send-ack",
+        new SendAck(tempId, success, messageId, createdAt));
+  }
+
+  private void notifyUserAsync(String username, String title, String body, String url) {
+    CompletableFuture.runAsync(() -> {
+      try {
+        pushNotificationService.notifyUser(username, title, body, url);
+      } catch (Exception ignored) {
+        // Keep websocket message processing independent from push transport failures.
+      }
+    });
+  }
+
+  private long toEpochMillis(Instant value) {
+    return value != null ? value.toEpochMilli() : Instant.now().toEpochMilli();
+  }
+
   private String normalizeUsername(String username) {
     return username == null ? "" : username.trim().toLowerCase();
+  }
+
+  private String normalizeClientMessageId(String tempId) {
+    if (tempId == null) return null;
+    String normalized = tempId.trim();
+    if (normalized.isBlank()) return null;
+    if (normalized.length() > 120) {
+      return normalized.substring(0, 120);
+    }
+    return normalized;
+  }
+
+  private String normalizeMessageType(String type) {
+    String normalized = normalizeUsername(type);
+    if (normalized.isBlank()) return "text";
+    if ("photo".equals(normalized)) return "image";
+    if ("audio".equals(normalized)) return "voice";
+    return normalized;
   }
 
   private String messagePreview(String text, String type, String fileName) {
@@ -653,9 +711,9 @@ public class ChatWebSocketController {
   private boolean hasChatRole(String username) {
     String normalized = normalizeUsername(username);
     if (normalized.isBlank()) return false;
-    UserEntity user = userRepository.findByUsername(normalized)
-        .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found"));
-    return "chat".equalsIgnoreCase(user.getRole());
+    return userRepository.findByUsername(normalized)
+        .map(user -> "chat".equalsIgnoreCase(user.getRole()))
+        .orElse(false);
   }
 
   private boolean isSecretTapType(String type) {
@@ -683,6 +741,7 @@ public class ChatWebSocketController {
 
   public record IncomingMessage(
       Long id,
+      String clientMessageId,
       String fromUsername,
       String message,
       String type,

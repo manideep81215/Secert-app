@@ -278,6 +278,7 @@ public class ChatMessageController {
         "/queue/messages",
         new ChatWebSocketController.IncomingMessage(
             entity.getId(),
+            entity.getClientMessageId(),
             fromUsername,
             entity.getMessage(),
             entity.getType(),
@@ -311,6 +312,7 @@ public class ChatMessageController {
     boolean isSender = meUsername.equalsIgnoreCase(row.getFromUsername());
     return new ConversationMessageDto(
         row.getId(),
+        row.getClientMessageId(),
         isSender ? "user" : "other",
         row.getFromUsername(),
         row.getMessage(),
@@ -455,6 +457,7 @@ public class ChatMessageController {
 
   public record ConversationMessageDto(
       Long id,
+      String clientMessageId,
       String sender,
       String senderName,
       String text,
