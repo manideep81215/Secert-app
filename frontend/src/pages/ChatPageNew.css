@@ -3423,6 +3423,10 @@
     padding-bottom: 0.35rem !important;
   }
 
+  .chat-container[data-native="true"][data-android="true"].keyboard-open:not(.mobile-users-open) .input-area {
+    margin-bottom: var(--chat-keyboard-offset, 0px) !important;
+  }
+
   .chat-container[data-native="true"][data-android="true"]:not(.mobile-users-open) .reply-preview,
   .chat-container[data-native="true"][data-android="true"].keyboard-open:not(.mobile-users-open) .reply-preview {
     position: relative !important;

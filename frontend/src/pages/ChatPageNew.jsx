@@ -96,7 +96,7 @@ function getViewportFallbackHeight() {
   const visualHeight = Math.round(window.visualViewport?.height || 0)
   const docHeight = Math.round(window.document?.documentElement?.clientHeight || 0)
   const screenHeight = Math.round(window.screen?.height || 0)
-  return Math.max(0, innerHeight, visualHeight, docHeight, screenHeight)
+  return visualHeight || innerHeight || docHeight || screenHeight || 0
 }
 
 function ChatPageNew() {
@@ -1537,7 +1537,6 @@ function ChatPageNew() {
         })
         setVisualViewportTop(0)
         setVisualViewportBottomGap(0)
-        setKeyboardOffset(0)
         return
       }
       const settleWindowActive = Date.now() < Number(keyboardSettleUntilRef.current || 0)
@@ -1625,9 +1624,14 @@ function ChatPageNew() {
           const nativeHeight = Number(info?.keyboardHeight || 0)
           keyboardSettleUntilRef.current = Date.now() + 420
           if (isAndroidPlatform) {
-            const layoutHeight = Math.round(window.innerHeight || 0)
-            const baseline = Math.max(maxViewportHeightRef.current || 0, layoutHeight)
-            const resizedDelta = Math.max(0, baseline - layoutHeight)
+            const visibleViewportHeight = Math.round(
+              window.visualViewport?.height ||
+              window.innerHeight ||
+              viewportHeight ||
+              0,
+            )
+            const baseline = Math.max(maxViewportHeightRef.current || 0, visibleViewportHeight)
+            const resizedDelta = Math.max(0, baseline - visibleViewportHeight)
             // Use only the remaining keyboard height not already applied by viewport resize.
             const remainingOffset = Math.max(0, nativeHeight - resizedDelta)
             setKeyboardOffset(remainingOffset <= 28 ? 0 : remainingOffset)
@@ -4779,16 +4783,20 @@ function ChatPageNew() {
   )
   const runtimeInnerHeight = typeof window !== 'undefined' ? Math.round(window.innerHeight || 0) : 0
   const runtimeVisualHeight = typeof window !== 'undefined' ? Math.round(window.visualViewport?.height || 0) : 0
-  const measuredViewportHeight = Math.max(
-    0,
-    Number(viewportHeight || 0),
-    runtimeVisualHeight,
-    runtimeInnerHeight,
-  )
+  const measuredViewportHeight = (isNativeRuntime && isAndroidPlatform)
+    ? Math.max(0, runtimeVisualHeight || Number(viewportHeight || 0) || runtimeInnerHeight || 0)
+    : Math.max(
+        0,
+        Number(viewportHeight || 0),
+        runtimeVisualHeight,
+        runtimeInnerHeight,
+      )
   const useStrictIosWebViewport = !isNativeRuntime && isIosPlatform && isKeyboardOpen
-  const resolvedViewportHeight = useStrictIosWebViewport
+  const resolvedViewportHeight = (isNativeRuntime && isAndroidPlatform)
     ? Math.max(0, measuredViewportHeight || fallbackViewportHeight)
-    : Math.max(0, measuredViewportHeight, fallbackViewportHeight)
+    : useStrictIosWebViewport
+      ? Math.max(0, measuredViewportHeight || fallbackViewportHeight)
+      : Math.max(0, measuredViewportHeight, fallbackViewportHeight)
   const renderReplyInsideComposer = Boolean(
     isNativeRuntime &&
     isAndroidPlatform &&

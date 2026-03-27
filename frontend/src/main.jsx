@@ -66,6 +66,14 @@ const markNativeRuntimeClasses = () => {
   }
 }
 
+const getFirstPositiveViewportValue = (...values) => {
+  for (const value of values) {
+    const next = Math.round(Number(value || 0))
+    if (next > 0) return next
+  }
+  return 0
+}
+
 const syncNativeViewportCssVars = () => {
   if (typeof window === 'undefined' || !isNativeCapacitorRuntime()) return () => {}
 
@@ -73,17 +81,15 @@ const syncNativeViewportCssVars = () => {
   if (!html) return () => {}
 
   const applyViewportSize = () => {
-    const viewportHeight = Math.max(
-      0,
-      Math.round(window.visualViewport?.height || 0),
-      Math.round(window.innerHeight || 0),
-      Math.round(document.documentElement?.clientHeight || 0),
+    const viewportHeight = getFirstPositiveViewportValue(
+      window.visualViewport?.height,
+      window.innerHeight,
+      document.documentElement?.clientHeight,
     )
-    const viewportWidth = Math.max(
-      0,
-      Math.round(window.visualViewport?.width || 0),
-      Math.round(window.innerWidth || 0),
-      Math.round(document.documentElement?.clientWidth || 0),
+    const viewportWidth = getFirstPositiveViewportValue(
+      window.visualViewport?.width,
+      window.innerWidth,
+      document.documentElement?.clientWidth,
     )
 
     if (viewportHeight > 0) {
