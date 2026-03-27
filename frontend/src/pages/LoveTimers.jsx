@@ -1,11 +1,58 @@
 ﻿import { useEffect, useMemo, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import LoveMilestonePopup, {
+  SpecialReminderPopup,
+  getMilestone,
+  getSpecialReminder,
+} from '../components/LoveMilestonePopup'
 
 const FIRST_TALK  = new Date('2022-11-28T00:00:00')
 const TALKED_UNTIL = new Date('2023-03-24T00:00:00')
 const FOUND_AGAIN = new Date('2025-03-11T00:00:00')
 const LOVE_START  = new Date('2025-10-07T00:00:00')
 const LOVE_TIMERS_SECRET_CODE = String(import.meta.env.VITE_LOVE_TIMERS_SECRET_CODE || '9192').trim()
+const LOVE_DAY_MILESTONE_STORAGE_KEY = 'love_timers_day_milestone_v1'
+const LOVE_SPECIAL_REMINDER_STORAGE_KEY = 'love_timers_special_reminder_v1'
+
+function buildDayMilestoneStorageKey(counterKey, count) {
+  return `${LOVE_DAY_MILESTONE_STORAGE_KEY}:${counterKey}:${count}`
+}
+
+function wasDayMilestoneCelebrated(counterKey, count) {
+  try {
+    return window.localStorage.getItem(buildDayMilestoneStorageKey(counterKey, count)) === '1'
+  } catch {
+    return false
+  }
+}
+
+function markDayMilestoneCelebrated(counterKey, count) {
+  try {
+    window.localStorage.setItem(buildDayMilestoneStorageKey(counterKey, count), '1')
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+function buildSpecialReminderStorageKey(queueKey) {
+  return `${LOVE_SPECIAL_REMINDER_STORAGE_KEY}:${queueKey}`
+}
+
+function wasSpecialReminderCelebrated(queueKey) {
+  try {
+    return window.localStorage.getItem(buildSpecialReminderStorageKey(queueKey)) === '1'
+  } catch {
+    return false
+  }
+}
+
+function markSpecialReminderCelebrated(queueKey) {
+  try {
+    window.localStorage.setItem(buildSpecialReminderStorageKey(queueKey), '1')
+  } catch {
+    // Ignore storage failures.
+  }
+}
 
 function getElapsed(since) {
   const sinceMs = since instanceof Date ? since.getTime() : new Date(since).getTime()
@@ -55,7 +102,24 @@ function TimerUnit({ value, label, accent }) {
   )
 }
 
-function TimerCard({ title, subtitle, story, detail, icon, since, accent, glow, tag, delay, index }) {
+function TimerCard({
+  title,
+  subtitle,
+  story,
+  detail,
+  icon,
+  since,
+  accent,
+  glow,
+  tag,
+  delay,
+  index,
+  milestoneCounter,
+  milestoneKey,
+  milestoneLabel,
+  onElapsedChange,
+  onMilestone,
+}) {
   const [elapsed, setElapsed]   = useState(() => getElapsed(since))
   const [visible, setVisible]   = useState(false)
   const [expanded, setExpanded] = useState(false)
@@ -76,6 +140,24 @@ function TimerCard({ title, subtitle, story, detail, icon, since, accent, glow, 
     obs.observe(el)
     return () => obs.disconnect()
   }, [])
+
+  useEffect(() => {
+    if (!milestoneCounter || typeof onElapsedChange !== 'function') return
+    onElapsedChange({
+      counter: milestoneCounter,
+      count: elapsed.totalDays,
+    })
+  }, [elapsed.totalDays, milestoneCounter, onElapsedChange])
+
+  useEffect(() => {
+    if (!milestoneCounter || !milestoneKey || !milestoneLabel || typeof onMilestone !== 'function') return
+    onMilestone({
+      counter: milestoneCounter,
+      counterKey: milestoneKey,
+      label: milestoneLabel,
+      count: elapsed.totalDays,
+    })
+  }, [elapsed.totalDays, milestoneCounter, milestoneKey, milestoneLabel])
 
   const isLeft = index % 2 === 0
 
@@ -217,6 +299,14 @@ function SecretGate({ onUnlock }) {
 export default function LoveTimers() {
   const navigate  = useNavigate()
   const [unlocked, setUnlocked] = useState(false)
+  const [popupQueue, setPopupQueue] = useState([])
+  const [activePopup, setActivePopup] = useState(null)
+  const queuedPopupKeysRef = useRef(new Set())
+  const [timerCounts, setTimerCounts] = useState(() => ({
+    hello: getElapsed(FIRST_TALK).totalDays,
+    ribbon: getElapsed(FOUND_AGAIN).totalDays,
+    love: getElapsed(LOVE_START).totalDays,
+  }))
 
   const hearts = useMemo(() => Array.from({ length: 14 }, () => ({
     left:              `${Math.random() * 100}%`,
@@ -225,6 +315,78 @@ export default function LoveTimers() {
     fontSize:          `${0.7 + Math.random() * 1.1}rem`,
     opacity:           0.08 + Math.random() * 0.18,
   })), [])
+
+  useEffect(() => {
+    if (activePopup || popupQueue.length === 0) return
+    setActivePopup(popupQueue[0])
+    setPopupQueue((prev) => prev.slice(1))
+  }, [activePopup, popupQueue])
+
+  const enqueuePopup = (popup) => {
+    if (!popup?.queueKey || queuedPopupKeysRef.current.has(popup.queueKey)) return
+    queuedPopupKeysRef.current.add(popup.queueKey)
+    setPopupQueue((prev) => [...prev, popup])
+  }
+
+  const handleTimerElapsed = ({ counter, count }) => {
+    if (!counter) return
+    setTimerCounts((prev) => (
+      prev[counter] === count
+        ? prev
+        : { ...prev, [counter]: count }
+    ))
+  }
+
+  const handleTimerMilestone = ({ counter, counterKey, label, count }) => {
+    if (!unlocked) return
+
+    const milestone = getMilestone(count, counter)
+    if (!milestone || wasDayMilestoneCelebrated(counterKey, count)) return
+
+    const queueKey = `${counterKey}:${count}`
+    enqueuePopup({
+      kind: 'milestone',
+      milestone,
+      counterKey,
+      label,
+      count,
+      queueKey,
+    })
+  }
+
+  useEffect(() => {
+    if (!unlocked) return
+
+    const helloCount = Number(timerCounts.hello || 0)
+    const ribbonCount = Number(timerCounts.ribbon || 0)
+    const loveCount = Number(timerCounts.love || 0)
+    if (helloCount <= 0 || ribbonCount <= 0 || loveCount <= 0) return
+
+    const reminder = getSpecialReminder(helloCount, ribbonCount, loveCount)
+    if (!reminder) return
+
+    const queueKey = `special:${helloCount}:${ribbonCount}:${loveCount}:${String(reminder.type || '')}:${String(reminder.title || '')}`
+    if (wasSpecialReminderCelebrated(queueKey)) return
+
+    enqueuePopup({
+      kind: 'special',
+      reminder,
+      queueKey,
+    })
+  }, [timerCounts.hello, timerCounts.ribbon, timerCounts.love, unlocked])
+
+  const dismissActivePopup = () => {
+    if (!activePopup) return
+
+    if (activePopup.kind === 'milestone') {
+      markDayMilestoneCelebrated(activePopup.counterKey, activePopup.count)
+    } else if (activePopup.kind === 'special') {
+      markSpecialReminderCelebrated(activePopup.queueKey)
+    }
+
+    queuedPopupKeysRef.current.delete(activePopup.queueKey)
+    setActivePopup(null)
+  }
 
   return (
     <>
@@ -450,6 +612,16 @@ export default function LoveTimers() {
       `}</style>
 
       <div className="os-page">
+        <LoveMilestonePopup
+          milestone={activePopup?.kind === 'milestone' ? activePopup.milestone : null}
+          label={activePopup?.kind === 'milestone' ? activePopup.label : ''}
+          onClose={dismissActivePopup}
+        />
+        <SpecialReminderPopup
+          reminder={activePopup?.kind === 'special' ? activePopup.reminder : null}
+          onClose={dismissActivePopup}
+        />
+
         {hearts.map((h, i) => (
           <FloatingHeart key={i} style={{
             left: h.left, animationDelay: h.animationDelay,
@@ -486,6 +658,11 @@ export default function LoveTimers() {
                   glow="rgba(192,132,252,.45)"
                   delay={300}
                   since={FIRST_TALK}
+                  milestoneCounter="hello"
+                  milestoneKey="since_first_hello"
+                  milestoneLabel="since first hello"
+                  onElapsedChange={handleTimerElapsed}
+                  onMilestone={handleTimerMilestone}
                 />
 
                 <GapCard from={TALKED_UNTIL} to={FOUND_AGAIN} label="time apart" />
@@ -502,6 +679,11 @@ export default function LoveTimers() {
                   glow="rgba(255,107,157,.45)"
                   delay={500}
                   since={FOUND_AGAIN}
+                  milestoneCounter="ribbon"
+                  milestoneKey="since_reunion"
+                  milestoneLabel="since reunion"
+                  onElapsedChange={handleTimerElapsed}
+                  onMilestone={handleTimerMilestone}
                 />
 
                 <GapCard from={FOUND_AGAIN} to={LOVE_START} label="growing closer" />
@@ -518,6 +700,11 @@ export default function LoveTimers() {
                   glow="rgba(200,60,120,.45)"
                   delay={700}
                   since={LOVE_START}
+                  milestoneCounter="love"
+                  milestoneKey="days_in_love"
+                  milestoneLabel="days in love"
+                  onElapsedChange={handleTimerElapsed}
+                  onMilestone={handleTimerMilestone}
                 />
               </div>
 
