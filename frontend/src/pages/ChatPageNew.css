@@ -3383,8 +3383,8 @@
     display: flex !important;
     flex-direction: column !important;
     overflow: hidden !important;
-    height: 100% !important;
-    min-height: 100% !important;
+    height: var(--chat-viewport-height, var(--native-app-height, 100dvh)) !important;
+    min-height: var(--chat-viewport-height, var(--native-app-height, 100dvh)) !important;
   }
 
   .chat-container[data-native="true"][data-android="true"]:not(.mobile-users-open) .chat-area,
@@ -3396,7 +3396,7 @@
     top: auto !important;
     bottom: auto !important;
     width: 100% !important;
-    height: 100% !important;
+    height: var(--chat-viewport-height, var(--native-app-height, 100dvh)) !important;
     min-height: 0 !important;
     display: flex !important;
     flex-direction: column !important;

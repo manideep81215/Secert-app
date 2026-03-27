@@ -16,6 +16,11 @@
     linear-gradient(180deg, #83d9ef 0%, #b7f1f5 50%, #b6e3a2 100%);
 }
 
+html.native-android-runtime .auth-showcase {
+  min-height: var(--native-app-height, 100dvh);
+  height: var(--native-app-height, 100dvh);
+}
+
 .auth-showcase::after {
   content: '';
   position: absolute;

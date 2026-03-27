@@ -14,6 +14,13 @@
   min-height: 100dvh;
 }
 
+html.native-android-runtime .app-wrap,
+html.native-android-runtime .app-auth-route,
+html.native-android-runtime .app-auth-max {
+  min-height: var(--native-app-height, 100dvh);
+  height: var(--native-app-height, 100dvh);
+}
+
 .app-max {
   max-width: 1080px;
 }

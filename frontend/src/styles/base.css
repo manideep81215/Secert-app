@@ -45,13 +45,15 @@ body {
 html.native-android-runtime,
 body.native-android-runtime {
   overflow: hidden;
-  position: fixed;
-  inset: 0;
+  width: 100%;
+  height: var(--native-app-height, 100%);
+  min-height: var(--native-app-height, 100%);
+  overscroll-behavior: none;
 }
 
 html.native-android-runtime #root,
 body.native-android-runtime #root {
   overflow: hidden;
-  height: 100%;
-  min-height: 0 !important;
+  height: var(--native-app-height, 100%);
+  min-height: var(--native-app-height, 100%) !important;
 }

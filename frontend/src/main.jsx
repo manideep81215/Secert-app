@@ -66,8 +66,67 @@ const markNativeRuntimeClasses = () => {
   }
 }
 
+const syncNativeViewportCssVars = () => {
+  if (typeof window === 'undefined' || !isNativeCapacitorRuntime()) return () => {}
+
+  const html = document.documentElement
+  if (!html) return () => {}
+
+  const applyViewportSize = () => {
+    const viewportHeight = Math.max(
+      0,
+      Math.round(window.visualViewport?.height || 0),
+      Math.round(window.innerHeight || 0),
+      Math.round(document.documentElement?.clientHeight || 0),
+    )
+    const viewportWidth = Math.max(
+      0,
+      Math.round(window.visualViewport?.width || 0),
+      Math.round(window.innerWidth || 0),
+      Math.round(document.documentElement?.clientWidth || 0),
+    )
+
+    if (viewportHeight > 0) {
+      html.style.setProperty('--native-app-height', `${viewportHeight}px`)
+    }
+    if (viewportWidth > 0) {
+      html.style.setProperty('--native-app-width', `${viewportWidth}px`)
+    }
+  }
+
+  let rafId = 0
+  const queueApplyViewportSize = () => {
+    if (rafId) cancelAnimationFrame(rafId)
+    rafId = requestAnimationFrame(() => {
+      rafId = 0
+      applyViewportSize()
+    })
+  }
+
+  applyViewportSize()
+
+  const viewport = window.visualViewport
+  viewport?.addEventListener('resize', queueApplyViewportSize)
+  viewport?.addEventListener('scroll', queueApplyViewportSize)
+  window.addEventListener('resize', queueApplyViewportSize)
+  window.addEventListener('orientationchange', queueApplyViewportSize)
+  window.addEventListener('focusin', queueApplyViewportSize)
+  window.addEventListener('focusout', queueApplyViewportSize)
+
+  return () => {
+    if (rafId) cancelAnimationFrame(rafId)
+    viewport?.removeEventListener('resize', queueApplyViewportSize)
+    viewport?.removeEventListener('scroll', queueApplyViewportSize)
+    window.removeEventListener('resize', queueApplyViewportSize)
+    window.removeEventListener('orientationchange', queueApplyViewportSize)
+    window.removeEventListener('focusin', queueApplyViewportSize)
+    window.removeEventListener('focusout', queueApplyViewportSize)
+  }
+}
+
 markNativeRuntimeClasses()
 configureNativeKeyboardBehavior()
+syncNativeViewportCssVars()
 
 if ('serviceWorker' in navigator) {
   if (isNativeCapacitorRuntime()) {
