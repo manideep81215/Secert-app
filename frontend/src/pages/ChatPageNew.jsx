@@ -5319,6 +5319,7 @@ function ChatPageNew() {
               <input
                 type="text"
                 className="message-input"
+                dir="auto"
                 placeholder="Type a message..."
                 value={inputValue}
                 onChange={handleInputChange}

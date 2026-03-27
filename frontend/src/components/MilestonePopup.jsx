@@ -25,16 +25,23 @@ const GLOBAL_4000_MILESTONE = {
   isSpecial: true,
 }
 
-const SPECIAL_9192_MILESTONE = {
-  kind: 'messages',
-  count: 9192,
-  emoji: '\uD83D\uDC9D',
-  color: '#ff1493',
-  glow: 'rgba(255,20,147,0.6)',
-  title: '9192 Messages of Love!',
-  message: 'Through 9192 conversations, your love story continues to bloom. Here\'s to forever together. \uD83D\uDC91',
-  buttonText: 'Forever & Always \uD83D\uDC96',
-  isSpecial: true,
+function buildSpecialLoveMilestone(count) {
+  return {
+    kind: 'messages',
+    count,
+    emoji: '\uD83D\uDC9D',
+    color: '#ff1493',
+    glow: 'rgba(255,20,147,0.6)',
+    title: `${count} Messages of Love!`,
+    message: `Through ${count} conversations, your love story continues to bloom. Here's to forever together. \uD83D\uDC91`,
+    buttonText: 'Forever & Always \uD83D\uDC96',
+    isSpecial: true,
+  }
+}
+
+const SPECIAL_MESSAGE_MILESTONES = {
+  9192: buildSpecialLoveMilestone(9192),
+  9291: buildSpecialLoveMilestone(9291),
 }
 
 const STREAK_MILESTONES = [
@@ -85,9 +92,14 @@ function createParticles(color, isSpecial = false) {
   })
 }
 
+function getSpecialMessageMilestone(count) {
+  return SPECIAL_MESSAGE_MILESTONES[Number(count || 0)] || null
+}
+
 function buildMessageMilestone(count) {
-  if (count === 9192) {
-    return SPECIAL_9192_MILESTONE
+  const specialMilestone = getSpecialMessageMilestone(count)
+  if (specialMilestone) {
+    return specialMilestone
   }
 
   const safeCount = Math.max(500, Number(count || 0))
@@ -144,9 +156,10 @@ function MilestonePopup({ token, peerUsername, triggerCheck }) {
         }
 
         const exactTotalMessages = Number(stats?.totalMessages || 0)
-        if (exactTotalMessages === 9192 && !wasAlreadyCelebrated('msg', 9192)) {
-          setMilestone(SPECIAL_9192_MILESTONE)
-          setParticles(createParticles(SPECIAL_9192_MILESTONE.color, true))
+        const exactSpecialMilestone = getSpecialMessageMilestone(exactTotalMessages)
+        if (exactSpecialMilestone && !wasAlreadyCelebrated('msg', exactTotalMessages)) {
+          setMilestone(exactSpecialMilestone)
+          setParticles(createParticles(exactSpecialMilestone.color, true))
           window.setTimeout(() => {
             if (!cancelled) setVisible(true)
           }, 80)
