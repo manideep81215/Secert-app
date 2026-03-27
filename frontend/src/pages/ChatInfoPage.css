@@ -90,6 +90,14 @@
   text-transform: capitalize;
 }
 
+.chat-info-status.online {
+  color: #22c55e;
+}
+
+.chat-info-status.offline {
+  color: #6f6a62;
+}
+
 .chat-info-status::before {
   content: '* ';
   color: #4caf50;

@@ -908,7 +908,7 @@ function ChatInfoPage() {
       <div className="chat-info-body">
         <div className="chat-info-avatar">{getAvatarLabel(getUserDisplayName(selectedUser))}</div>
         <h3 className="chat-info-name">{getUserDisplayName(selectedUser)}</h3>
-        <p className="chat-info-status">{statusLabel}</p>
+        <p className={`chat-info-status ${selectedPresence.status === 'online' ? 'online' : 'offline'}`}>{statusLabel}</p>
 
         <div className="chat-info-actions">
           <button type="button" className="chat-info-action" onClick={() => setShowDeleteConfirm(true)} aria-label="Delete chat">

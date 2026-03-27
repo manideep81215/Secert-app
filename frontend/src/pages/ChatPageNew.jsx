@@ -218,6 +218,7 @@ function ChatPageNew() {
   const recordingTimerRef = useRef(null)
   const wsErrorToastAtRef = useRef(0)
   const wsResumeSuppressUntilRef = useRef(0)
+  const messageInputRef = useRef(null)
   const wsLastHiddenAtRef = useRef(typeof Date !== 'undefined' ? Date.now() : 0)
   const wsErrorTimerRef = useRef(null)
   const lastAutoRefreshAtRef = useRef(0)
@@ -3377,9 +3378,29 @@ function ChatPageNew() {
     }
   }
 
+  const resizeMessageInput = (inputEl = messageInputRef.current) => {
+    if (!(inputEl instanceof HTMLTextAreaElement)) return
+
+    inputEl.style.height = 'auto'
+
+    const computedStyle = window.getComputedStyle(inputEl)
+    const lineHeight = parseFloat(computedStyle.lineHeight) || 19
+    const paddingTop = parseFloat(computedStyle.paddingTop) || 0
+    const paddingBottom = parseFloat(computedStyle.paddingBottom) || 0
+    const borderTop = parseFloat(computedStyle.borderTopWidth) || 0
+    const borderBottom = parseFloat(computedStyle.borderBottomWidth) || 0
+    const minHeight = Math.ceil(lineHeight + paddingTop + paddingBottom + borderTop + borderBottom)
+    const maxHeight = Math.ceil((lineHeight * 4) + paddingTop + paddingBottom + borderTop + borderBottom)
+    const nextHeight = Math.max(minHeight, Math.min(inputEl.scrollHeight, maxHeight))
+
+    inputEl.style.height = `${nextHeight}px`
+    inputEl.style.overflowY = inputEl.scrollHeight > maxHeight ? 'auto' : 'hidden'
+  }
+
   const handleInputChange = (event) => {
     const nextValue = event.target.value
     setInputValue(nextValue)
+    resizeMessageInput(event.target)
 
     if (!selectedUser) return
 
@@ -4568,6 +4589,10 @@ function ChatPageNew() {
     }
   }
 
+  useEffect(() => {
+    resizeMessageInput()
+  }, [inputValue, editingMessage?.key, selectedUser?.username])
+
   const openSnapCamera = () => {
     if (!selectedUser) {
       notify.error('Select a user first.')
@@ -5324,14 +5349,19 @@ function ChatPageNew() {
               )}
             </div>
             <div className="message-input-shell">
-              <input
-                type="text"
+              <textarea
+                ref={messageInputRef}
                 className="message-input"
                 dir="auto"
                 placeholder="Type a message..."
                 value={inputValue}
                 onChange={handleInputChange}
-                onKeyDown={(event) => event.key === 'Enter' && handleSendMessage()}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault()
+                    void handleSendMessage()
+                  }
+                }}
                 onFocus={() => {
                   scrollMessagesToBottom('auto')
                   setTimeout(() => scrollMessagesToBottom('auto'), 120)
@@ -5345,6 +5375,7 @@ function ChatPageNew() {
                 spellCheck={false}
                 inputMode="text"
                 enterKeyHint="send"
+                rows={1}
               />
               <button
                 className={`btn-voice-inline ${isRecordingVoice ? 'recording' : ''}`}
