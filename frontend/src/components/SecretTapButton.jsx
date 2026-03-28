@@ -39,6 +39,8 @@ function SecretTapButton({ username, socketRef }) {
   const suppressNextClickRef = useRef(false)
   const [hitCount, setHitCount] = useState(0)
   const [isBursting, setIsBursting] = useState(false)
+  const [longPressScale, setLongPressScale] = useState(0)
+  const longPressScaleIntervalRef = useRef(null)
   const normalizedUsername = normalizeUsername(username)
   const isTonySender = normalizedUsername === TONY_USERNAME
   const isHihiSender = normalizedUsername === HIHI_USERNAME
@@ -83,6 +85,13 @@ function SecretTapButton({ username, socketRef }) {
     if (burstTimerRef.current) {
       clearTimeout(burstTimerRef.current)
       burstTimerRef.current = null
+    }
+  }
+
+  const clearLongPressScaleInterval = () => {
+    if (longPressScaleIntervalRef.current) {
+      clearInterval(longPressScaleIntervalRef.current)
+      longPressScaleIntervalRef.current = null
     }
   }
 
@@ -224,7 +233,19 @@ function SecretTapButton({ username, socketRef }) {
     }
     suppressNextClickRef.current = false
     clearLongPressTimer()
+    clearLongPressScaleInterval()
+    setLongPressScale(0)
+
+    // Start scaling up during long press
+    longPressScaleIntervalRef.current = setInterval(() => {
+      setLongPressScale((prev) => {
+        const next = Math.min(prev + 0.04, 0.6)
+        return next
+      })
+    }, 50)
+
     longPressTimerRef.current = setTimeout(() => {
+      clearLongPressScaleInterval()
       suppressNextClickRef.current = true
       clearTapTimer()
       tapCountRef.current = 0
@@ -233,6 +254,9 @@ function SecretTapButton({ username, socketRef }) {
         tempKey: `${normalizedUsername}-long-press`,
         successToast: 'You Long Pressed The Button',
       })
+      // Trigger burst after long press
+      triggerBurstReset()
+      setLongPressScale(0)
     }, SECRET_TAP_LONG_PRESS_MS)
   }
 
@@ -246,6 +270,8 @@ function SecretTapButton({ username, socketRef }) {
       }
     }
     clearLongPressTimer()
+    clearLongPressScaleInterval()
+    setLongPressScale(0)
   }
 
   useEffect(() => () => {
@@ -253,9 +279,10 @@ function SecretTapButton({ username, socketRef }) {
     clearLongPressTimer()
     clearResetScaleTimer()
     clearBurstTimer()
+    clearLongPressScaleInterval()
   }, [])
 
-  const currentScale = Math.min(1 + (hitCount * SECRET_TAP_SCALE_STEP), SECRET_TAP_SCALE_MAX)
+  const currentScale = Math.min(1 + (hitCount * SECRET_TAP_SCALE_STEP) + longPressScale, SECRET_TAP_SCALE_MAX)
 
   if (!canUseSecretTap) return null
 
