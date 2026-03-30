@@ -50,6 +50,12 @@ public class DatabasePoolMonitor {
             total, max, active, idle, waiting
         );
 
+        if (waiting > 0 && total < max) {
+            logger.error("DATABASE CONNECTIVITY ISSUE: {}", message);
+            logger.error("Pool demand exists, but new connections are not being established. Verify DB_URL host/port, network access, and MySQL availability.");
+            return;
+        }
+
         if (active > (max * 0.8)) {
             logger.warn("HIGH CONNECTION POOL USAGE: {}", message);
             logger.warn("Consider increasing DB_POOL_MAX_SIZE if this persists");
