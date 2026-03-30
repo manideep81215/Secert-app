@@ -65,3 +65,22 @@ export function FileAttachIcon({ className = '', size = 20 }) {
     </svg>
   )
 }
+
+export function DriveAttachIcon({ className = '', size = 20 }) {
+  return (
+    <svg
+      className={className}
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M7 5L2 12L7 19H17L22 12L17 5H7Z" fill="#4285F4" />
+      <path d="M7 5L12 12L7 19" fill="#34A853" />
+      <path d="M17 5L12 12L17 19" fill="#EA4335" />
+    </svg>
+  )
+}

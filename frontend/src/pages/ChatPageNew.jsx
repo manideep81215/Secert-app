@@ -20,15 +20,15 @@ import {
 } from '../services/messagesApi'
 import { getAllUsers } from '../services/usersApi'
 import BackIcon from '../components/BackIcon'
-import { CameraAttachIcon, FileAttachIcon, PhotoAttachIcon } from '../components/AttachmentIcons'
+import { CameraAttachIcon, FileAttachIcon, PhotoAttachIcon, DriveAttachIcon } from '../components/AttachmentIcons'
 import LoveReminder from '../components/LoveReminder'
 import MonthlyRecap from '../components/MonthlyRecap'
 import MilestonePopup from '../components/MilestonePopup'
 import LovePercentageChip from '../components/LovePercentageChip'
 import CheckedForYouPopup from '../components/CheckedForYouPopup'
-import SnapCameraScreen from '../components/SnapCameraScreen'
+// import SnapCameraScreen from '../components/SnapCameraScreen' // DISABLED: Snap Camera feature
 import SecretTapButton from '../components/SecretTapButton'
-import snapIcon from '../assets/snap.png'
+// import snapIcon from '../assets/snap.png' // DISABLED: Snap Camera feature
 import timerLoveBirdsIcon from '../assets/in-love.png'
 import ChatUsersPanel from './ChatUsersPanel'
 import {
@@ -59,10 +59,11 @@ const ONLINE_HEARTBEAT_MS = 30 * 1000
 const AUTO_REFRESH_DEBOUNCE_MS = 1200
 const TEXT_SEND_WAIT_MS = 1500
 const MEDIA_SEND_WAIT_MS = 2000
-const SEND_ACK_TIMEOUT_MS = 12000
+const SEND_ACK_TIMEOUT_MS = 20000
 const USERS_SUMMARY_TIMEOUT_MS = 2200
 const CONVERSATION_FETCH_RETRY_LIMIT = 4
 const CONVERSATION_PAGE_SIZE = 50
+const MAX_MESSAGES_IN_MEMORY = 100  // Keep only latest 100 messages in state to save RAM
 const CONVERSATION_SCROLL_TOP_THRESHOLD = 140
 const AUTO_SCROLL_BOTTOM_THRESHOLD = 120
 const MISSED_SCAN_PAGE_LIMIT = 12
@@ -140,7 +141,7 @@ function ChatPageNew() {
   const [inputValue, setInputValue] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [showAttachMenu, setShowAttachMenu] = useState(false)
-  const [isSnapCameraOpen, setIsSnapCameraOpen] = useState(false)
+  // const [isSnapCameraOpen, setIsSnapCameraOpen] = useState(false) // DISABLED: Snap Camera feature
   const [pendingImagePreview, setPendingImagePreview] = useState(null)
   const [isPendingImageSending, setIsPendingImageSending] = useState(false)
   const [activeMediaPreview, setActiveMediaPreview] = useState(null)
@@ -163,6 +164,7 @@ function ChatPageNew() {
   const [isManualRefreshing, setIsManualRefreshing] = useState(false)
   const [isRecordingVoice, setIsRecordingVoice] = useState(false)
   const [recordingSeconds, setRecordingSeconds] = useState(0)
+  const [isCameraLoading, setIsCameraLoading] = useState(false)
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false)
   const [keyboardOffset, setKeyboardOffset] = useState(0)
   const [viewportHeight, setViewportHeight] = useState(() => getViewportFallbackHeight())
@@ -278,15 +280,17 @@ function ChatPageNew() {
   const requestNativeCameraPermission = async () => {
     if (!isNativeCapacitorRuntime()) return true
     try {
-      const permission = await Camera.requestPermissions({ permissions: ['camera'] })
-      if (isGrantedPermissionState(permission?.camera)) {
+      const cameraPerms = await Camera.requestPermissions({ permissions: ['camera', 'photos'] })
+      const cameraGranted = isGrantedPermissionState(cameraPerms?.camera)
+      const photosGranted = isGrantedPermissionState(cameraPerms?.photos)
+      if (cameraGranted || photosGranted) {
         return true
       }
     } catch (error) {
       const message = String(error?.message || '').toLowerCase()
       if (message.includes('cancel')) return false
     }
-    notify.error('Camera permission is required to use the camera.')
+    notify.error('Camera permission is required. Enable it in settings.')
     return false
   }
   const getCapacitorKeyboard = async () => {
@@ -907,6 +911,16 @@ function ChatPageNew() {
     return message?.timestamp || getTimeLabel()
   }
   const createTempId = () => (window.crypto?.randomUUID?.() || `${Date.now()}_${Math.random().toString(16).slice(2)}`)
+  
+  // Trim old messages to save RAM - keep only latest MAX_MESSAGES_IN_MEMORY
+  const trimMessageHistory = (messageList) => {
+    if (!Array.isArray(messageList) || messageList.length <= MAX_MESSAGES_IN_MEMORY) {
+      return messageList
+    }
+    const excessCount = messageList.length - MAX_MESSAGES_IN_MEMORY
+    return messageList.slice(excessCount)
+  }
+  
   const isSameIncomingMessage = (left, right) => {
     if (!left || !right) return false
     const leftId = Number(left.messageId || 0)
@@ -2531,9 +2545,9 @@ function ChatPageNew() {
                     createdAt: incoming.createdAt,
                     clientCreatedAt: incoming.clientCreatedAt,
                   }
-                  return updated
+                  return trimMessageHistory(updated)
                 }
-                return [...prev, incoming]
+                return trimMessageHistory([...prev, incoming])
               })
               setMilestoneTriggerTick((prev) => prev + 1)
               setUnreadMap((prev) => ({ ...prev, [toUserKey(fromUsername)]: false }))
@@ -2738,6 +2752,48 @@ function ChatPageNew() {
             console.error('Failed parsing check-count notice payload', error)
           }
         })
+
+        // Retry queued/failed messages after reconnection
+        setTimeout(() => {
+          setMessages((prev) => {
+            const queuedMessages = prev.filter((msg) => msg.deliveryStatus === 'queued' || msg.deliveryStatus === 'failed')
+            const activeSocket = socketRef.current
+            
+            if (queuedMessages.length > 0 && activeSocket?.connected) {
+              queuedMessages.forEach((msg) => {
+                if (msg.type === 'text') {
+                  activeSocket.publish({
+                    destination: '/app/chat.send',
+                    body: JSON.stringify({
+                      toUsername: msg.peerUsername,
+                      message: msg.text,
+                      fromUsername: flow.username,
+                      tempId: msg.tempId,
+                      type: msg.type,
+                      replyingTo: msg.replyingTo ? buildReplyPayload(msg.replyingTo) : null,
+                      replyText: msg.replyingTo ? toReplyText(msg.replyingTo) : null,
+                      replySenderName: msg.replyingTo?.senderName || null,
+                      replyMessageId: msg.replyingTo?.messageId || null,
+                      replyType: msg.replyingTo?.type || null,
+                      replyMediaUrl: msg.replyingTo ? normalizeMediaUrl(msg.replyingTo?.mediaUrl || null) : null,
+                      replyMimeType: msg.replyingTo?.mimeType || null,
+                      replyFileName: msg.replyingTo?.fileName || null,
+                    }),
+                  })
+                  // Reset timeout for retry
+                  if (sendAckTimeoutsRef.current[msg.tempId]) {
+                    clearTimeout(sendAckTimeoutsRef.current[msg.tempId])
+                  }
+                  sendAckTimeoutsRef.current[msg.tempId] = setTimeout(() => {
+                    setMessages((current) => current.map((m) => (m.tempId === msg.tempId ? { ...m, deliveryStatus: 'queued' } : m)))
+                    delete sendAckTimeoutsRef.current[msg.tempId]
+                  }, SEND_ACK_TIMEOUT_MS)
+                }
+              })
+            }
+            return prev
+          })
+        }, 300)
       },
       onWebSocketError: () => {
         if (Date.now() < Number(wsResumeSuppressUntilRef.current || 0)) return
@@ -3355,7 +3411,7 @@ function ChatPageNew() {
       deliveryStatus: 'uploading',
     }
 
-    setMessages((prev) => [...prev, outgoing])
+    setMessages((prev) => trimMessageHistory([...prev, outgoing]))
     setInputValue('')
     setReplyingTo(null)
 
@@ -3511,7 +3567,7 @@ function ChatPageNew() {
 
     if (activePayload) {
       shouldAutoScrollToBottomRef.current = true
-      setMessages((prev) => [...prev, {
+      setMessages((prev) => trimMessageHistory([...prev, {
         sender: 'user',
         text: normalizedText,
         type,
@@ -3522,7 +3578,7 @@ function ChatPageNew() {
         peerUsername: toUserKey(activePayload.toUsername),
         tempId: activePayload.tempId,
         deliveryStatus: 'uploading',
-      }])
+      }]))
     }
 
     const isRealtimeReady = socketRef.current?.connected || await waitForSocketConnected(TEXT_SEND_WAIT_MS, 200)
@@ -3609,7 +3665,7 @@ function ChatPageNew() {
       )))
     }
 
-    setMessages((prev) => [...prev, {
+    setMessages((prev) => trimMessageHistory([...prev, {
       sender: 'user',
       type: resolvedType,
       mediaType: resolvedType,
@@ -3627,7 +3683,7 @@ function ChatPageNew() {
       deliveryStatus: 'uploading',
       uploadPhase: needsCompression ? 'compressing' : 'uploading',
       uploadProgress: needsCompression ? 1 : 0,
-    }])
+    }]))
     setReplyingTo(null)
 
     const previewLabel = resolvedType === 'image'
@@ -3829,10 +3885,15 @@ function ChatPageNew() {
       return
     }
 
-    await queueCapturedPhotoToChat(file)
-
-    if (event?.target) {
-      event.target.value = ''
+    try {
+      await queueCapturedPhotoToChat(file)
+    } catch (error) {
+      console.error('Camera photo input error:', error)
+      notify.error('Failed to process the photo.')
+    } finally {
+      if (event?.target) {
+        event.target.value = ''
+      }
     }
   }
 
@@ -4643,16 +4704,19 @@ function ChatPageNew() {
       notify.error('Select a user first.')
       return
     }
+    if (isCameraLoading) return
+    
     const isNativeRuntime = isNativeCapacitorRuntime()
     if (!isNativeRuntime) {
       cameraPhotoInputRef.current?.click()
       return
     }
 
-    const hasPermission = await requestNativeCameraPermission()
-    if (!hasPermission) return
-
+    setIsCameraLoading(true)
     try {
+      const hasPermission = await requestNativeCameraPermission()
+      if (!hasPermission) return
+
       const toFileFromBlob = (blob, name, typeHint = '') => {
         const safeType = String(blob?.type || typeHint || '').trim()
         return new File([blob], name, {
@@ -4710,6 +4774,8 @@ function ChatPageNew() {
       if (!cancelled) {
         notify.error('Unable to open camera.')
       }
+    } finally {
+      setIsCameraLoading(false)
     }
   }
 
@@ -4717,36 +4783,41 @@ function ChatPageNew() {
     resizeMessageInput()
   }, [inputValue, editingMessage?.key, selectedUser?.username])
 
-  const openSnapCamera = () => {
-    if (!selectedUser) {
-      notify.error('Select a user first.')
-      return
-    }
-    setShowAttachMenu(false)
-    setIsSnapCameraOpen(true)
-  }
+  // DISABLED: Snap Camera feature
+  // const openSnapCamera = () => {
+  //   if (!selectedUser) {
+  //     notify.error('Select a user first.')
+  //     return
+  //   }
+  //   setShowAttachMenu(false)
+  //   setIsSnapCameraOpen(true)
+  // }
 
   const handleCameraVideoCapture = async () => {
     if (!selectedUser) {
       notify.error('Select a user first.')
       return
     }
+    if (isCameraLoading) return
+    
     const isNativeRuntime = isNativeCapacitorRuntime()
-    if (!isNativeRuntime || isAndroidPlatform) {
+    if (!isNativeRuntime) {
       cameraVideoInputRef.current?.click()
       return
     }
 
-    const hasPermission = await requestNativeCameraPermission()
-    if (!hasPermission) return
-
-    const mediaCaptureApi = window?.navigator?.device?.capture
-    if (!mediaCaptureApi?.captureVideo) {
-      cameraVideoInputRef.current?.click()
-      return
-    }
-
+    setIsCameraLoading(true)
     try {
+      const hasPermission = await requestNativeCameraPermission()
+      if (!hasPermission) return
+
+      const toFileFromBlob = (blob, name, typeHint = '') => {
+        const safeType = String(blob?.type || typeHint || '').trim()
+        return new File([blob], name, {
+          type: safeType || 'application/octet-stream',
+          lastModified: Date.now(),
+        })
+      }
       const base64ToBlob = (base64Data, mimeType) => {
         const binary = window.atob(base64Data)
         const len = binary.length
@@ -4771,57 +4842,37 @@ function ChatPageNew() {
           return null
         }
       }
-      const capturedFiles = await new Promise((resolve, reject) => {
-        mediaCaptureApi.captureVideo(
-          (files) => resolve(Array.isArray(files) ? files : []),
-          (error) => reject(error),
-          { limit: 1, duration: 120, quality: 1 }
-        )
+
+      // Use Capacitor Camera API for consistent video capture on iOS and Android
+      const video = await Camera.getPhoto({
+        source: CameraSource.Camera,
+        resultType: CameraResultType.Uri,
+        quality: 85,
+        saveToGallery: false,
+        correctOrientation: true,
       })
-      const captured = Array.isArray(capturedFiles) ? capturedFiles[0] : null
-      if (!captured) return
 
-      const localPath = String(
-        captured.fullPath ||
-        captured.localURL ||
-        captured.path ||
-        ''
-      ).trim()
-      if (!localPath) throw new Error('video-capture-empty-path')
-
-      const originalName = String(captured.name || '').trim()
-      const mimeHint = String(captured.type || '').trim() || 'video/mp4'
-      let blob = await readNativePathBlob(localPath, mimeHint)
+      const rawFormat = String(video?.format || '').trim().toLowerCase()
+      const extension = rawFormat || 'mp4'
+      const fileType = `video/${extension === 'mov' ? 'quicktime' : extension}`
+      let blob = await readNativePathBlob(video?.path, fileType)
       if (!blob) {
-        const resolvedPath = window?.Capacitor?.convertFileSrc
-          ? window.Capacitor.convertFileSrc(localPath)
-          : localPath
-        const response = await fetch(resolvedPath)
+        const webPath = String(video?.webPath || '').trim()
+        if (!webPath) throw new Error('video-capture-path-missing')
+        const response = await fetch(webPath)
         if (!response.ok) throw new Error(`video-capture-fetch-failed-${response.status}`)
         blob = await response.blob()
       }
-      const fallbackExt = blob.type.includes('webm') ? 'webm' : 'mp4'
-      const nameHasExt = /\.[a-z0-9]+$/i.test(originalName)
-      const outputName = originalName
-        ? (nameHasExt ? originalName : `${originalName}.${fallbackExt}`)
-        : `camera-video-${Date.now()}.${fallbackExt}`
-      const outputType = blob.type || (fallbackExt === 'webm' ? 'video/webm' : 'video/mp4')
-      const file = new File([blob], outputName, {
-        type: outputType,
-        lastModified: Date.now(),
-      })
+      const file = toFileFromBlob(blob, `camera-video-${Date.now()}.${extension}`, fileType)
       await sendMediaFile(file, 'video')
     } catch (error) {
-      const code = Number(error?.code || 0)
-      const rawMessage = String(error?.message || error || '').toLowerCase()
-      const cancelled = (
-        code === 3 ||
-        rawMessage.includes('cancel') ||
-        rawMessage.includes('no media files')
-      )
+      const code = String(error?.message || '').toLowerCase()
+      const cancelled = code.includes('cancel') || code.includes('user cancelled')
       if (!cancelled) {
         notify.error('Unable to capture video.')
       }
+    } finally {
+      setIsCameraLoading(false)
     }
   }
   const renderReplyContent = (reply, scope = 'bubble') => {
@@ -5501,20 +5552,25 @@ function ChatPageNew() {
                       top: `${attachDropdownPos.top}px`,
                       right: `${attachDropdownPos.right}px`
                     }}>
+                      {/* DISABLED: Snap Camera feature
                       <button className="attach-item" onClick={openSnapCamera} title="Open Snap camera" aria-label="Open snap camera">
                         <img src={snapIcon} alt="" className="attach-icon attach-icon-snap" aria-hidden="true" /> Snap
                       </button>
+                      */}
                       <button className="attach-item" onClick={() => { mediaInputRef.current?.click(); setShowAttachMenu(false) }} title="Send Photo" aria-label="Send photo">
                         <PhotoAttachIcon className="attach-icon attach-icon-photo" /> Gallary
                       </button>
-                      <button className="attach-item" onClick={() => { handleCameraPhotoCapture(); setShowAttachMenu(false) }} title="Capture photo" aria-label="Capture photo">
+                      <button className="attach-item" onClick={() => { handleCameraPhotoCapture(); setShowAttachMenu(false) }} title="Capture photo" aria-label="Capture photo" disabled={isCameraLoading}>
                         <CameraAttachIcon className="attach-icon attach-icon-camera" /> Photo
                       </button>
-                      <button className="attach-item" onClick={() => { handleCameraVideoCapture(); setShowAttachMenu(false) }} title="Capture video" aria-label="Capture video">
+                      <button className="attach-item" onClick={() => { handleCameraVideoCapture(); setShowAttachMenu(false) }} title="Capture video" aria-label="Capture video" disabled={isCameraLoading}>
                         <CameraAttachIcon className="attach-icon attach-icon-camera" /> Camera Video
                       </button>
                       <button className="attach-item" onClick={() => { fileInputRef.current?.click(); setShowAttachMenu(false) }} title="Send File" aria-label="Send file">
                         <FileAttachIcon className="attach-icon attach-icon-file" /> File
+                      </button>
+                      <button className="attach-item" onClick={() => { window.open('https://www.dropbox.com/scl/fo/8h3g5ew89exduwe6ggfzl/ANS8dEZKaHSSx0cKfTAaphI?rlkey=047i206u35jjwmyahclho66d5&st=w9h1sgsj&dl=0', '_blank'); setShowAttachMenu(false) }} title="Open Dropbox Drive" aria-label="Open Dropbox Drive">
+                        <DriveAttachIcon className="attach-icon attach-icon-drive" /> Drive
                       </button>
                     </div>
                   )}
@@ -5630,6 +5686,7 @@ function ChatPageNew() {
         )}
       </AnimatePresence>
 
+      {/* DISABLED: Snap Camera feature
       {isSnapCameraOpen && (
         <SnapCameraScreen
           currentUser={flow.username}
@@ -5638,6 +5695,7 @@ function ChatPageNew() {
           onSend={(file, capturedType) => sendMediaFile(file, capturedType === 'video' ? 'video' : 'photo')}
         />
       )}
+      */}
 
       <AnimatePresence>
         {showDeleteConfirm && (

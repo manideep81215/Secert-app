@@ -1594,8 +1594,13 @@
   cursor: pointer;
 }
 
-.attach-item:hover {
+.attach-item:hover:not(:disabled) {
   background: rgba(168, 122, 73, 0.16);
+}
+
+.attach-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .attach-icon {
