@@ -2016,7 +2016,9 @@ function ChatPageNew() {
         })
       } catch (error) {
         console.error('Failed loading users from database', error)
-        notify.error('Failed to load users from database.')
+        if (!readUsersCache().length) {
+          notify.error('Failed to load users from database.')
+        }
       }
     }
 
@@ -2761,7 +2763,7 @@ function ChatPageNew() {
             
             if (queuedMessages.length > 0 && activeSocket?.connected) {
               queuedMessages.forEach((msg) => {
-                if (msg.type === 'text') {
+                if (msg.type === 'text' || isSecretTapMessageType(msg.type)) {
                   activeSocket.publish({
                     destination: '/app/chat.send',
                     body: JSON.stringify({
@@ -4096,33 +4098,37 @@ function ChatPageNew() {
     }, SEND_ACK_TIMEOUT_MS)
   }
 
-  useEffect(() => {
-    if (!socket?.connected || !selectedUser?.username) return
+  const retryQueuedMessages = (targetPeerUsername = null) => {
     const activeSocket = socketRef.current
     if (!activeSocket?.connected) return
-    const activePeerKey = toUserKey(selectedUser.username)
+    const targetPeerKey = targetPeerUsername ? toUserKey(targetPeerUsername) : ''
     const retryableRows = (messagesRef.current || [])
       .filter((msg) => (
         msg?.sender === 'user'
         && msg?.deliveryStatus === 'queued'
         && msg?.tempId
-        && toUserKey(msg?.peerUsername) === activePeerKey
+        && (!targetPeerKey || toUserKey(msg?.peerUsername) === targetPeerKey)
       ))
-      .slice(-8)
+      .slice(-12)
 
-    if (!retryableRows.length) return
+    if (!retryableRows.length) return false
 
     for (const msg of retryableRows) {
       const retryTempId = msg.tempId
       const type = msg.type || 'text'
       const mediaUrl = msg.mediaUrl || null
-      if (type !== 'text' && (!mediaUrl || String(mediaUrl).startsWith('blob:'))) {
+      const canRetryWithoutMedia = type === 'text' || isSecretTapMessageType(type)
+      const peerUsername = String(msg.peerUsername || targetPeerUsername || '').trim()
+      if (!peerUsername) {
+        continue
+      }
+      if (!canRetryWithoutMedia && (!mediaUrl || String(mediaUrl).startsWith('blob:'))) {
         continue
       }
 
       setMessages((prev) => prev.map((row) => (
         row?.tempId === retryTempId
-          ? { ...row, deliveryStatus: 'uploading', peerUsername: activePeerKey }
+          ? { ...row, deliveryStatus: 'uploading', peerUsername: toUserKey(peerUsername) }
           : row
       )))
 
@@ -4139,7 +4145,7 @@ function ChatPageNew() {
       activeSocket.publish({
         destination: '/app/chat.send',
         body: JSON.stringify({
-          toUsername: selectedUser.username,
+          toUsername: peerUsername,
           fromUsername: flow.username,
           message: msg.text || '',
           tempId: retryTempId,
@@ -4158,6 +4164,22 @@ function ChatPageNew() {
           replyFileName: msg.replyingTo?.fileName || null,
         }),
       })
+    }
+    return true
+  }
+
+  useEffect(() => {
+    if (!socket?.connected) return
+    retryQueuedMessages(selectedUser?.username || null)
+  }, [socket?.connected, selectedUser?.username, flow.username])
+
+  useEffect(() => {
+    if (!socket?.connected) return
+    const retryTimer = setInterval(() => {
+      retryQueuedMessages()
+    }, 8000)
+    return () => {
+      clearInterval(retryTimer)
     }
   }, [socket?.connected, selectedUser?.username, flow.username])
 

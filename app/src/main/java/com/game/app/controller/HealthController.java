@@ -34,6 +34,15 @@ public class HealthController {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("service", "secert-app");
         payload.put("timestamp", Instant.now().toString());
+        payload.put("status", "ok");
+        return ResponseEntity.ok(payload);
+    }
+
+    @GetMapping("/health/db")
+    public ResponseEntity<Map<String, Object>> databaseHealth() {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("service", "secert-app");
+        payload.put("timestamp", Instant.now().toString());
 
         try (Connection connection = dataSource.getConnection()) {
             if (!connection.isValid(2)) {
