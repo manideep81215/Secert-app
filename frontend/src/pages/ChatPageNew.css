@@ -1499,6 +1499,7 @@
   gap: 0.4rem;
   position: relative;
   flex-shrink: 0;
+  align-items: center;
 }
 
 .btn-action {
@@ -1545,6 +1546,23 @@
 
 .attach-desktop-btn {
   display: grid;
+}
+
+.message-input-attachments {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.message-input-attachments .btn-plus,
+.message-input-attachments .attach-desktop-btn {
+  margin-left: 0.15rem;
+}
+
+.message-input-attachments .attach-dropdown {
+  left: auto;
+  right: 0;
 }
 
 .attach-dropdown {
@@ -2813,6 +2831,19 @@
   gap: 0.3rem;
 }
 
+.chat-container .input-actions .secret-tap-btn {
+  min-width: 36px;
+  min-height: 36px;
+  width: 36px;
+  padding: 0.1rem;
+}
+
+.chat-container .input-actions .secret-tap-btn-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+}
+
 .chat-container .btn-plus {
   font-size: 1.2rem;
 }
@@ -3582,6 +3613,10 @@
   gap: 10px !important;
 }
 
+.chat-container .message-input-attachments {
+  gap: 0 !important;
+}
+
 .chat-container .btn-action,
 .chat-container .btn-send,
 .chat-container .btn-voice-inline,
@@ -3601,6 +3636,17 @@
 .chat-container .btn-game-icon {
   font-size: 24px !important;
   line-height: 1 !important;
+}
+
+.chat-container .input-actions .secret-tap-btn {
+  min-width: 36px !important;
+  min-height: 36px !important;
+  width: 36px !important;
+}
+
+.chat-container .input-actions .secret-tap-btn-icon {
+  width: 28px !important;
+  height: 28px !important;
 }
 
 .chat-container .attach-icon,
@@ -3793,17 +3839,17 @@
     padding-right: 6px !important;
   }
 
-  .chat-container[data-native="true"][data-android="true"]:not(.mobile-users-open) .btn-voice-inline,
-  .chat-container[data-native="true"][data-android="true"]:not(.mobile-users-open) .btn-voice-cancel {
-    width: 26px !important;
-    height: 26px !important;
-    margin-left: 6px !important;
-    margin-right: 0 !important;
-    border-width: 1.5px !important;
-    box-shadow: none !important;
-  }
+.chat-container[data-native="true"][data-android="true"]:not(.mobile-users-open) .btn-voice-inline,
+.chat-container[data-native="true"][data-android="true"]:not(.mobile-users-open) .btn-voice-cancel {
+  width: 26px !important;
+  height: 26px !important;
+  margin-left: 6px !important;
+  margin-right: 0 !important;
+  border-width: 1.5px !important;
+  box-shadow: none !important;
+}
 
-  .chat-container[data-native="true"][data-android="true"]:not(.mobile-users-open) .voice-action-icon {
+.chat-container[data-native="true"][data-android="true"]:not(.mobile-users-open) .voice-action-icon {
     width: 18px !important;
     height: 18px !important;
   }
@@ -3811,4 +3857,30 @@
   .chat-container[data-native="true"][data-android="true"]:not(.mobile-users-open) .btn-voice-cancel {
     font-size: 12px !important;
   }
+}
+
+/* Chat-page-only transparent action styling */
+.chat-container .btn-action,
+.chat-container .btn-game,
+.chat-container .message-input-attachments .btn-plus,
+.chat-container .message-input-attachments .attach-desktop-btn {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.chat-container .btn-action:hover,
+.chat-container .btn-game:hover,
+.chat-container .message-input-attachments .btn-plus:hover,
+.chat-container .message-input-attachments .attach-desktop-btn:hover {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.chat-container .btn-game {
+  color: #7b4e24 !important;
+}
+
+.chat-container .secret-tap-btn {
+  background: transparent !important;
+  box-shadow: none !important;
 }

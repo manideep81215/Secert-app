@@ -27,6 +27,7 @@ import MilestonePopup from '../components/MilestonePopup'
 import LovePercentageChip from '../components/LovePercentageChip'
 import CheckedForYouPopup from '../components/CheckedForYouPopup'
 import SnapCameraScreen from '../components/SnapCameraScreen'
+import SecretTapButton from '../components/SecretTapButton'
 import snapIcon from '../assets/snap.png'
 import timerLoveBirdsIcon from '../assets/in-love.png'
 import ChatUsersPanel from './ChatUsersPanel'
@@ -2872,6 +2873,14 @@ function ChatPageNew() {
     return () => window.removeEventListener('click', onWindowClick)
   }, [])
 
+  const hasComposerText = Boolean(String(inputValue || '').trim())
+
+  useEffect(() => {
+    if (hasComposerText && showAttachMenu) {
+      setShowAttachMenu(false)
+    }
+  }, [hasComposerText, showAttachMenu])
+
   useEffect(() => {
     const syncPermission = () => {
       setNotificationPermission(getNotificationPermissionState())
@@ -5011,14 +5020,7 @@ function ChatPageNew() {
             >
               <img src={timerLoveBirdsIcon} alt="" className="timer-icon-image" aria-hidden="true" />
             </button>
-            <button
-              className="btn-home-game"
-              onClick={() => navigate('/games')}
-              title="Go to dashboard"
-              aria-label="Go to dashboard"
-            >
-              {icons.game}
-            </button>
+            <SecretTapButton username={flow.username} socketRef={socketRef} />
           </div>
         </motion.div>
 
@@ -5294,7 +5296,7 @@ function ChatPageNew() {
             </div>
           )}
           <div className="input-wrapper">
-            <div className="input-actions" ref={attachMenuRef}>
+            <div className="input-actions">
               <button
                 className="btn-action btn-game"
                 onClick={(event) => {
@@ -5306,47 +5308,7 @@ function ChatPageNew() {
               >
                 <span className="btn-game-icon" aria-hidden="true">{icons.game}</span>
               </button>
-              <button
-                className="btn-action btn-plus"
-                onClick={(event) => {
-                  event.stopPropagation()
-                  setShowAttachMenu((prev) => !prev)
-                }}
-                title="Attachments"
-                aria-label="Open attachments menu"
-              >
-                +
-              </button>
-              <button
-                className="btn-action attach-desktop-btn"
-                onClick={(event) => {
-                  event.stopPropagation()
-                  setShowAttachMenu((prev) => !prev)
-                }}
-                title="Photo or file"
-                aria-label="Open attachments menu"
-              >
-                <PhotoAttachIcon className="attach-icon attach-icon-photo" />
-              </button>
-              {showAttachMenu && (
-                <div className="attach-dropdown">
-                  <button className="attach-item" onClick={openSnapCamera} title="Open Snap camera" aria-label="Open snap camera">
-                    <img src={snapIcon} alt="" className="attach-icon attach-icon-snap" aria-hidden="true" /> Snap
-                  </button>
-                  <button className="attach-item" onClick={() => { mediaInputRef.current?.click(); setShowAttachMenu(false) }} title="Send Photo" aria-label="Send photo">
-                    <PhotoAttachIcon className="attach-icon attach-icon-photo" /> Gallary
-                  </button>
-                  <button className="attach-item" onClick={() => { handleCameraPhotoCapture(); setShowAttachMenu(false) }} title="Capture photo" aria-label="Capture photo">
-                    <CameraAttachIcon className="attach-icon attach-icon-camera" /> Photo
-                  </button>
-                  <button className="attach-item" onClick={() => { handleCameraVideoCapture(); setShowAttachMenu(false) }} title="Capture video" aria-label="Capture video">
-                    <CameraAttachIcon className="attach-icon attach-icon-camera" /> Camera Video
-                  </button>
-                  <button className="attach-item" onClick={() => { fileInputRef.current?.click(); setShowAttachMenu(false) }} title="Send File" aria-label="Send file">
-                    <FileAttachIcon className="attach-icon attach-icon-file" /> File
-                  </button>
-                </div>
-              )}
+              <SecretTapButton username={flow.username} socketRef={socketRef} />
             </div>
             <div className="message-input-shell">
               <textarea
@@ -5377,14 +5339,61 @@ function ChatPageNew() {
                 enterKeyHint="send"
                 rows={1}
               />
-              <button
-                className={`btn-voice-inline ${isRecordingVoice ? 'recording' : ''}`}
-                onClick={toggleVoiceRecording}
-                title={isRecordingVoice ? `Stop recording (${recordingSeconds}s)` : 'Record voice message'}
-                aria-label={isRecordingVoice ? 'Stop recording' : 'Record voice message'}
-              >
-                {isRecordingVoice ? icons.send : <VoiceActionIcon className="voice-action-icon" />}
-              </button>
+              {!hasComposerText && (
+                <button
+                  className={`btn-voice-inline ${isRecordingVoice ? 'recording' : ''}`}
+                  onClick={toggleVoiceRecording}
+                  title={isRecordingVoice ? `Stop recording (${recordingSeconds}s)` : 'Record voice message'}
+                  aria-label={isRecordingVoice ? 'Stop recording' : 'Record voice message'}
+                >
+                  {isRecordingVoice ? icons.send : <VoiceActionIcon className="voice-action-icon" />}
+                </button>
+              )}
+              {!hasComposerText && (
+                <div className="message-input-attachments" ref={attachMenuRef}>
+                  <button
+                    className="btn-action btn-plus"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      setShowAttachMenu((prev) => !prev)
+                    }}
+                    title="Attachments"
+                    aria-label="Open attachments menu"
+                  >
+                    +
+                  </button>
+                  <button
+                    className="btn-action attach-desktop-btn"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      setShowAttachMenu((prev) => !prev)
+                    }}
+                    title="Photo or file"
+                    aria-label="Open attachments menu"
+                  >
+                    <PhotoAttachIcon className="attach-icon attach-icon-photo" />
+                  </button>
+                  {showAttachMenu && (
+                    <div className="attach-dropdown">
+                      <button className="attach-item" onClick={openSnapCamera} title="Open Snap camera" aria-label="Open snap camera">
+                        <img src={snapIcon} alt="" className="attach-icon attach-icon-snap" aria-hidden="true" /> Snap
+                      </button>
+                      <button className="attach-item" onClick={() => { mediaInputRef.current?.click(); setShowAttachMenu(false) }} title="Send Photo" aria-label="Send photo">
+                        <PhotoAttachIcon className="attach-icon attach-icon-photo" /> Gallary
+                      </button>
+                      <button className="attach-item" onClick={() => { handleCameraPhotoCapture(); setShowAttachMenu(false) }} title="Capture photo" aria-label="Capture photo">
+                        <CameraAttachIcon className="attach-icon attach-icon-camera" /> Photo
+                      </button>
+                      <button className="attach-item" onClick={() => { handleCameraVideoCapture(); setShowAttachMenu(false) }} title="Capture video" aria-label="Capture video">
+                        <CameraAttachIcon className="attach-icon attach-icon-camera" /> Camera Video
+                      </button>
+                      <button className="attach-item" onClick={() => { fileInputRef.current?.click(); setShowAttachMenu(false) }} title="Send File" aria-label="Send file">
+                        <FileAttachIcon className="attach-icon attach-icon-file" /> File
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
               {isRecordingVoice && (
                 <button
                   className="btn-voice-cancel"
