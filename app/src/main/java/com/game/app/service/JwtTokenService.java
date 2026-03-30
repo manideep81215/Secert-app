@@ -65,6 +65,16 @@ public class JwtTokenService {
     return extractSubjectAsUserId(claims);
   }
 
+  public String extractAccessUsername(String rawToken) {
+    Claims claims = parseClaims(rawToken, accessSigningKey);
+    validateTokenType(claims, "access");
+    String username = claims.get("username", String.class);
+    if (username == null || username.isBlank()) {
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid token username");
+    }
+    return username.trim().toLowerCase();
+  }
+
   public Long extractRefreshUserId(String rawToken) {
     Claims claims = parseClaims(rawToken, refreshSigningKey);
     validateTokenType(claims, "refresh");

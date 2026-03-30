@@ -14,18 +14,14 @@ import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 
-import com.game.app.model.UserEntity;
-import com.game.app.repository.UserRepository;
 import com.game.app.service.JwtTokenService;
 
 @Component
 public class WebSocketChannelInterceptor implements ChannelInterceptor {
   private final JwtTokenService jwtTokenService;
-  private final UserRepository userRepository;
 
-  public WebSocketChannelInterceptor(JwtTokenService jwtTokenService, UserRepository userRepository) {
+  public WebSocketChannelInterceptor(JwtTokenService jwtTokenService) {
     this.jwtTokenService = jwtTokenService;
-    this.userRepository = userRepository;
   }
 
   @Override
@@ -41,10 +37,8 @@ public class WebSocketChannelInterceptor implements ChannelInterceptor {
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authorization header is required");
     }
 
-    Long userId = jwtTokenService.extractAccessUserId(authHeader);
-    UserEntity userEntity = userRepository.findById(userId)
-        .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found"));
-    Principal user = new StompPrincipal(userEntity.getUsername());
+    String username = jwtTokenService.extractAccessUsername(authHeader);
+    Principal user = new StompPrincipal(username);
     accessor.setUser(user);
 
     return message;
