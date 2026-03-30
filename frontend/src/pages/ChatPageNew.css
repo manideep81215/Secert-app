@@ -1566,9 +1566,7 @@
 }
 
 .attach-dropdown {
-  position: absolute;
-  left: 0;
-  bottom: calc(100% + 0.45rem);
+  position: fixed;
   background: #f9ecd2;
   border: 2px solid #a27a49;
   border-radius: 0.7rem;
@@ -1577,7 +1575,9 @@
   padding: 0.25rem;
   display: grid;
   gap: 0.2rem;
-  z-index: 30;
+  z-index: 1000;
+  bottom: auto;
+  left: auto;
 }
 
 .attach-item {

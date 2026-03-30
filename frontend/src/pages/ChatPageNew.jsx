@@ -180,6 +180,7 @@ function ChatPageNew() {
   const [notificationPermission, setNotificationPermission] = useState(
     getNotificationPermissionState()
   )
+  const [attachDropdownPos, setAttachDropdownPos] = useState({ top: 0, right: 0 })
   const lastPublishedReadAtRef = useRef({})
   const nextConversationPageRef = useRef(1)
   const loadingOlderMessagesRef = useRef(false)
@@ -2873,6 +2874,19 @@ function ChatPageNew() {
     return () => window.removeEventListener('click', onWindowClick)
   }, [])
 
+  useEffect(() => {
+    if (showAttachMenu && attachMenuRef.current) {
+      const rect = attachMenuRef.current.getBoundingClientRect()
+      const inputArea = document.querySelector('.input-area')
+      const footerTop = inputArea ? inputArea.getBoundingClientRect().top : rect.top
+      
+      setAttachDropdownPos({
+        top: footerTop - 220, // Position above footer (220px for dropdown + gap)
+        right: window.innerWidth - rect.right
+      })
+    }
+  }, [showAttachMenu])
+
   const hasComposerText = Boolean(String(inputValue || '').trim())
 
   useEffect(() => {
@@ -3468,6 +3482,107 @@ function ChatPageNew() {
       await new Promise((resolve) => setTimeout(resolve, pollIntervalMs))
     }
     return Boolean(socketRef.current?.connected)
+  }
+
+  const handleSecretTapSend = async ({ text, tempKey, targetRecipients, type = SECRET_TAP_TYPE }) => {
+    const senderUsername = String(flow.username || '').trim()
+    const normalizedText = String(text || '').trim()
+    const uniqueRecipients = Array.from(new Set(
+      (Array.isArray(targetRecipients) ? targetRecipients : [])
+        .map((value) => String(value || '').trim())
+        .filter(Boolean)
+    ))
+
+    if (!senderUsername || !normalizedText || !uniqueRecipients.length) {
+      return false
+    }
+
+    const activePeerUsername = String(selectedUserRef.current?.username || '').trim()
+    const activePeerKey = toUserKey(activePeerUsername)
+    const createdAtBase = Date.now()
+    const outgoingPayloads = uniqueRecipients.map((toUsername, index) => ({
+      toUsername,
+      tempId: `secret-tap-${tempKey}-${createdAtBase}-${index}`,
+      createdAt: createdAtBase + index,
+    }))
+    const activePayload = activePeerKey
+      ? outgoingPayloads.find((row) => toUserKey(row.toUsername) === activePeerKey) || null
+      : null
+
+    if (activePayload) {
+      shouldAutoScrollToBottomRef.current = true
+      setMessages((prev) => [...prev, {
+        sender: 'user',
+        text: normalizedText,
+        type,
+        timestamp: getTimeLabel(),
+        createdAt: activePayload.createdAt,
+        clientCreatedAt: activePayload.createdAt,
+        senderName: formatUsername(senderUsername || 'You'),
+        peerUsername: toUserKey(activePayload.toUsername),
+        tempId: activePayload.tempId,
+        deliveryStatus: 'uploading',
+      }])
+    }
+
+    const isRealtimeReady = socketRef.current?.connected || await waitForSocketConnected(TEXT_SEND_WAIT_MS, 200)
+    const activeSocket = socketRef.current
+
+    if (!isRealtimeReady || !activeSocket?.connected) {
+      if (activePayload) {
+        setMessages((prev) => prev.map((msg) => (
+          msg.tempId === activePayload.tempId
+            ? { ...msg, deliveryStatus: 'queued' }
+            : msg
+        )))
+        return true
+      }
+      toast.error('Button Clicking Not Wokring! Wait for 5 sec and try')
+      return false
+    }
+
+    try {
+      outgoingPayloads.forEach(({ toUsername, tempId }) => {
+        activeSocket.publish({
+          destination: '/app/chat.send',
+          body: JSON.stringify({
+            toUsername,
+            message: normalizedText,
+            fromUsername: senderUsername,
+            tempId,
+            type,
+          }),
+        })
+      })
+
+      if (activePayload) {
+        if (sendAckTimeoutsRef.current[activePayload.tempId]) {
+          clearTimeout(sendAckTimeoutsRef.current[activePayload.tempId])
+        }
+        sendAckTimeoutsRef.current[activePayload.tempId] = setTimeout(() => {
+          setMessages((prev) => prev.map((msg) => (
+            msg.tempId === activePayload.tempId
+              ? { ...msg, deliveryStatus: 'queued' }
+              : msg
+          )))
+          delete sendAckTimeoutsRef.current[activePayload.tempId]
+        }, SEND_ACK_TIMEOUT_MS)
+      }
+
+      return true
+    } catch (error) {
+      console.error('Realtime publish failed for secret tap', error)
+      if (activePayload) {
+        setMessages((prev) => prev.map((msg) => (
+          msg.tempId === activePayload.tempId
+            ? { ...msg, deliveryStatus: 'queued' }
+            : msg
+        )))
+        return true
+      }
+      toast.error('Button Clicking Not Wokring! Wait for 5 sec and try')
+      return false
+    }
   }
 
   const sendMediaFile = async (file, type) => {
@@ -5020,7 +5135,11 @@ function ChatPageNew() {
             >
               <img src={timerLoveBirdsIcon} alt="" className="timer-icon-image" aria-hidden="true" />
             </button>
-            <SecretTapButton username={flow.username} socketRef={socketRef} />
+                      <SecretTapButton
+                        username={flow.username}
+                        socketRef={socketRef}
+                        onSendSecretTap={handleSecretTapSend}
+                      />
           </div>
         </motion.div>
 
@@ -5308,7 +5427,11 @@ function ChatPageNew() {
               >
                 <span className="btn-game-icon" aria-hidden="true">{icons.game}</span>
               </button>
-              <SecretTapButton username={flow.username} socketRef={socketRef} />
+              <SecretTapButton
+                username={flow.username}
+                socketRef={socketRef}
+                onSendSecretTap={handleSecretTapSend}
+              />
             </div>
             <div className="message-input-shell">
               <textarea
@@ -5374,7 +5497,10 @@ function ChatPageNew() {
                     <PhotoAttachIcon className="attach-icon attach-icon-photo" />
                   </button>
                   {showAttachMenu && (
-                    <div className="attach-dropdown">
+                    <div className="attach-dropdown" style={{
+                      top: `${attachDropdownPos.top}px`,
+                      right: `${attachDropdownPos.right}px`
+                    }}>
                       <button className="attach-item" onClick={openSnapCamera} title="Open Snap camera" aria-label="Open snap camera">
                         <img src={snapIcon} alt="" className="attach-icon attach-icon-snap" aria-hidden="true" /> Snap
                       </button>

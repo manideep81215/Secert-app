@@ -31,7 +31,7 @@ const HIHI_TONY_FOUR_TAP_MESSAGE = 'Love Youuu 😘'
 
 const normalizeUsername = (value) => String(value || '').trim().toLowerCase()
 
-function SecretTapButton({ username, socketRef }) {
+function SecretTapButton({ username, socketRef, onSendSecretTap }) {
   const tapCountRef = useRef(0)
   const tapTimerRef = useRef(null)
   const longPressTimerRef = useRef(null)
@@ -120,37 +120,49 @@ function SecretTapButton({ username, socketRef }) {
   }
 
   const sendSecretTapMessage = async ({ text, tempKey, successToast, targetRecipients = recipients }) => {
-    const activeSocket = socketRef?.current
-
     if (!text || !targetRecipients.length) return
-    if (!activeSocket?.connected) {
-      toast.error('Button Clicking Not Wokring! Wait for 5 sec and try')
-      return
-    }
-    if (isSendingRef.current) return
+    if (isSendingRef.current) return false
 
     isSendingRef.current = true
     try {
-      const senderUsername = String(username || '').trim()
-      const timestamp = Date.now()
-
-      targetRecipients.forEach((toUsername, index) => {
-        activeSocket.publish({
-          destination: '/app/chat.send',
-          body: JSON.stringify({
-            toUsername,
-            message: text,
-            fromUsername: senderUsername,
-            tempId: `secret-tap-${tempKey}-${timestamp}-${index}`,
-            type: SECRET_TAP_TYPE,
-          }),
+      if (typeof onSendSecretTap === 'function') {
+        const handled = await onSendSecretTap({
+          text,
+          tempKey,
+          successToast,
+          targetRecipients,
+          type: SECRET_TAP_TYPE,
         })
-      })
+        if (!handled) return false
+      } else {
+        const activeSocket = socketRef?.current
+        if (!activeSocket?.connected) {
+          toast.error('Button Clicking Not Wokring! Wait for 5 sec and try')
+          return false
+        }
+
+        const senderUsername = String(username || '').trim()
+        const timestamp = Date.now()
+
+        targetRecipients.forEach((toUsername, index) => {
+          activeSocket.publish({
+            destination: '/app/chat.send',
+            body: JSON.stringify({
+              toUsername,
+              message: text,
+              fromUsername: senderUsername,
+              tempId: `secret-tap-${tempKey}-${timestamp}-${index}`,
+              type: SECRET_TAP_TYPE,
+            }),
+          })
+        })
+      }
 
       if (successToast) {
         toast.success(successToast, { autoClose: SECRET_TAP_RESET_DELAY_MS })
         scheduleScaleReset(SECRET_TAP_RESET_DELAY_MS)
       }
+      return true
     } finally {
       isSendingRef.current = false
     }

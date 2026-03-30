@@ -14,6 +14,13 @@
   min-height: 100dvh;
 }
 
+html.native-runtime .app-auth-max {
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}
+
 html.native-android-runtime .app-wrap,
 html.native-android-runtime .app-auth-route,
 html.native-android-runtime .app-auth-max {
