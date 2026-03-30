@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useFlowState } from '../hooks/useFlowState'
 import { getChatStats } from '../services/messagesApi'
@@ -112,6 +112,7 @@ function RecapPage() {
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const loadedPeerRef = useRef('')
 
   const peerUsername = useMemo(() => {
     const fromSearch = new URLSearchParams(location.search).get('peer')
@@ -132,22 +133,33 @@ function RecapPage() {
 
   useEffect(() => {
     if (!flow?.token || !peerUsername) {
+      if (!peerUsername) {
+        setStats(null)
+        loadedPeerRef.current = ''
+      }
+      setError('')
       setLoading(false)
       return
     }
 
     let cancelled = false
+    const hasLoadedCurrentPeer = loadedPeerRef.current === peerUsername && Boolean(stats)
 
     const loadStats = async () => {
       try {
-        setLoading(true)
+        setLoading(!hasLoadedCurrentPeer)
         setError('')
         const data = await getChatStats(flow.token, peerUsername)
         if (cancelled) return
         setStats(data)
+        loadedPeerRef.current = peerUsername
       } catch {
         if (cancelled) return
-        setError('Failed to load recap right now.')
+        if (!hasLoadedCurrentPeer) {
+          setError('Failed to load recap right now.')
+          setStats(null)
+          loadedPeerRef.current = ''
+        }
       } finally {
         if (!cancelled) setLoading(false)
       }

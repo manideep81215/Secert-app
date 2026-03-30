@@ -3600,6 +3600,21 @@
 }
 
 /* Instagram-like composer sizing */
+.chat-container .chat-area,
+.chat-container .messages-area,
+.chat-container .input-area,
+.chat-container .input-wrapper {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+
+.chat-container .chat-area,
+.chat-container .input-area {
+  align-self: stretch !important;
+}
+
 .chat-container .input-area {
   padding: 10px 12px !important;
 }
@@ -3660,8 +3675,9 @@
   height: auto !important;
   max-height: calc(5.4em + 24px) !important;
   border-radius: 22px !important;
+  flex: 1 1 0% !important;
   align-items: flex-end !important;
-  padding: 4px 10px 4px 0 !important;
+  padding: 4px 10px 4px 8px !important;
   justify-content: flex-start !important;
   overflow: hidden !important;
 }
@@ -3678,8 +3694,8 @@
   text-align: start !important;
   text-indent: 0 !important;
   unicode-bidi: plaintext;
-  padding: 9px 12px 9px 2px !important;
-  padding-inline-start: 2px !important;
+  padding: 9px 12px 9px 10px !important;
+  padding-inline-start: 10px !important;
   appearance: none;
   -webkit-appearance: none;
   resize: none !important;

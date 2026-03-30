@@ -27,6 +27,8 @@ const TONY_LONG_PRESS_MESSAGE = '📢 friends unnaru chatting cheyadam avvatle�
 const HIHI_LONG_PRESS_MESSAGE = '📢 Hari unnadu 🚨'
 const TONY_HIHI_DOUBLE_TAP_MESSAGE = '📢 Aagu baby Ostha ,Matladaniki avvatle 🚨'
 
+const HIHI_TONY_FOUR_TAP_MESSAGE = 'Love Youuu 😘'
+
 const normalizeUsername = (value) => String(value || '').trim().toLowerCase()
 
 function SecretTapButton({ username, socketRef }) {
@@ -58,6 +60,9 @@ function SecretTapButton({ username, socketRef }) {
   const canUseSecretTap = recipients.length > 0
   const canSendTonyHihiDoubleTap = (
     normalizedUsername === TONY_USERNAME && recipients.includes(HIHI_USERNAME)
+  )
+  const canSendHihiTonyFourTap = (
+    normalizedUsername === HIHI_USERNAME && recipients.includes(TONY_USERNAME)
   )
 
   const clearTapTimer = () => {
@@ -157,6 +162,7 @@ function SecretTapButton({ username, socketRef }) {
     if (safeTapCount === 2 && canSendTonyHihiDoubleTap) return TONY_HIHI_DOUBLE_TAP_MESSAGE
     if (safeTapCount === 2) return SECRET_TAP_MESSAGES[2]
     if (safeTapCount === 3) return SECRET_TAP_MESSAGES[3]
+    if (safeTapCount === 4 && canSendHihiTonyFourTap) return HIHI_TONY_FOUR_TAP_MESSAGE
     if (isHihiSender) {
       return `${SECRET_TAP_MESSAGES[3]} (${safeTapCount} taps)`
     }

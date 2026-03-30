@@ -25,7 +25,7 @@ const GLOBAL_4000_MILESTONE = {
   isSpecial: true,
 }
 
-function buildSpecialLoveMilestone(count) {
+function buildSpecialLoveMilestone(count, message) {
   return {
     kind: 'messages',
     count,
@@ -33,15 +33,21 @@ function buildSpecialLoveMilestone(count) {
     color: '#ff1493',
     glow: 'rgba(255,20,147,0.6)',
     title: `${count} Messages of Love!`,
-    message: `Through ${count} conversations, your love story continues to bloom. Here's to forever together. \uD83D\uDC91`,
+    message,
     buttonText: 'Forever & Always \uD83D\uDC96',
     isSpecial: true,
   }
 }
 
 const SPECIAL_MESSAGE_MILESTONES = {
-  9192: buildSpecialLoveMilestone(9192),
-  9291: buildSpecialLoveMilestone(9291),
+  9192: buildSpecialLoveMilestone(
+    9192,
+    "Through 9192 conversations, your love story continues to bloom. 91 will stand always with 92! Here's to forever together. \uD83D\uDC91",
+  ),
+  9291: buildSpecialLoveMilestone(
+    9291,
+    "Through 9291 conversations, your love story continues to bloom. Will 92 always stands with 91? Here's to forever together. \uD83D\uDC91",
+  ),
 }
 
 const STREAK_MILESTONES = [

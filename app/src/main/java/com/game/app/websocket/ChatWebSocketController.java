@@ -31,6 +31,7 @@ import com.game.app.service.PushNotificationService;
 @Controller
 public class ChatWebSocketController {
   private static final long EDIT_WINDOW_MILLIS = 15 * 60 * 1000L;
+  private static final long CHAT_ROLE_CACHE_TTL_MILLIS = 5 * 60 * 1000L;
   private static final String SECRET_TAP_TYPE = "secret-tap";
   private static final String TONY_USERNAME = "tony";
 
@@ -47,6 +48,7 @@ public class ChatWebSocketController {
   private final Set<String> onlineUsers = ConcurrentHashMap.newKeySet();
   private final Map<String, Long> lastSeenMap = new ConcurrentHashMap<>();
   private final Map<String, Long> presenceHeartbeatMap = new ConcurrentHashMap<>();
+  private final Map<String, CachedChatRole> chatRoleCache = new ConcurrentHashMap<>();
 
   public ChatWebSocketController(
       SimpMessagingTemplate messagingTemplate,
@@ -711,9 +713,18 @@ public class ChatWebSocketController {
   private boolean hasChatRole(String username) {
     String normalized = normalizeUsername(username);
     if (normalized.isBlank()) return false;
-    return userRepository.findByUsername(normalized)
+
+    long now = Instant.now().toEpochMilli();
+    CachedChatRole cachedRole = chatRoleCache.get(normalized);
+    if (cachedRole != null && (now - cachedRole.checkedAt()) <= CHAT_ROLE_CACHE_TTL_MILLIS) {
+      return cachedRole.hasChatRole();
+    }
+
+    boolean hasChatRole = userRepository.findByUsername(normalized)
         .map(user -> "chat".equalsIgnoreCase(user.getRole()))
         .orElse(false);
+    chatRoleCache.put(normalized, new CachedChatRole(hasChatRole, now));
+    return hasChatRole;
   }
 
   private boolean isSecretTapType(String type) {
@@ -801,4 +812,6 @@ public class ChatWebSocketController {
   public record MessageDeletePayload(Long messageId, String fromUsername, String toUsername, Long deletedAt) {}
 
   public record DeleteAck(Long messageId, boolean success, String reason) {}
+
+  private record CachedChatRole(boolean hasChatRole, long checkedAt) {}
 }
