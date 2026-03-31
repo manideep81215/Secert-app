@@ -5282,7 +5282,7 @@ function ChatPageNew() {
                     )}
                   </div>
                   {shouldShowSeenInline && index === lastOutgoingIndex && activeMessageActionsKey !== messageKey && (
-                    <span className="message-seen-inline">Seen</span>
+                    <span className="message-seen-inline">👁️ Seen</span>
                   )}
                 </div>
                 {renderMessageActions(message, messageKey, messageFailed)}
@@ -5333,7 +5333,7 @@ function ChatPageNew() {
                       )}
                     </div>
                     {shouldShowSeenInline && index === lastOutgoingIndex && activeMessageActionsKey !== messageKey && (
-                      <span className="message-seen-inline">Seen</span>
+                      <span className="message-seen-inline">👁️ Seen</span>
                     )}
                   </div>
                   {renderMessageActions(message, messageKey, messageFailed)}
