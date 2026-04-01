@@ -275,6 +275,29 @@
   font-weight: 600;
 }
 
+.recap-timeline-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.8rem;
+  margin-top: 0.65rem;
+  padding: 0.72rem 0.85rem;
+  border-radius: 12px;
+  background: rgba(255, 143, 171, 0.08);
+  border: 1px solid rgba(255, 143, 171, 0.18);
+  color: rgba(255, 255, 255, 0.8);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.82rem;
+}
+
+.recap-timeline-total strong {
+  color: #ffb347;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.2rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .recap-since {
   text-align: center;
   font-family: 'Cormorant Garamond', serif;
@@ -308,5 +331,14 @@
   .recap-page-header {
     padding-left: 1rem;
     padding-right: 1rem;
+  }
+
+  .recap-timeline-total {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .recap-timeline-total strong {
+    font-size: 1.05rem;
   }
 }

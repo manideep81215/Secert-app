@@ -188,6 +188,8 @@ function RecapPage() {
   const maxBarMessages = Math.max(1, ...monthlyBars.map((row) => Number(row?.messages || 0)))
   const previousPeriodLabel = formatRecapPeriodLabel(stats?.recapPeriodStart, stats?.recapPeriodEnd)
   const currentPeriodLabel = formatRecapPeriodLabel(stats?.currentPeriodStart, stats?.currentPeriodEnd)
+  const timelineTotalMessages = timeline.reduce((sum, row) => sum + Number(row?.messages || 0), 0)
+  const totalMessagesInMonths = Math.max(Number(stats?.totalMessages || 0), timelineTotalMessages)
 
   return (
     <div className="recap-page">
@@ -269,14 +271,20 @@ function RecapPage() {
           ) : null}
 
           {timeline.length ? (
-            <ul className="recap-timeline-list">
-              {timeline.map((row) => (
-                <li key={String(row.month)} className="recap-timeline-item">
-                  <span>{formatMonthLabel(row.month)}</span>
-                  <strong>{Number(row.messages || 0).toLocaleString()} msgs</strong>
-                </li>
-              ))}
-            </ul>
+            <>
+              <ul className="recap-timeline-list">
+                {timeline.map((row) => (
+                  <li key={String(row.month)} className="recap-timeline-item">
+                    <span>{formatMonthLabel(row.month)}</span>
+                    <strong>{Number(row.messages || 0).toLocaleString()} msgs</strong>
+                  </li>
+                ))}
+              </ul>
+              <div className="recap-timeline-total">
+                <span>Total messages in all months</span>
+                <strong>{totalMessagesInMonths.toLocaleString()} msgs</strong>
+              </div>
+            </>
           ) : (
             <div className="recap-muted">No timeline data yet.</div>
           )}
