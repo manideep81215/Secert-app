@@ -5092,6 +5092,7 @@ function ChatPageNew() {
   )
   const reactionTrayMessage = reactionTray ? getReactionTrayMessage() : null
   const isMessageOverlayOpen = Boolean(isTouchDevice && (reactionTray || activeMessageActionsKey))
+  const shouldRenderMessageOverlayBackdrop = isMessageOverlayOpen && !isIosPlatform
 
   useEffect(() => {
     if (!isTouchDevice) return undefined
@@ -5099,7 +5100,7 @@ function ChatPageNew() {
 
     const handleOutsidePress = (event) => {
       const target = event.target
-      if (!(target instanceof HTMLElement)) return
+      if (!(target instanceof Element)) return
       if (target.closest('.reaction-tray')) return
       if (target.closest('.message-actions.active')) return
       if (target.closest('.message')) return
@@ -5376,7 +5377,7 @@ function ChatPageNew() {
           </AnimatePresence>
           <div ref={messagesEndRef} />
         </motion.div>
-        {isMessageOverlayOpen && (
+        {shouldRenderMessageOverlayBackdrop && (
           <button
             type="button"
             className="reaction-overlay-backdrop"
