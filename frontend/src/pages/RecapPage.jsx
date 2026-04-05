@@ -280,9 +280,13 @@ function RecapPage() {
                   </li>
                 ))}
               </ul>
-              <div className="recap-timeline-total">
-                <span>Total messages in all months</span>
-                <strong>{totalMessagesInMonths.toLocaleString()} msgs</strong>
+              <div className="recap-big-card recap-timeline-total-card">
+                <div className="recap-big-icon">{'\uD83D\uDC8C'}</div>
+                <div className="recap-big-number recap-pink">{totalMessagesInMonths.toLocaleString()}</div>
+                <div className="recap-big-label">total messages in all months</div>
+                <div className="recap-timeline-total-sub">
+                  Across {timeline.length} month{timeline.length === 1 ? '' : 's'} together
+                </div>
               </div>
             </>
           ) : (

@@ -275,27 +275,42 @@
   font-weight: 600;
 }
 
-.recap-timeline-total {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.8rem;
-  margin-top: 0.65rem;
-  padding: 0.72rem 0.85rem;
-  border-radius: 12px;
-  background: rgba(255, 143, 171, 0.08);
-  border: 1px solid rgba(255, 143, 171, 0.18);
-  color: rgba(255, 255, 255, 0.8);
-  font-family: 'DM Sans', sans-serif;
-  font-size: 0.82rem;
+.recap-timeline-total-card {
+  margin-top: 0.7rem;
+  position: relative;
+  overflow: hidden;
 }
 
-.recap-timeline-total strong {
-  color: #ffb347;
-  font-family: 'Cormorant Garamond', serif;
-  font-size: 1.2rem;
-  font-weight: 700;
-  white-space: nowrap;
+.recap-timeline-total-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at top left, rgba(255, 143, 171, 0.16), transparent 48%),
+    radial-gradient(circle at bottom right, rgba(192, 132, 252, 0.12), transparent 52%);
+  pointer-events: none;
+}
+
+.recap-timeline-total-card .recap-big-icon,
+.recap-timeline-total-card .recap-big-number,
+.recap-timeline-total-card .recap-big-label {
+  position: relative;
+  z-index: 1;
+}
+
+.recap-timeline-total-card .recap-big-number {
+  font-size: clamp(2.1rem, 5vw, 2.7rem);
+}
+
+.recap-timeline-total-sub {
+  position: relative;
+  z-index: 1;
+  margin-top: 0.28rem;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  color: rgba(255, 220, 235, 0.58);
 }
 
 .recap-since {
@@ -333,12 +348,7 @@
     padding-right: 1rem;
   }
 
-  .recap-timeline-total {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .recap-timeline-total strong {
-    font-size: 1.05rem;
+  .recap-timeline-total-card .recap-big-number {
+    font-size: 2rem;
   }
 }
