@@ -22,6 +22,7 @@ import { getAllUsers } from '../services/usersApi'
 import BackIcon from '../components/BackIcon'
 import { CameraAttachIcon, FileAttachIcon, PhotoAttachIcon, DriveAttachIcon } from '../components/AttachmentIcons'
 import LoveReminder from '../components/LoveReminder'
+import LoveJourneyPopupHost from '../components/LoveJourneyPopupHost'
 import MonthlyRecap from '../components/MonthlyRecap'
 import MilestonePopup from '../components/MilestonePopup'
 import LovePercentageChip from '../components/LovePercentageChip'
@@ -5131,6 +5132,7 @@ function ChatPageNew() {
       }}
     >
       <LoveReminder />
+      <LoveJourneyPopupHost />
       <MonthlyRecap token={flow.token} peerUsername={selectedUser?.username} />
       <MilestonePopup token={flow.token} peerUsername={selectedUser?.username} triggerCheck={milestoneTriggerTick} />
       <ChatUsersPanel
