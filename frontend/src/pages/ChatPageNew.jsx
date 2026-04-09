@@ -189,7 +189,6 @@ function ChatPageNew() {
   const loadingOlderMessagesRef = useRef(false)
   const mediaInputRef = useRef(null)
   const cameraPhotoInputRef = useRef(null)
-  const cameraVideoInputRef = useRef(null)
   const fileInputRef = useRef(null)
   const messagesAreaRef = useRef(null)
   const messagesEndRef = useRef(null)
@@ -3651,6 +3650,10 @@ function ChatPageNew() {
     if (type === 'photo') {
       resolvedType = inferMediaKind(file)
     }
+    if (resolvedType === 'video') {
+      notify.error('Video uploads are disabled on this build.')
+      return false
+    }
 
     const currentReply = replyingTo
     const targetUser = selectedUser
@@ -4816,88 +4819,6 @@ function ChatPageNew() {
   //   setIsSnapCameraOpen(true)
   // }
 
-  const handleCameraVideoCapture = async () => {
-    if (!selectedUser) {
-      notify.error('Select a user first.')
-      return
-    }
-    if (isCameraLoading) return
-    
-    const isNativeRuntime = isNativeCapacitorRuntime()
-    if (!isNativeRuntime) {
-      cameraVideoInputRef.current?.click()
-      return
-    }
-
-    setIsCameraLoading(true)
-    try {
-      const hasPermission = await requestNativeCameraPermission()
-      if (!hasPermission) return
-
-      const toFileFromBlob = (blob, name, typeHint = '') => {
-        const safeType = String(blob?.type || typeHint || '').trim()
-        return new File([blob], name, {
-          type: safeType || 'application/octet-stream',
-          lastModified: Date.now(),
-        })
-      }
-      const base64ToBlob = (base64Data, mimeType) => {
-        const binary = window.atob(base64Data)
-        const len = binary.length
-        const bytes = new Uint8Array(len)
-        for (let i = 0; i < len; i += 1) {
-          bytes[i] = binary.charCodeAt(i)
-        }
-        return new Blob([bytes], { type: mimeType || 'application/octet-stream' })
-      }
-      const readNativePathBlob = async (path, mimeType) => {
-        const pathText = String(path || '').trim()
-        if (!pathText) return null
-        try {
-          const read = await Filesystem.readFile({ path: pathText })
-          const rawData = read?.data
-          if (!rawData) return null
-          if (rawData instanceof Blob) return rawData
-          const base64Data = String(rawData).split(',').pop() || ''
-          if (!base64Data) return null
-          return base64ToBlob(base64Data, mimeType)
-        } catch {
-          return null
-        }
-      }
-
-      // Use Capacitor Camera API for consistent video capture on iOS and Android
-      const video = await Camera.getPhoto({
-        source: CameraSource.Camera,
-        resultType: CameraResultType.Uri,
-        quality: 85,
-        saveToGallery: false,
-        correctOrientation: true,
-      })
-
-      const rawFormat = String(video?.format || '').trim().toLowerCase()
-      const extension = rawFormat || 'mp4'
-      const fileType = `video/${extension === 'mov' ? 'quicktime' : extension}`
-      let blob = await readNativePathBlob(video?.path, fileType)
-      if (!blob) {
-        const webPath = String(video?.webPath || '').trim()
-        if (!webPath) throw new Error('video-capture-path-missing')
-        const response = await fetch(webPath)
-        if (!response.ok) throw new Error(`video-capture-fetch-failed-${response.status}`)
-        blob = await response.blob()
-      }
-      const file = toFileFromBlob(blob, `camera-video-${Date.now()}.${extension}`, fileType)
-      await sendMediaFile(file, 'video')
-    } catch (error) {
-      const code = String(error?.message || '').toLowerCase()
-      const cancelled = code.includes('cancel') || code.includes('user cancelled')
-      if (!cancelled) {
-        notify.error('Unable to capture video.')
-      }
-    } finally {
-      setIsCameraLoading(false)
-    }
-  }
   const renderReplyContent = (reply, scope = 'bubble') => {
     if (!reply) return null
     const replyType = String(reply.type || '').toLowerCase()
@@ -5588,9 +5509,6 @@ function ChatPageNew() {
                       <button className="attach-item" onClick={() => { handleCameraPhotoCapture(); setShowAttachMenu(false) }} title="Capture photo" aria-label="Capture photo" disabled={isCameraLoading}>
                         <CameraAttachIcon className="attach-icon attach-icon-camera" /> Photo
                       </button>
-                      <button className="attach-item" onClick={() => { handleCameraVideoCapture(); setShowAttachMenu(false) }} title="Capture video" aria-label="Capture video" disabled={isCameraLoading}>
-                        <CameraAttachIcon className="attach-icon attach-icon-camera" /> Camera Video
-                      </button>
                       <button className="attach-item" onClick={() => { fileInputRef.current?.click(); setShowAttachMenu(false) }} title="Send File" aria-label="Send file">
                         <FileAttachIcon className="attach-icon attach-icon-file" /> File
                       </button>
@@ -5619,7 +5537,7 @@ function ChatPageNew() {
             ref={mediaInputRef}
             style={{ display: 'none' }}
             onChange={(event) => handleFileUpload(event, 'photo')}
-            accept="image/*,video/*"
+            accept="image/*"
           />
           <input
             type="file"
@@ -5635,14 +5553,6 @@ function ChatPageNew() {
             onChange={handleCameraPhotoInputChange}
             accept="image/*"
             capture="environment"
-          />
-          <input
-            type="file"
-            ref={cameraVideoInputRef}
-            style={{ display: 'none' }}
-            onChange={(event) => handleFileUpload(event, 'video')}
-            accept="video/*"
-            capture="camcorder"
           />
         </motion.div>
       </div>

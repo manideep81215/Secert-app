@@ -154,6 +154,9 @@ public class ChatMessageController {
     }
     String mimeType = normalizeMimeType(file.getContentType(), file.getOriginalFilename());
     String mediaKind = normalizeMediaKind(kind, mimeType);
+    if ("video".equalsIgnoreCase(mediaKind) || (mimeType != null && mimeType.startsWith("video/"))) {
+      throw new ResponseStatusException(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "Video uploads are disabled");
+    }
     if (file.getSize() > maxMediaUploadBytes) {
       throw new ResponseStatusException(
           HttpStatus.PAYLOAD_TOO_LARGE,

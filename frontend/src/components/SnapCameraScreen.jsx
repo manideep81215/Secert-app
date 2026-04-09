@@ -6,10 +6,9 @@ import './SnapCamera.css'
 const FILTERS = ['none', 'warm', 'cool', 'vintage', 'fade', 'dark', 'gold']
 const TIMERS = ['off', '3s', '10s']
 const ZOOMS = ['1x', '2x', '5x']
-const MODE_TABS = ['camera', 'video']
+const MODE_TABS = ['camera']
 const MODE_LABELS = {
   camera: 'PHOTO',
-  video: 'VIDEO',
 }
 const SNAP_CAPTURE_WIDTH = 720
 const SNAP_CAPTURE_HEIGHT = 1280
@@ -496,7 +495,7 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
   const isMobileDevice = isLikelyMobileDevice()
   const isNativeRuntime = Capacitor.isNativePlatform()
   const cameraToggleLabel = '🔄'
-  const libraryAccept = mode === 'video' ? 'video/*' : 'image/*'
+  const libraryAccept = 'image/*'
 
   function clearPreviewUrl(url) {
     const value = String(url || '').trim()
@@ -1143,12 +1142,7 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
 
   function acceptCapturedVideo(inputFile) {
     if (!inputFile) return
-    const preparedFile = buildVideoFile(inputFile, inputFile.name, inputFile.type)
-    stopPreview()
-    clearCapturedMedia({ restartPreview: false })
-    setFile(preparedFile)
-    setCapturedType('video')
-    replacePreviewUrl(URL.createObjectURL(preparedFile))
+    console.warn('Snap video capture is disabled on this build.')
   }
 
   function addOverlayItem(type, content) {
@@ -1909,6 +1903,8 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
   }
 
   async function startVideoRecording() {
+    console.warn('Snap video capture is disabled on this build.')
+    return
     const timerSecs = timer === '3s' ? 3 : timer === '10s' ? 10 : 0
     if (timerSecs > 0) {
       const completedCountdown = await runCaptureCountdown(timerSecs)
@@ -2018,11 +2014,6 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
       return
     }
 
-    if (mode === 'video') {
-      await startVideoRecording()
-      return
-    }
-
     await capturePhoto()
   }
 
@@ -2077,7 +2068,7 @@ export default function SnapCameraScreen({ currentUser, otherUser, onClose, onSe
 
     const mediaKind = getSelectedMediaKind(selectedFile)
     if (mediaKind === 'video') {
-      acceptCapturedVideo(selectedFile)
+      console.warn('Snap video capture is disabled on this build.')
     } else {
       acceptCapturedPhoto(selectedFile)
     }
