@@ -61,7 +61,7 @@ public class SecurityConfig {
         // Handle credentials properly: if using credentials, don't use* pattern
         if (allowedOriginPatterns.contains("*")) {
             // If wildcard is in patterns, allow all origins without credentials
-            configuration.setAllowedOriginPatterns("*");
+            configuration.setAllowedOriginPatterns(List.of("*"));
             configuration.setAllowCredentials(false);
         } else {
             // Use specific origin patterns with credentials enabled
