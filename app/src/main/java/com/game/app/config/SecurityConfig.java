@@ -57,12 +57,22 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOriginPatterns(allowedOriginPatterns);
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        
+        // Handle credentials properly: if using credentials, don't use* pattern
+        if (allowedOriginPatterns.contains("*")) {
+            // If wildcard is in patterns, allow all origins without credentials
+            configuration.setAllowedOriginPatterns("*");
+            configuration.setAllowCredentials(false);
+        } else {
+            // Use specific origin patterns with credentials enabled
+            configuration.setAllowedOriginPatterns(allowedOriginPatterns);
+            configuration.setAllowCredentials(true);
+        }
+        
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"));
         configuration.setAllowedHeaders(List.of("*"));
-        configuration.setExposedHeaders(List.of("Authorization", "Set-Cookie", "Content-Type"));  // ✅ Added more headers
-        configuration.setAllowCredentials(true);
-        configuration.setMaxAge(3600L);  // ✅ Cache preflight for 1 hour
+        configuration.setExposedHeaders(List.of("Authorization", "Set-Cookie", "Content-Type", "X-Requested-With"));
+        configuration.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
