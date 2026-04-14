@@ -57,17 +57,13 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        
-        // Handle credentials properly: if using credentials, don't use* pattern
-        if (allowedOriginPatterns.contains("*")) {
-            // If wildcard is in patterns, allow all origins without credentials
-            configuration.setAllowedOriginPatterns(List.of("*"));
-            configuration.setAllowCredentials(false);
-        } else {
-            // Use specific origin patterns with credentials enabled
-            configuration.setAllowedOriginPatterns(allowedOriginPatterns);
-            configuration.setAllowCredentials(true);
-        }
+
+        // Using allowed origin patterns lets Spring reflect the request origin,
+        // which keeps credentialed CORS and SockJS fallback transports working.
+        configuration.setAllowedOriginPatterns(
+            allowedOriginPatterns.isEmpty() ? List.of("*") : allowedOriginPatterns
+        );
+        configuration.setAllowCredentials(true);
         
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"));
         configuration.setAllowedHeaders(List.of("*"));
