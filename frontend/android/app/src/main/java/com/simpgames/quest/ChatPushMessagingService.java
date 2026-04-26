@@ -60,8 +60,9 @@ public class ChatPushMessagingService extends FirebaseMessagingService {
   private void showChatNotification(String title, String body, String url, String peerUsername, String pushToken) {
     ensureNotificationChannel();
 
-    int notificationId = buildNotificationId(peerUsername, url, title);
-    String notificationTag = buildNotificationTag(peerUsername, url, title);
+    // Generate unique notification ID for each message (timestamp-based) for separate popups
+    int notificationId = (int) (System.currentTimeMillis() % Integer.MAX_VALUE);
+    String notificationTag = null; // Remove tag to prevent grouping/replacement
     NotificationReplyStore.save(this, notificationId, peerUsername, pushToken, url, title);
     PendingIntent openIntent = createOpenChatPendingIntent(this, url);
 
@@ -73,10 +74,20 @@ public class ChatPushMessagingService extends FirebaseMessagingService {
         .setCategory(NotificationCompat.CATEGORY_MESSAGE)
         .setPriority(NotificationCompat.PRIORITY_HIGH)
         .setAutoCancel(true)
-        .setOnlyAlertOnce(true);
+        .setOnlyAlertOnce(false)
+        .setShowWhen(true)
+        .setSound(android.provider.Settings.System.DEFAULT_NOTIFICATION_URI)
+        .setVibrate(new long[]{0, 100, 200, 100})
+        .setLights(0xFF00FF00, 1000, 1000);
 
     if (openIntent != null) {
       builder.setContentIntent(openIntent);
+      // Enable heads-up notification popup even when other notifications exist
+      int pendingFlags = PendingIntent.FLAG_UPDATE_CURRENT;
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        pendingFlags |= PendingIntent.FLAG_IMMUTABLE;
+      }
+      builder.setFullScreenIntent(openIntent, true);
     }
 
     if (!peerUsername.isEmpty() && !pushToken.isEmpty()) {
@@ -111,7 +122,8 @@ public class ChatPushMessagingService extends FirebaseMessagingService {
       builder.addAction(replyAction);
     }
 
-    NotificationManagerCompat.from(this).notify(notificationTag, notificationId, builder.build());
+    // Notify with null tag to show separate popup for every message
+    NotificationManagerCompat.from(this).notify(notificationId, builder.build());
   }
 
   private boolean shouldSuppressWhileChatOpen() {

@@ -3,6 +3,7 @@ package com.simpgames.quest;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
+import android.view.WindowManager;
 
 import com.getcapacitor.BridgeActivity;
 import androidx.core.view.WindowCompat;
@@ -17,6 +18,8 @@ public class MainActivity extends BridgeActivity {
     registerPlugin(OpenFilePlugin.class);
     super.onCreate(savedInstanceState);
     WindowCompat.setDecorFitsSystemWindows(getWindow(), true);
+    // Enable FLAG_SECURE to blur content in recent apps and prevent screenshots
+    getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE);
     captureNotificationIntent(getIntent());
     deliverPendingNotificationRoute();
   }
