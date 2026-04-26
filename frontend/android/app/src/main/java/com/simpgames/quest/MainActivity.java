@@ -2,8 +2,21 @@ package com.simpgames.quest;
 
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.os.Build;
 import android.os.Bundle;
+import android.app.ActivityManager;
+import android.graphics.BitmapFactory;
+import android.graphics.Bitmap;
 import android.view.WindowManager;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.view.ViewGroup;
+import android.graphics.Color;
+import android.graphics.BlurMaskFilter;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.view.View;
 
 import com.getcapacitor.BridgeActivity;
 import androidx.core.view.WindowCompat;
@@ -12,6 +25,7 @@ public class MainActivity extends BridgeActivity {
   private static final String CAPACITOR_STORAGE_GROUP = "CapacitorStorage";
   private static final String PREF_APP_IN_FOREGROUND = "chat_app_in_foreground_v1";
   private String pendingNotificationUrl = "";
+  private View privacyOverlay;
 
   @Override
   public void onCreate(Bundle savedInstanceState) {
@@ -20,6 +34,18 @@ public class MainActivity extends BridgeActivity {
     WindowCompat.setDecorFitsSystemWindows(getWindow(), true);
     // Enable FLAG_SECURE to blur content in recent apps and prevent screenshots
     getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE);
+    
+    // Set custom task description for recent apps with app icon (no preview)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+      Bitmap icon = BitmapFactory.decodeResource(getResources(), R.mipmap.ic_launcher);
+      ActivityManager.TaskDescription taskDesc = new ActivityManager.TaskDescription(
+          getString(R.string.app_name),
+          icon,
+          getResources().getColor(android.R.color.black, getTheme())
+      );
+      setTaskDescription(taskDesc);
+    }
+    
     captureNotificationIntent(getIntent());
     deliverPendingNotificationRoute();
   }
@@ -37,12 +63,14 @@ public class MainActivity extends BridgeActivity {
     super.onResume();
     WindowCompat.setDecorFitsSystemWindows(getWindow(), true);
     setAppForegroundState(true);
+    hidePrivacyOverlay();
     deliverPendingNotificationRoute();
   }
 
   @Override
   public void onPause() {
     setAppForegroundState(false);
+    showPrivacyOverlay();
     super.onPause();
   }
 
@@ -84,6 +112,41 @@ public class MainActivity extends BridgeActivity {
       prefs.edit().putString(PREF_APP_IN_FOREGROUND, isForeground ? "1" : "0").apply();
     } catch (Exception ignored) {
       // Foreground tracking is best-effort only.
+    }
+  }
+
+  private void showPrivacyOverlay() {
+    if (privacyOverlay != null) {
+      privacyOverlay.setVisibility(View.VISIBLE);
+      return;
+    }
+
+    // Create blurred overlay with app logo
+    FrameLayout overlay = new FrameLayout(this);
+    overlay.setBackgroundColor(Color.parseColor("#F5F5F5")); // Light gray background
+    
+    // Add app icon in center
+    ImageView iconView = new ImageView(this);
+    iconView.setImageResource(R.mipmap.ic_launcher);
+    iconView.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+    
+    FrameLayout.LayoutParams iconParams = new FrameLayout.LayoutParams(
+        200, 200, android.view.Gravity.CENTER);
+    overlay.addView(iconView, iconParams);
+    
+    // Get root view and add overlay
+    ViewGroup rootView = (ViewGroup) getWindow().getDecorView().findViewById(android.R.id.content);
+    FrameLayout.LayoutParams overlayParams = new FrameLayout.LayoutParams(
+        ViewGroup.LayoutParams.MATCH_PARENT,
+        ViewGroup.LayoutParams.MATCH_PARENT);
+    rootView.addView(overlay, overlayParams);
+    
+    privacyOverlay = overlay;
+  }
+
+  private void hidePrivacyOverlay() {
+    if (privacyOverlay != null) {
+      privacyOverlay.setVisibility(View.GONE);
     }
   }
 }

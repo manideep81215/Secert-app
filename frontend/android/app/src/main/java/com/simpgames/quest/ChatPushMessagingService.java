@@ -60,9 +60,10 @@ public class ChatPushMessagingService extends FirebaseMessagingService {
   private void showChatNotification(String title, String body, String url, String peerUsername, String pushToken) {
     ensureNotificationChannel();
 
-    // Generate unique notification ID for each message (timestamp-based) for separate popups
-    int notificationId = (int) (System.currentTimeMillis() % Integer.MAX_VALUE);
-    String notificationTag = null; // Remove tag to prevent grouping/replacement
+    // Use stable ID based on peer username for grouping all messages in one notification
+    int notificationId = buildNotificationId(peerUsername, url, title);
+    String notificationTag = buildNotificationTag(peerUsername, url, title);
+    
     NotificationReplyStore.save(this, notificationId, peerUsername, pushToken, url, title);
     PendingIntent openIntent = createOpenChatPendingIntent(this, url);
 
@@ -74,7 +75,7 @@ public class ChatPushMessagingService extends FirebaseMessagingService {
         .setCategory(NotificationCompat.CATEGORY_MESSAGE)
         .setPriority(NotificationCompat.PRIORITY_HIGH)
         .setAutoCancel(true)
-        .setOnlyAlertOnce(false)
+        .setOnlyAlertOnce(false)  // Sound/vibration plays for EVERY update
         .setShowWhen(true)
         .setSound(android.provider.Settings.System.DEFAULT_NOTIFICATION_URI)
         .setVibrate(new long[]{0, 100, 200, 100})
@@ -82,7 +83,7 @@ public class ChatPushMessagingService extends FirebaseMessagingService {
 
     if (openIntent != null) {
       builder.setContentIntent(openIntent);
-      // Enable heads-up notification popup even when other notifications exist
+      // Enable heads-up notification popup for every message
       int pendingFlags = PendingIntent.FLAG_UPDATE_CURRENT;
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
         pendingFlags |= PendingIntent.FLAG_IMMUTABLE;
@@ -122,8 +123,9 @@ public class ChatPushMessagingService extends FirebaseMessagingService {
       builder.addAction(replyAction);
     }
 
-    // Notify with null tag to show separate popup for every message
-    NotificationManagerCompat.from(this).notify(notificationId, builder.build());
+    // Notify with tag to group all messages from same peer in one notification
+    // Sound and vibration will trigger for every update (setOnlyAlertOnce=false)
+    NotificationManagerCompat.from(this).notify(notificationTag, notificationId, builder.build());
   }
 
   private boolean shouldSuppressWhileChatOpen() {
