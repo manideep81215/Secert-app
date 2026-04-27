@@ -20,7 +20,7 @@ import com.google.firebase.messaging.RemoteMessage;
 import java.util.Map;
 
 public class ChatPushMessagingService extends FirebaseMessagingService {
-  public static final String CHANNEL_ID = "chat_messages_v6";
+  public static final String CHANNEL_ID = "chat_messages_v7";
   private static final String CAPACITOR_STORAGE_GROUP = "CapacitorStorage";
   private static final String PREF_APP_IN_FOREGROUND = "chat_app_in_foreground_v1";
   private static final String PREF_CHAT_PAGE_ACTIVE = "chat_page_active_v1";
@@ -232,7 +232,7 @@ public class ChatPushMessagingService extends FirebaseMessagingService {
   }
 
   private Uri buildNotificationSoundUri() {
-    return Uri.parse("android.resource://" + getPackageName() + "/" + R.raw.mixkit_elevator_tone_2863);
+    return Uri.parse("android.resource://" + getPackageName() + "/" + R.raw.that_was_quick_606);
   }
 
   static int buildNotificationId(String peerUsername, String url, String title) {

@@ -3,9 +3,9 @@ import { PushNotifications } from '@capacitor/push-notifications'
 import { subscribeMobilePush, unsubscribeMobilePush } from '../services/pushApi'
 
 const MOBILE_PUSH_TOKEN_KEY = 'mobile_push_token_v1'
-const NATIVE_PUSH_CHANNEL_ID = 'chat_messages_v6'
+const NATIVE_PUSH_CHANNEL_ID = 'chat_messages_v7'
 const LEGACY_NATIVE_PUSH_CHANNEL_ID = 'chat_messages'
-const NATIVE_PUSH_SOUND = 'mixkit_elevator_tone_2863.wav'
+const NATIVE_PUSH_SOUND = 'that_was_quick_606.mp3'
 
 let listenersAttached = false
 let authTokenRef = ''

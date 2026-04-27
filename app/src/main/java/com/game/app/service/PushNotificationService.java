@@ -38,7 +38,7 @@ public class PushNotificationService {
   private static final Logger log = LoggerFactory.getLogger(PushNotificationService.class);
   private static final long FCM_TTL_MILLIS = 24L * 60L * 60L * 1000L;
   private static final String FCM_APP_NAME = "simp-games-quest-fcm";
-  private static final String FCM_ANDROID_CHANNEL_ID = "chat_messages_v6";
+  private static final String FCM_ANDROID_CHANNEL_ID = "chat_messages_v7";
   private static final String FCM_ANDROID_SMALL_ICON = "ic_stat_simp_games";
 
   private final MobilePushTokenRepository mobilePushTokenRepository;

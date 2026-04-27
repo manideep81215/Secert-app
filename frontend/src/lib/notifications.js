@@ -2,9 +2,9 @@ import { Capacitor } from '@capacitor/core'
 import { LocalNotifications } from '@capacitor/local-notifications'
 
 const CHAT_NOTIFY_CUTOFFS_KEY = 'chat_notify_cutoffs_v1'
-const NATIVE_CHAT_CHANNEL_ID = 'chat_messages_v6'
+const NATIVE_CHAT_CHANNEL_ID = 'chat_messages_v7'
 const LEGACY_NATIVE_CHAT_CHANNEL_ID = 'chat_messages'
-const NATIVE_CHAT_SOUND = 'mixkit_elevator_tone_2863.wav'
+const NATIVE_CHAT_SOUND = 'that_was_quick_606.mp3'
 const NOTIFY_DEDUP_WINDOW_MS = 1800
 let nativeNotificationSetupDone = false
 let nativeActionListenerAttached = false
