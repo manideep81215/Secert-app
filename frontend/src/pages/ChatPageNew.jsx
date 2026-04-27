@@ -29,6 +29,7 @@ import LovePercentageChip from '../components/LovePercentageChip'
 import CheckedForYouPopup from '../components/CheckedForYouPopup'
 // import SnapCameraScreen from '../components/SnapCameraScreen' // DISABLED: Snap Camera feature
 import SecretTapButton from '../components/SecretTapButton'
+import ConnectionStatusIndicator from '../components/ConnectionStatusIndicator'
 // import snapIcon from '../assets/snap.png' // DISABLED: Snap Camera feature
 import timerLoveBirdsIcon from '../assets/in-love.png'
 import ChatUsersPanel from './ChatUsersPanel'
@@ -162,6 +163,7 @@ function ChatPageNew() {
   const [swipingMessage, setSwipingMessage] = useState({ key: null, offset: 0 })
   const [activeMessageActionsKey, setActiveMessageActionsKey] = useState(null)
   const [socket, setSocket] = useState(null)
+  const [isSocketConnecting, setIsSocketConnecting] = useState(false)
   const [isManualRefreshing, setIsManualRefreshing] = useState(false)
   const [isRecordingVoice, setIsRecordingVoice] = useState(false)
   const [recordingSeconds, setRecordingSeconds] = useState(0)
@@ -2422,6 +2424,7 @@ function ChatPageNew() {
       reconnectDelay: 600,
       connectionTimeout: 7000,
       onConnect: () => {
+        setIsSocketConnecting(false)
         if (wsErrorTimerRef.current) {
           clearTimeout(wsErrorTimerRef.current)
           wsErrorTimerRef.current = null
@@ -2798,6 +2801,7 @@ function ChatPageNew() {
         }, 300)
       },
       onWebSocketError: () => {
+        setIsSocketConnecting(false)
         if (Date.now() < Number(wsResumeSuppressUntilRef.current || 0)) return
         if (wsErrorTimerRef.current) return
         wsErrorTimerRef.current = setTimeout(() => {
@@ -2807,6 +2811,7 @@ function ChatPageNew() {
         }, 1500)
       },
       onWebSocketClose: (event) => {
+        setIsSocketConnecting(false)
         const code = event?.code ?? 'n/a'
         if (code === 1000 || code === 1001) return
         const now = Date.now()
@@ -2818,11 +2823,13 @@ function ChatPageNew() {
         notifyRealtimeIssue(`Realtime disconnected (${code})${reason}`)
       },
       onStompError: (frame) => {
+        setIsSocketConnecting(false)
         const reason = frame?.headers?.message || frame?.body || 'STOMP broker error'
         notifyRealtimeIssue(`Realtime error: ${reason}`)
       },
     })
 
+    setIsSocketConnecting(true)
     client.activate()
     setSocket(client)
     socketRef.current = client
@@ -5124,6 +5131,10 @@ function ChatPageNew() {
             </div>
           )}
           <div className="chat-header-actions">
+            <ConnectionStatusIndicator
+              isConnected={socket?.connected}
+              isConnecting={isSocketConnecting && !socket?.connected}
+            />
             <button
               className="btn-user-details"
               onClick={() => navigate('/timers')}

@@ -1,0 +1,140 @@
+/* ConnectionStatusIndicator Styles */
+
+.connection-status-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  position: relative;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: transparent;
+}
+
+/* Connected State - Green */
+.connection-status-indicator.connected {
+  color: #4caf50;
+}
+
+.connection-status-indicator.connected:hover {
+  background: rgba(76, 175, 80, 0.1);
+  transform: scale(1.1);
+}
+
+/* Disconnected State - Red */
+.connection-status-indicator.disconnected {
+  color: #f44336;
+}
+
+.connection-status-indicator.disconnected:hover {
+  background: rgba(244, 67, 54, 0.1);
+  transform: scale(1.1);
+}
+
+/* Connecting State - Amber/Orange */
+.connection-status-indicator.connecting {
+  color: #ff9800;
+}
+
+.connection-status-indicator.connecting:hover {
+  background: rgba(255, 152, 0, 0.1);
+}
+
+/* Connection Icon */
+.connection-icon {
+  width: 1.4rem;
+  height: 1.4rem;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Connection Progress Container */
+.connection-progress-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.connection-progress-circle {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+/* Background circle */
+.progress-circle-bg {
+  fill: none;
+  stroke: rgba(255, 152, 0, 0.2);
+  stroke-width: 2.5;
+}
+
+/* Progress circle */
+.progress-circle-fill {
+  fill: none;
+  stroke: url(#progressGradient);
+  stroke-width: 2.5;
+  stroke-dasharray: 251;
+  stroke-dashoffset: 251;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.3s ease;
+}
+
+/* Percentage text */
+.connection-percentage {
+  position: absolute;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #ff9800;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* Status Label (Tooltip) */
+.connection-status-label {
+  position: absolute;
+  bottom: -28px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 0.4rem 0.8rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+  z-index: 1000;
+}
+
+.connection-status-indicator:hover .connection-status-label {
+  opacity: 1;
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .connection-status-indicator {
+    width: 2.2rem;
+    height: 2.2rem;
+  }
+
+  .connection-icon {
+    width: 1.2rem;
+    height: 1.2rem;
+  }
+
+  .connection-percentage {
+    font-size: 0.65rem;
+  }
+
+  .connection-status-label {
+    font-size: 0.7rem;
+    bottom: -26px;
+  }
+}
+
