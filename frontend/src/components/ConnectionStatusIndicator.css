@@ -33,6 +33,23 @@
   transform: scale(1.1);
 }
 
+/* Disconnected State with Retry - Red with Pulse */
+.connection-status-indicator.disconnected.retry-available {
+  color: #f44336;
+  cursor: pointer;
+  animation: retry-pulse 2s ease-in-out infinite;
+}
+
+.connection-status-indicator.disconnected.retry-available:hover {
+  background: rgba(244, 67, 54, 0.15);
+  transform: scale(1.15);
+  box-shadow: 0 0 12px rgba(244, 67, 54, 0.4);
+}
+
+.connection-status-indicator.disconnected.retry-available:active {
+  transform: scale(0.95);
+}
+
 /* Connecting State - Amber/Orange */
 .connection-status-indicator.connecting {
   color: #ff9800;
@@ -114,6 +131,16 @@
 
 .connection-status-indicator:hover .connection-status-label {
   opacity: 1;
+}
+
+/* Retry Pulse Animation */
+@keyframes retry-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(244, 67, 54, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(244, 67, 54, 0);
+  }
 }
 
 /* Responsive adjustments */

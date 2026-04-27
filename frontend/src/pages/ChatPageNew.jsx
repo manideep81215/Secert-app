@@ -2801,19 +2801,27 @@ function ChatPageNew() {
         }, 300)
       },
       onWebSocketError: () => {
+        // Mark as disconnected - socket will auto-retry via reconnectDelay
         setIsSocketConnecting(false)
         if (Date.now() < Number(wsResumeSuppressUntilRef.current || 0)) return
         if (wsErrorTimerRef.current) return
         wsErrorTimerRef.current = setTimeout(() => {
           wsErrorTimerRef.current = null
-          if (client.connected) return
-          notifyRealtimeIssue('Realtime connection error (websocket).')
+          if (client.connected) {
+            setIsSocketConnecting(true)
+            return
+          }
+          // Socket is attempting auto-retry via reconnectDelay
         }, 1500)
       },
       onWebSocketClose: (event) => {
-        setIsSocketConnecting(false)
         const code = event?.code ?? 'n/a'
-        if (code === 1000 || code === 1001) return
+        if (code === 1000 || code === 1001) {
+          setIsSocketConnecting(false) // Normal closure, stop connecting
+          return
+        }
+        // Mark as disconnected - socket will auto-retry via reconnectDelay
+        setIsSocketConnecting(false)
         const now = Date.now()
         const inResumeWindow = now < Number(wsResumeSuppressUntilRef.current || 0)
         const recentlyBackgrounded = now - Number(wsLastHiddenAtRef.current || 0) < 20000
@@ -2823,6 +2831,7 @@ function ChatPageNew() {
         notifyRealtimeIssue(`Realtime disconnected (${code})${reason}`)
       },
       onStompError: (frame) => {
+        // Mark as disconnected - socket will auto-retry via reconnectDelay
         setIsSocketConnecting(false)
         const reason = frame?.headers?.message || frame?.body || 'STOMP broker error'
         notifyRealtimeIssue(`Realtime error: ${reason}`)
@@ -3547,6 +3556,14 @@ function ChatPageNew() {
       await new Promise((resolve) => setTimeout(resolve, pollIntervalMs))
     }
     return Boolean(socketRef.current?.connected)
+  }
+
+  const handleReconnect = () => {
+    if (socketRef.current && !socketRef.current.connected && !isSocketConnecting) {
+      setIsSocketConnecting(true)
+      socketRef.current.activate()
+      toast.info('Attempting to reconnect...', { toastId: 'reconnect-attempt' })
+    }
   }
 
   const handleSecretTapSend = async ({ text, tempKey, targetRecipients, type = SECRET_TAP_TYPE }) => {
@@ -5134,6 +5151,7 @@ function ChatPageNew() {
             <ConnectionStatusIndicator
               isConnected={socket?.connected}
               isConnecting={isSocketConnecting && !socket?.connected}
+              onRetryClick={handleReconnect}
             />
             <button
               className="btn-user-details"

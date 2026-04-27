@@ -3,6 +3,7 @@ package com.simpgames.quest;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.media.AudioAttributes;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -19,7 +20,7 @@ import com.google.firebase.messaging.RemoteMessage;
 import java.util.Map;
 
 public class ChatPushMessagingService extends FirebaseMessagingService {
-  public static final String CHANNEL_ID = "chat_messages_v5";
+  public static final String CHANNEL_ID = "chat_messages_v6";
   private static final String CAPACITOR_STORAGE_GROUP = "CapacitorStorage";
   private static final String PREF_APP_IN_FOREGROUND = "chat_app_in_foreground_v1";
   private static final String PREF_CHAT_PAGE_ACTIVE = "chat_page_active_v1";
@@ -59,6 +60,7 @@ public class ChatPushMessagingService extends FirebaseMessagingService {
 
   private void showChatNotification(String title, String body, String url, String peerUsername, String pushToken) {
     ensureNotificationChannel();
+    Uri notificationSound = buildNotificationSoundUri();
 
     // Use stable ID based on peer username for grouping all messages in one notification
     int notificationId = buildNotificationId(peerUsername, url, title);
@@ -77,7 +79,7 @@ public class ChatPushMessagingService extends FirebaseMessagingService {
         .setAutoCancel(true)
         .setOnlyAlertOnce(false)  // Sound/vibration plays for EVERY update
         .setShowWhen(true)
-        .setSound(android.provider.Settings.System.DEFAULT_NOTIFICATION_URI)
+        .setSound(notificationSound)
         .setVibrate(new long[]{0, 100, 200, 100})
         .setLights(0xFF00FF00, 1000, 1000);
 
@@ -208,15 +210,29 @@ public class ChatPushMessagingService extends FirebaseMessagingService {
 
   private void ensureNotificationChannel() {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
+    Uri notificationSound = buildNotificationSoundUri();
     NotificationChannel channel = new NotificationChannel(
         CHANNEL_ID,
         "Chat messages",
         NotificationManager.IMPORTANCE_HIGH);
     channel.setDescription("Incoming chat message alerts");
+    channel.enableLights(true);
+    channel.enableVibration(true);
+    channel.setVibrationPattern(new long[]{0, 100, 200, 100});
+    channel.setSound(
+        notificationSound,
+        new AudioAttributes.Builder()
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+            .build());
     NotificationManager manager = getSystemService(NotificationManager.class);
     if (manager != null) {
       manager.createNotificationChannel(channel);
     }
+  }
+
+  private Uri buildNotificationSoundUri() {
+    return Uri.parse("android.resource://" + getPackageName() + "/" + R.raw.mixkit_elevator_tone_2863);
   }
 
   static int buildNotificationId(String peerUsername, String url, String title) {

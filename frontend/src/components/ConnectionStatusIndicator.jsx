@@ -6,17 +6,25 @@ import './ConnectionStatusIndicator.css'
  * ConnectionStatusIndicator Component
  * Displays the real-time connection status with three states:
  * - Connected: Green linked icon + 100%
- * - Disconnected: Red unlinked icon + 0%
- * - Connecting: Animated percentage (0-90%) with icon
+ * - Disconnected: Red unlinked icon + 0% (clickable after 2 seconds)
+ * - Connecting: Animated percentage (0-90%) with icon during auto-reconnection
  */
-export default function ConnectionStatusIndicator({ isConnected, isConnecting }) {
+export default function ConnectionStatusIndicator({ isConnected, isConnecting, onRetryClick }) {
   const [connectPercentage, setConnectPercentage] = useState(0)
+  const [canRetry, setCanRetry] = useState(false)
+  const [disconnectedSince, setDisconnectedSince] = useState(null)
 
+  // Track when connection is lost
   useEffect(() => {
     if (isConnected) {
       setConnectPercentage(100)
+      setCanRetry(false)
+      setDisconnectedSince(null)
     } else if (isConnecting) {
+      // Socket is actively trying to connect
       setConnectPercentage(0)
+      setCanRetry(false)
+      setDisconnectedSince(null)
       // Animate percentage from 0 to 90 during connection attempt
       const startTime = Date.now()
       const animationDuration = 8000 // 8 seconds to reach ~90%
@@ -26,25 +34,65 @@ export default function ConnectionStatusIndicator({ isConnected, isConnecting })
         setConnectPercentage(Math.round(progress))
       }, 100)
       return () => clearInterval(interval)
-    } else {
+    } else if (!isConnected && !isConnecting) {
+      // Disconnected and not trying to connect
       setConnectPercentage(0)
+      
+      // Record when disconnection started
+      if (!disconnectedSince) {
+        setDisconnectedSince(Date.now())
+      }
+      
+      // Enable retry button after 2 seconds of disconnection
+      const retryCheckTimer = setInterval(() => {
+        if (!disconnectedSince) return
+        const timeSinceDisconnection = Date.now() - disconnectedSince
+        if (timeSinceDisconnection >= 2000) {
+          setCanRetry(true)
+          clearInterval(retryCheckTimer)
+        }
+      }, 100)
+      
+      return () => clearInterval(retryCheckTimer)
     }
-  }, [isConnecting, isConnected])
+  }, [isConnecting, isConnected, disconnectedSince])
 
   const getStatusLabel = () => {
     if (isConnecting) return `Connecting... ${connectPercentage}%`
     if (isConnected) return 'Connected 100%'
+    if (canRetry) return 'Disconnected (Click to Retry)'
     return 'Disconnected 0%'
   }
 
   const getStatusClass = () => {
     if (isConnecting) return 'connecting'
     if (isConnected) return 'connected'
+    if (canRetry) return 'disconnected retry-available'
     return 'disconnected'
   }
 
+  const handleClick = () => {
+    if (canRetry && onRetryClick && !isConnecting && !isConnected) {
+      setCanRetry(false)
+      setDisconnectedSince(null)
+      onRetryClick()
+    }
+  }
+
   return (
-    <div className={`connection-status-indicator ${getStatusClass()}`} title={getStatusLabel()}>
+    <div 
+      className={`connection-status-indicator ${getStatusClass()}`} 
+      title={getStatusLabel()}
+      onClick={handleClick}
+      role={canRetry ? 'button' : undefined}
+      tabIndex={canRetry ? 0 : undefined}
+      onKeyDown={canRetry ? (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          handleClick()
+        }
+      } : undefined}
+    >
       {isConnecting ? (
         // Connecting state with percentage
         <motion.div
