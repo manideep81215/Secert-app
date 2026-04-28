@@ -5173,18 +5173,19 @@ function ChatPageNew() {
           animate={{ y: 0 }}
           transition={{ duration: 0.3 }}
         >
-            <button
-              className="btn-back-mobile"
-              onClick={() => {
-                if (isMobileView) {
-                  clearActiveChatSelection()
-                  setShowMobileUsers(true)
-                  return
-                }
+          <button
+            type="button"
+            className="btn-back-mobile"
+            onClick={() => {
+              if (isMobileView) {
                 clearActiveChatSelection()
                 setShowMobileUsers(true)
-              }}
-              title="Back to users"
+                return
+              }
+              clearActiveChatSelection()
+              setShowMobileUsers(true)
+            }}
+            title="Back to users"
             aria-label="Back to users"
           >
             <BackIcon />
