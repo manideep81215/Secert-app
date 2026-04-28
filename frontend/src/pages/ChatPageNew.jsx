@@ -3343,16 +3343,13 @@ function ChatPageNew() {
       // Ignore dismiss persistence failures.
     }
   }
-  const handleOpenGames = (event) => {
+  const handleOpenGames = () => {
     const now = Date.now()
     if (now - Number(lastOpenGamesAtRef.current || 0) < 500) {
-      event?.preventDefault?.()
-      event?.stopPropagation?.()
       return
     }
     lastOpenGamesAtRef.current = now
-    event?.preventDefault?.()
-    event?.stopPropagation?.()
+    
     const activeTypingTarget = typingTargetRef.current || selectedUserRef.current?.username
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current)
@@ -3361,30 +3358,22 @@ function ChatPageNew() {
     if (activeTypingTarget) {
       publishTyping(false, true, activeTypingTarget)
     }
+    
     const activeElement = document.activeElement
     if (activeElement instanceof HTMLElement) {
       activeElement.blur()
     }
+    
     setReactionTray(null)
     setActiveMessageActionsKey(null)
     setShowDeleteConfirm(false)
     setPendingDeleteMessage(null)
+    
     const gamesState = {
       from: '/chat',
       selectedUsername: selectedUserRef.current?.username || lastSelectedUserRef.current?.username || '',
     }
     navigate('/games', { state: gamesState })
-    if (typeof window !== 'undefined') {
-      const currentHash = String(window.location.hash || '').trim().toLowerCase()
-      if (currentHash !== '#/games') {
-        window.location.hash = '/games'
-      }
-      window.setTimeout(() => {
-        if (getNormalizedRoutePath({ pathname: window.location.pathname }) !== '/games') {
-          window.location.hash = '/games'
-        }
-      }, 0)
-    }
   }
 
   useEffect(() => {
@@ -5537,9 +5526,6 @@ function ChatPageNew() {
               <button
                 type="button"
                 className="btn-action btn-game"
-                onTouchStart={handleOpenGames}
-                onMouseDown={handleOpenGames}
-                onPointerDown={handleOpenGames}
                 onClick={handleOpenGames}
                 title="Open games"
                 aria-label="Open games"
