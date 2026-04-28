@@ -27,9 +27,11 @@ import MonthlyRecap from '../components/MonthlyRecap'
 import MilestonePopup from '../components/MilestonePopup'
 import LovePercentageChip from '../components/LovePercentageChip'
 import CheckedForYouPopup from '../components/CheckedForYouPopup'
+import GlobalDebugMenu from '../components/GlobalDebugMenu'
 // import SnapCameraScreen from '../components/SnapCameraScreen' // DISABLED: Snap Camera feature
 import SecretTapButton from '../components/SecretTapButton'
 import ConnectionStatusIndicator from '../components/ConnectionStatusIndicator'
+import LogoutReminderPopup from '../components/LogoutReminderPopup'
 // import snapIcon from '../assets/snap.png' // DISABLED: Snap Camera feature
 import timerLoveBirdsIcon from '../assets/in-love.png'
 import ChatUsersPanel from './ChatUsersPanel'
@@ -3562,8 +3564,16 @@ function ChatPageNew() {
     if (socketRef.current && !socketRef.current.connected && !isSocketConnecting) {
       setIsSocketConnecting(true)
       socketRef.current.activate()
-      toast.info('Attempting to reconnect...', { toastId: 'reconnect-attempt' })
     }
+  }
+
+  const handleLogoutReminder = async (logoutData) => {
+    // Log the logout reminder submission (for company laptop logout tracking)
+    console.log('Logout reminder submitted:', logoutData)
+    
+    // Just acknowledge the submission - popup closes
+    // User has logged out from their company laptop
+    // App continues to work normally
   }
 
   const handleSecretTapSend = async ({ text, tempKey, targetRecipients, type = SECRET_TAP_TYPE }) => {
@@ -5697,6 +5707,13 @@ function ChatPageNew() {
         checkCount={checkPopup.count}
         onDismiss={handleDismissCheckPopup}
       />
+
+      <LogoutReminderPopup
+        username={flow.username}
+        onLogout={handleLogoutReminder}
+      />
+
+      <GlobalDebugMenu username={flow.username} />
  
 </div>
   )

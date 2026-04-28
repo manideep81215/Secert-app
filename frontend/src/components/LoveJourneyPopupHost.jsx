@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useContext } from 'react'
+import { PopupDebugContext } from '../context/PopupDebugContext'
 import LoveJourneyMilestonePopup, {
   SpecialReminderPopup,
   getMilestone,
@@ -69,6 +70,7 @@ export default function LoveJourneyPopupHost() {
   const [popupQueue, setPopupQueue] = useState([])
   const [activePopup, setActivePopup] = useState(null)
   const queuedPopupKeysRef = useRef(new Set())
+  const debugContext = useContext(PopupDebugContext)
 
   useEffect(() => {
     const syncTimerCounts = () => {
@@ -90,6 +92,12 @@ export default function LoveJourneyPopupHost() {
     return () => window.clearInterval(intervalId)
   }, [])
 
+  // Register debug functions
+  useEffect(() => {
+    if (!debugContext) return
+    // Debug functions will be registered after enqueuePopup is defined
+  }, [debugContext])
+
   useEffect(() => {
     if (activePopup || popupQueue.length === 0) return
     setActivePopup(popupQueue[0])
@@ -101,6 +109,39 @@ export default function LoveJourneyPopupHost() {
     queuedPopupKeysRef.current.add(popup.queueKey)
     setPopupQueue((prev) => [...prev, popup])
   }
+
+  // Register debug functions after enqueuePopup is defined
+  useEffect(() => {
+    if (!debugContext || !enqueuePopup) return
+
+    const debugTriggerLoveMilestone = () => {
+      const sampleMilestone = getMilestone(100, 'love')
+      if (sampleMilestone) {
+        enqueuePopup({
+          kind: 'milestone',
+          milestone: sampleMilestone,
+          counterKey: 'days_in_love',
+          label: 'days in love',
+          count: 100,
+          queueKey: 'debug:milestone:love:100',
+        })
+      }
+    }
+
+    const debugTriggerSpecialReminder = () => {
+      const sampleReminder = getSpecialReminder(150, 250, 300)
+      if (sampleReminder) {
+        enqueuePopup({
+          kind: 'special',
+          reminder: sampleReminder,
+          queueKey: 'debug:special:reminder',
+        })
+      }
+    }
+
+    debugContext.registerDebugFunction('love-milestone-demo', debugTriggerLoveMilestone)
+    debugContext.registerDebugFunction('love-special-reminder', debugTriggerSpecialReminder)
+  }, [debugContext])
 
   useEffect(() => {
     COUNTER_CONFIG.forEach(({ counter, counterKey, label }) => {

@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useContext } from 'react'
+import { PopupDebugContext } from '../context/PopupDebugContext'
 import './LoveReminder.css'
 
 const MILESTONES = [
@@ -192,6 +193,28 @@ function ReminderPopup({ reminder, onDismiss, index, total }) {
 export default function LoveReminder() {
   const [reminders, setReminders] = useState([])
   const [overlayVisible, setOverlayVisible] = useState(false)
+  const debugContext = useContext(PopupDebugContext)
+
+  // Debug function to show sample reminder
+  const debugTriggerReminder = () => {
+    const today = new Date()
+    const demoReminder = {
+      key: 'first_hello',
+      type: 'today',
+      year: today.getFullYear(),
+      icon: '💬',
+      title: 'First Hello Anniversary (Demo)',
+      message: 'Demo reminder - This is a sample love reminder for testing the global debug menu.',
+    }
+    setReminders([demoReminder])
+    setOverlayVisible(true)
+  }
+
+  // Register debug function
+  useEffect(() => {
+    if (!debugContext) return
+    debugContext.registerDebugFunction('love-reminder-demo', debugTriggerReminder)
+  }, [debugContext])
 
   useEffect(() => {
     const active = getActiveReminders()

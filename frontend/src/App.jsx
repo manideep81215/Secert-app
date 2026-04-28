@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-
 import { Client } from '@stomp/stompjs'
 import SockJS from 'sockjs-client'
 import { ToastContainer } from 'react-toastify'
+import { PopupDebugProvider } from './context/PopupDebugContext'
 import AuthPage from './pages/AuthPage'
 import GamesPage from './pages/GamesPage'
 import RpsGamePage from './pages/RpsGamePage'
@@ -409,8 +410,9 @@ function App() {
   }, [flow?.token])
 
   return (
-    <>
-      <ToastContainer
+    <PopupDebugProvider>
+      <>
+        <ToastContainer
         position="top-right"
         autoClose={1500}
         hideProgressBar
@@ -481,7 +483,8 @@ function App() {
           </div>
         )}
       </div>
-    </>
+      </>
+    </PopupDebugProvider>
   )
 }
 

@@ -1,0 +1,569 @@
+/* ============================================================
+   LogoutReminderPopup — Vibrant Animated Styles
+   ============================================================ */
+
+/* ---------- Keyframe Animations ---------- */
+
+@keyframes overlayFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes popIn {
+  0%   { transform: scale(0.5) translateY(60px) rotate(-3deg); opacity: 0; }
+  60%  { transform: scale(1.06) translateY(-6px) rotate(1deg);  opacity: 1; }
+  100% { transform: scale(1)    translateY(0)    rotate(0deg);  opacity: 1; }
+}
+
+@keyframes popOut {
+  0%   { transform: scale(1)    translateY(0)    rotate(0deg);  opacity: 1; }
+  100% { transform: scale(0.75) translateY(30px) rotate(-2deg); opacity: 0; }
+}
+
+@keyframes shake {
+  0%,  100% { transform: translateX(0)   rotate(0deg);  }
+  15%        { transform: translateX(-8px) rotate(-2deg); }
+  30%        { transform: translateX(8px)  rotate(2deg);  }
+  45%        { transform: translateX(-6px) rotate(-1deg); }
+  60%        { transform: translateX(6px)  rotate(1deg);  }
+  75%        { transform: translateX(-3px);               }
+  90%        { transform: translateX(3px);                }
+}
+
+@keyframes tickTock {
+  0%,  100% { transform: rotate(-12deg) translateY(4px); }
+  50%        { transform: rotate(12deg)  translateY(4px); }
+}
+
+@keyframes handSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes pulseRing1 {
+  0%   { transform: scale(1);   opacity: 0.7; }
+  100% { transform: scale(1.8); opacity: 0;   }
+}
+
+@keyframes pulseRing2 {
+  0%   { transform: scale(1);   opacity: 0.5; }
+  100% { transform: scale(2.2); opacity: 0;   }
+}
+
+@keyframes rainbowShift {
+  0%   { background-position: 0%   50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0%   50%; }
+}
+
+@keyframes progressGlow {
+  0%,  100% { opacity: 1;   }
+  50%        { opacity: 0.7; }
+}
+
+@keyframes bgBreath1 {
+  0%,  100% { background: linear-gradient(135deg, #fff9f9, #fff3f3); }
+  50%        { background: linear-gradient(135deg, #fff3f3, #ffecec); }
+}
+
+@keyframes bgBreath2 {
+  0%,  100% { background: linear-gradient(135deg, #fffbf0, #fff8e1); }
+  50%        { background: linear-gradient(135deg, #fff3dc, #ffefc0); }
+}
+
+@keyframes bgBreath3 {
+  0%,  100% { background: linear-gradient(135deg, #fdf0f0, #fce8e8); }
+  50%        { background: linear-gradient(135deg, #fce8e8, #fbd9d9); }
+}
+
+@keyframes badgeBounce {
+  0%   { transform: scale(0)    rotate(-10deg); }
+  65%  { transform: scale(1.2)  rotate(2deg);   }
+  100% { transform: scale(1)    rotate(0deg);   }
+}
+
+@keyframes dotBounce {
+  0%,  100% { transform: translateY(0);   }
+  50%        { transform: translateY(-4px); }
+}
+
+@keyframes sparkle {
+  0%,  100% { opacity: 0; transform: scale(0); }
+  50%        { opacity: 1; transform: scale(1); }
+}
+
+@keyframes btnPulse {
+  0%,  100% { transform: scale(1);    box-shadow: 0 4px 15px rgba(244, 67, 54, 0.4); }
+  50%        { transform: scale(1.02); box-shadow: 0 6px 20px rgba(244, 67, 54, 0.6); }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+
+
+/* ---------- Overlay ---------- */
+
+.logout-reminder-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(ellipse at center, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.75) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  animation: overlayFadeIn 0.4s ease;
+}
+
+
+/* ---------- Popup Shell ---------- */
+
+.logout-reminder-popup {
+  background: #fff;
+  border-radius: 20px;
+  max-width: 400px;
+  width: 90%;
+  position: relative;
+  overflow: hidden;
+  border: 2.5px solid #ff9800;
+  animation: popIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* Per-variant background breath */
+.logout-reminder-popup--v1 { animation: bgBreath1 3s   ease-in-out infinite, popIn 0.6s cubic-bezier(0.34,1.56,0.64,1) both; border-color: #ff9800; }
+.logout-reminder-popup--v2 { animation: bgBreath2 2.5s ease-in-out infinite, popIn 0.6s cubic-bezier(0.34,1.56,0.64,1) both; border-color: #ff6f00; }
+.logout-reminder-popup--v3 { animation: bgBreath3 2s   ease-in-out infinite, popIn 0.6s cubic-bezier(0.34,1.56,0.64,1) both; border-color: #d32f2f; }
+
+.logout-reminder-popup--shaking {
+  animation: shake 0.6s ease !important;
+}
+
+
+/* ---------- Rainbow Strip ---------- */
+
+.logout-reminder-rainbow-bar {
+  height: 4px;
+  width: 100%;
+  background: linear-gradient(90deg, #f44336, #ff9800, #ffeb3b, #4caf50, #2196f3, #9c27b0, #f44336);
+  background-size: 200%;
+  animation: rainbowShift 2.5s linear infinite;
+}
+
+
+/* ---------- Progress Bar ---------- */
+
+.logout-reminder-progress-track {
+  height: 5px;
+  background: #f5f5f5;
+}
+
+.logout-reminder-progress-fill {
+  height: 5px;
+  transition: width 0.9s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: progressGlow 1.2s ease-in-out infinite;
+}
+
+.logout-reminder-progress-fill--v1 { width: 33%;  background: linear-gradient(90deg, #ff9800, #f44336); }
+.logout-reminder-progress-fill--v2 { width: 66%;  background: linear-gradient(90deg, #ff6f00, #ff9800, #f44336); }
+.logout-reminder-progress-fill--v3 { width: 100%; background: linear-gradient(90deg, #d32f2f, #f44336, #ff1744); }
+
+
+/* ---------- Close Button ---------- */
+
+.logout-reminder-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 500;
+  background: #ffebee;
+  color: #c62828;
+  transition: transform 0.2s, background 0.2s;
+}
+
+.logout-reminder-close:hover {
+  transform: scale(1.2) rotate(90deg);
+  background: #ffcdd2;
+}
+
+
+/* ---------- Header ---------- */
+
+.logout-reminder-header {
+  padding: 1rem 1.5rem 0.75rem;
+  border-bottom: 1px solid #f5f5f5;
+  text-align: center;
+  position: relative;
+}
+
+.logout-reminder-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #333;
+}
+
+
+/* ---------- Badge ---------- */
+
+.logout-reminder-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 12px;
+  border-radius: 999px;
+  margin-bottom: 8px;
+  animation: badgeBounce 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.logout-reminder-badge--v2 {
+  background: #fff8e1;
+  color: #e65100;
+  border: 1px solid rgba(255,111,0,0.2);
+}
+
+.logout-reminder-badge--v3 {
+  background: #ffebee;
+  color: #b71c1c;
+  border: 1px solid rgba(211,47,47,0.2);
+}
+
+
+/* ---------- Step Dots ---------- */
+
+.logout-reminder-dots {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin-top: 8px;
+}
+
+.logout-reminder-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #e0e0e0;
+  transition: background 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+              transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.logout-reminder-dot--done    { background: #4caf50; }
+.logout-reminder-dot--active  { background: #ff9800; transform: scale(1.4); animation: dotBounce 0.6s ease both; }
+.logout-reminder-dot--active-v2 { background: #ff6f00; transform: scale(1.4); }
+.logout-reminder-dot--active-v3 { background: #d32f2f; transform: scale(1.4); }
+
+
+/* ---------- Clock ---------- */
+
+.logout-reminder-clock-container {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 1rem;
+  transform-origin: center bottom;
+  animation: tickTock 1s ease-in-out infinite;
+}
+
+.logout-reminder-clock-container--v1 { animation-duration: 1s;     }
+.logout-reminder-clock-container--v2 { animation-duration: 0.65s;  }
+.logout-reminder-clock-container--v3 { animation-duration: 0.38s;  }
+
+/* Pulse rings */
+.logout-reminder-pulse-ring-1,
+.logout-reminder-pulse-ring-2 {
+  position: absolute;
+  border-radius: 50%;
+  border: 2px solid;
+  top: -8px; left: -8px; right: -8px; bottom: -8px;
+}
+.logout-reminder-pulse-ring-1 { animation: pulseRing1 1.2s ease-out infinite; }
+.logout-reminder-pulse-ring-2 { animation: pulseRing2 1.2s ease-out 0.4s infinite; }
+
+.logout-reminder-pulse-ring-1--v1 { border-color: #ff9800; }
+.logout-reminder-pulse-ring-2--v1 { border-color: #ffcc80; }
+.logout-reminder-pulse-ring-1--v2 { border-color: #ff6f00; }
+.logout-reminder-pulse-ring-2--v2 { border-color: #ffd54f; }
+.logout-reminder-pulse-ring-1--v3 { border-color: #d32f2f; }
+.logout-reminder-pulse-ring-2--v3 { border-color: #ef9a9a; }
+
+/* Sparkle dots around the clock */
+.logout-reminder-sparkles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.logout-reminder-sparkle {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.logout-reminder-sparkle--1 { top: 0;   left: 25%;  background: #ffeb3b; animation: sparkle 1.5s 0.1s ease-in-out infinite; }
+.logout-reminder-sparkle--2 { top: 10%; right: 10%; background: #4caf50; animation: sparkle 1.5s 0.5s ease-in-out infinite; }
+.logout-reminder-sparkle--3 { bottom: 5%; left: 10%; background: #2196f3; animation: sparkle 1.5s 0.9s ease-in-out infinite; }
+.logout-reminder-sparkle--4 { bottom: 0; right: 25%; background: #9c27b0; animation: sparkle 1.5s 0.3s ease-in-out infinite; }
+
+/* Clock SVG second hand */
+.logout-reminder-second-hand {
+  transform-origin: 40px 40px;
+  animation: handSpin 6s linear infinite;
+}
+
+
+/* ---------- Body Content ---------- */
+
+.logout-reminder-content {
+  padding: 1.25rem 1.5rem 1rem;
+  text-align: center;
+}
+
+.logout-reminder-message {
+  font-size: 15px;
+  font-weight: 600;
+  color: #333;
+  margin: 0 0 4px;
+  animation: slideUp 0.4s 0.4s ease both;
+}
+
+.logout-reminder-username {
+  font-size: 13px;
+  color: #999;
+  margin: 0;
+  font-style: italic;
+  animation: slideUp 0.4s 0.5s ease both;
+}
+
+
+/* ---------- Checkbox (2nd popup only) ---------- */
+
+.logout-reminder-checkbox-container {
+  margin: 0 1.25rem 1rem;
+  padding: 0.75rem 1rem;
+  border-left: 4px solid #4caf50;
+  border-radius: 0 10px 10px 0;
+  background: linear-gradient(135deg, #f1f8e9, #e8f5e9);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  animation: slideUp 0.4s ease both;
+}
+
+.logout-reminder-checkbox-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #2e7d32;
+  cursor: pointer;
+}
+
+.logout-reminder-checkbox {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  accent-color: #4caf50;
+}
+
+
+/* ---------- Submit Button ---------- */
+
+.logout-reminder-actions {
+  padding: 0 1.25rem 0.75rem;
+}
+
+.logout-reminder-btn-submit {
+  width: 100%;
+  padding: 0.75rem;
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  animation: btnPulse 1.8s ease-in-out infinite;
+  transition: transform 0.15s;
+}
+
+.logout-reminder-btn-submit--v1 { background: linear-gradient(135deg, #ff9800, #f44336); }
+.logout-reminder-btn-submit--v2 { background: linear-gradient(135deg, #ff6f00, #e53935); }
+.logout-reminder-btn-submit--v3 { background: linear-gradient(135deg, #b71c1c, #d32f2f, #f44336); }
+
+.logout-reminder-btn-submit:hover  { transform: scale(1.02); }
+.logout-reminder-btn-submit:active { transform: scale(0.96); }
+
+
+/* ---------- Info Text ---------- */
+
+.logout-reminder-info {
+  padding: 0 1.5rem 1rem;
+  font-size: 11px;
+  color: #aaa;
+  text-align: center;
+  margin: 0;
+  line-height: 1.5;
+  animation: slideUp 0.4s 0.6s ease both;
+}
+
+
+/* ---------- Debug Menu (Test User Only) ---------- */
+
+.logout-debug-menu-container {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 9998;
+}
+
+.logout-debug-menu-btn {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: #f5f5f5;
+  border: 2px solid #ff9800;
+  cursor: pointer;
+  font-size: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  hover-effect: scale(1.1);
+}
+
+.logout-debug-menu-btn:hover {
+  transform: scale(1.1);
+  background: #fff;
+  box-shadow: 0 6px 16px rgba(255, 152, 0, 0.3);
+}
+
+.logout-debug-menu {
+  position: absolute;
+  bottom: 70px;
+  right: 0;
+  background: white;
+  border-radius: 12px;
+  padding: 12px 0;
+  min-width: 160px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 152, 0, 0.2);
+}
+
+.logout-debug-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #999;
+  text-transform: uppercase;
+  padding: 8px 12px;
+  margin: 0;
+  border-bottom: 1px solid #f0f0f0;
+  letter-spacing: 0.5px;
+}
+
+.logout-debug-trigger-btn {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: #333;
+  font-size: 12px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-left: 3px solid transparent;
+}
+
+.logout-debug-trigger-btn:hover {
+  background: #f5f5f5;
+  border-left-color: #ff9800;
+}
+
+.logout-debug-trigger-btn.popup-1 {
+  color: #ff9800;
+}
+
+.logout-debug-trigger-btn.popup-1:hover {
+  background: #fff8e1;
+}
+
+.logout-debug-trigger-btn.popup-2 {
+  color: #ff6f00;
+}
+
+.logout-debug-trigger-btn.popup-2:hover {
+  background: #ffe0b2;
+}
+
+.logout-debug-trigger-btn.popup-3 {
+  color: #d32f2f;
+}
+
+.logout-debug-trigger-btn.popup-3:hover {
+  background: #ffebee;
+}
+
+.logout-debug-reset-btn {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: #4caf50;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  border-top: 1px solid #f0f0f0;
+  transition: all 0.2s ease;
+  border-left: 3px solid transparent;
+}
+
+.logout-debug-reset-btn:hover {
+  background: #f1f8e9;
+  border-left-color: #4caf50;
+}
+
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 480px) {
+  .logout-reminder-popup {
+    width: 95%;
+    border-radius: 16px;
+  }
+
+  .logout-reminder-content {
+    padding: 1rem 1.25rem 0.75rem;
+  }
+
+  .logout-reminder-clock-container {
+    width: 64px;
+    height: 64px;
+  }
+
+  .logout-reminder-btn-submit {
+    padding: 0.65rem;
+    font-size: 13px;
+  }
+
+  .logout-reminder-checkbox-container {
+    margin: 0 1rem 1rem;
+  }
+
+  .logout-reminder-actions {
+    padding: 0 1rem 0.75rem;
+  }
+}
