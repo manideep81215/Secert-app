@@ -69,9 +69,6 @@ function ChatUsersPanel({
             <button
               type="button"
               className="btn-users-games"
-              onTouchStart={onOpenGames}
-              onMouseDown={onOpenGames}
-              onPointerDown={onOpenGames}
               onClick={onOpenGames}
               title="Go to dashboard"
               aria-label="Go to dashboard"

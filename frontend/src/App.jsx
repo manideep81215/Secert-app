@@ -3,7 +3,6 @@ import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-
 import { Client } from '@stomp/stompjs'
 import SockJS from 'sockjs-client'
 import { ToastContainer } from 'react-toastify'
-import { PopupDebugProvider } from './context/PopupDebugContext'
 import AuthPage from './pages/AuthPage'
 import GamesPage from './pages/GamesPage'
 import RpsGamePage from './pages/RpsGamePage'
@@ -244,13 +243,13 @@ function App() {
         if (disposed) return
         listenerHandle = await mod.App.addListener('backButton', () => {
           const current = currentPathRef.current || ''
-          const activeChatPeerKey = `active_chat_peer_v1:${(flow?.username || '').trim().toLowerCase()}`
-          const activeChatPeer = typeof window !== 'undefined'
-            ? (window.localStorage.getItem(activeChatPeerKey) || '').trim()
-            : ''
+          if (current === '/chat') {
+            navigate('/chat', { replace: true })
+            return
+          }
+
           const orderedBackMap = {
-            '/chat': '/users',
-            '/users': '/profile',
+            '/users': '/chat',
             '/timers': '/chat',
             '/profile': '/games',
           }
@@ -410,9 +409,8 @@ function App() {
   }, [flow?.token])
 
   return (
-    <PopupDebugProvider>
-      <>
-        <ToastContainer
+    <>
+      <ToastContainer
         position="top-right"
         autoClose={1500}
         hideProgressBar
@@ -483,8 +481,7 @@ function App() {
           </div>
         )}
       </div>
-      </>
-    </PopupDebugProvider>
+    </>
   )
 }
 

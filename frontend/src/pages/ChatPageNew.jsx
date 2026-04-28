@@ -27,7 +27,6 @@ import MonthlyRecap from '../components/MonthlyRecap'
 import MilestonePopup from '../components/MilestonePopup'
 import LovePercentageChip from '../components/LovePercentageChip'
 import CheckedForYouPopup from '../components/CheckedForYouPopup'
-import GlobalDebugMenu from '../components/GlobalDebugMenu'
 // import SnapCameraScreen from '../components/SnapCameraScreen' // DISABLED: Snap Camera feature
 import SecretTapButton from '../components/SecretTapButton'
 import ConnectionStatusIndicator from '../components/ConnectionStatusIndicator'
@@ -103,6 +102,17 @@ function getViewportFallbackHeight() {
   const docHeight = Math.round(window.document?.documentElement?.clientHeight || 0)
   const screenHeight = Math.round(window.screen?.height || 0)
   return visualHeight || innerHeight || docHeight || screenHeight || 0
+}
+
+function readStoredActiveChatPeer(meUsername) {
+  if (typeof window === 'undefined') return ''
+  const normalizedMe = String(meUsername || '').trim().toLowerCase()
+  if (!normalizedMe) return ''
+  try {
+    return String(window.localStorage.getItem(`${ACTIVE_CHAT_PEER_KEY_PREFIX}${normalizedMe}`) || '').trim().toLowerCase()
+  } catch {
+    return ''
+  }
 }
 
 function ChatPageNew() {
@@ -895,15 +905,40 @@ function ChatPageNew() {
     )))
   }
   const setActiveChatUser = (user, { clearRememberedSelection = false } = {}) => {
+    const key = flow.username ? activeChatKey(flow.username) : ''
     if (user?.username) {
+      selectedUserRef.current = user
       lastSelectedUserRef.current = user
+      if (key) {
+        try {
+          window.localStorage.setItem(key, toUserKey(user.username))
+        } catch {
+          // Ignore localStorage failures.
+        }
+      }
     } else if (clearRememberedSelection) {
+      selectedUserRef.current = null
       lastSelectedUserRef.current = null
+      if (key) {
+        try {
+          window.localStorage.removeItem(key)
+        } catch {
+          // Ignore localStorage failures.
+        }
+      }
     }
     setSelectedUser(user || null)
   }
   const clearActiveChatSelection = () => {
+    selectedUserRef.current = null
     lastSelectedUserRef.current = null
+    if (flow.username) {
+      try {
+        window.localStorage.removeItem(activeChatKey(flow.username))
+      } catch {
+        // Ignore localStorage failures.
+      }
+    }
     setSelectedUser(null)
   }
   const canEditMessage = (message) => {
@@ -1329,14 +1364,20 @@ function ChatPageNew() {
         // Ignore localStorage failures.
       }
     }
-    return () => {
-      try {
-        window.localStorage.removeItem(key)
-      } catch {
-        // Ignore localStorage failures.
-      }
-    }
   }, [flow.username, selectedUser?.username])
+
+  useEffect(() => {
+    if (!isMobileView) return
+    if (selectedUser?.username) return
+    if (location.state?.openUsersList) return
+    if (!users.length) return
+    const storedActivePeer = readStoredActiveChatPeer(flow.username)
+    if (!storedActivePeer) return
+    const restoredUser = users.find((user) => toUserKey(user?.username) === storedActivePeer)
+    if (!restoredUser) return
+    setActiveChatUser(restoredUser)
+    setShowMobileUsers(false)
+  }, [isMobileView, selectedUser?.username, users, flow.username, location.state])
 
   useEffect(() => {
     let disposed = false
@@ -1408,25 +1449,37 @@ function ChatPageNew() {
       setIsTouchDevice(window.matchMedia?.('(pointer: coarse)').matches || 'ontouchstart' in window)
       if (!mobile) {
         setShowMobileUsers(false)
-      } else if (!selectedUserRef.current) {
-        setShowMobileUsers(true)
+        return
+      }
+      const hasRememberedChat = Boolean(
+        selectedUserRef.current?.username
+        || lastSelectedUserRef.current?.username
+        || readStoredActiveChatPeer(flow.username)
+      )
+      if (hasRememberedChat) {
+        setShowMobileUsers(false)
       }
     }
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
-  }, [])
+  }, [flow.username])
 
   useEffect(() => {
     if (!isMobileView) return
-    const requestedFromQuery = new URLSearchParams(location.search).get('with')
-    const hasRouteSelection = Boolean(location.state?.selectedUserId || location.state?.selectedUsername || requestedFromQuery)
-    const hasActiveSelection = Boolean(selectedUser?.username || (hasRouteSelection && lastSelectedUserRef.current?.username))
-    if (hasRouteSelection && !selectedUser?.username) {
-      setShowMobileUsers(false)
+    if (location.state?.openUsersList) {
+      setShowMobileUsers(true)
       return
     }
+    const requestedFromQuery = new URLSearchParams(location.search).get('with')
+    const hasRouteSelection = Boolean(location.state?.selectedUserId || location.state?.selectedUsername || requestedFromQuery)
+    const hasActiveSelection = Boolean(
+      selectedUser?.username
+      || lastSelectedUserRef.current?.username
+      || readStoredActiveChatPeer(flow.username)
+      || hasRouteSelection
+    )
     setShowMobileUsers(!hasActiveSelection)
-  }, [isMobileView, selectedUser, location.state, location.search])
+  }, [isMobileView, selectedUser?.username, location.state, location.search, flow.username])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -3632,20 +3685,6 @@ function ChatPageNew() {
     // App continues to work normally
   }
 
-  const handleBroadcastPopup = (popupId) => {
-    // Send popup trigger to backend to broadcast to all users
-    if (socketRef.current && socketRef.current.connected) {
-      socketRef.current.publish({
-        destination: '/app/debug/popup/broadcast',
-        body: JSON.stringify({
-          popupId,
-          triggeredBy: flow.username,
-          timestamp: Date.now(),
-        }),
-      })
-    }
-  }
-
   const handleSecretTapSend = async ({ text, tempKey, targetRecipients, type = SECRET_TAP_TYPE }) => {
     const senderUsername = String(flow.username || '').trim()
     const normalizedText = String(text || '').trim()
@@ -5184,16 +5223,13 @@ function ChatPageNew() {
             type="button"
             className="btn-back-mobile"
             onClick={() => {
-              if (isMobileView) {
-                clearActiveChatSelection()
-                setShowMobileUsers(true)
-                return
-              }
+              if (!selectedUser) return
               clearActiveChatSelection()
               setShowMobileUsers(true)
             }}
             title="Back to users"
             aria-label="Back to users"
+            disabled={!selectedUser}
           >
             <BackIcon />
           </button>
@@ -5235,8 +5271,13 @@ function ChatPageNew() {
               onRetryClick={handleReconnect}
             />
             <button
+              type="button"
               className="btn-user-details"
-              onClick={() => navigate('/timers')}
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                navigate('/timers')
+              }}
               title="Love timers"
               aria-label="Love timers"
             >
@@ -5778,13 +5819,7 @@ function ChatPageNew() {
       />
 
       <LogoutReminderPopup
-        username={flow.username}
         onLogout={handleLogoutReminder}
-      />
-
-      <GlobalDebugMenu 
-        username={flow.username} 
-        onBroadcastPopup={handleBroadcastPopup}
       />
  
 </div>

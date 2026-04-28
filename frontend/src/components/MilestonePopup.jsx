@@ -1,6 +1,5 @@
-import { useEffect, useState, useContext } from 'react'
+import { useEffect, useState } from 'react'
 import { getChatStats } from '../services/messagesApi'
-import { PopupDebugContext } from '../context/PopupDebugContext'
 import './MilestonePopup.css'
 
 const MESSAGE_MILESTONE_THEMES = [
@@ -141,33 +140,6 @@ function MilestonePopup({ token, peerUsername, triggerCheck }) {
   const [milestone, setMilestone] = useState(null)
   const [visible, setVisible] = useState(false)
   const [particles, setParticles] = useState([])
-  const debugContext = useContext(PopupDebugContext)
-
-  // Debug function to show sample milestone
-  const debugTriggerMilestone = () => {
-    const sampleMilestone = {
-      kind: 'messages',
-      count: 500,
-      emoji: '💬',
-      color: '#60a5fa',
-      glow: 'rgba(96,165,250,0.45)',
-      title: '500 Messages! (Demo)',
-      message: 'Demo milestone - 500 messages exchanged (this is a test milestone).',
-      buttonText: 'Amazing 📈',
-      isSpecial: false,
-    }
-    setMilestone(sampleMilestone)
-    setParticles(createParticles(sampleMilestone.color, false))
-    window.setTimeout(() => {
-      setVisible(true)
-    }, 80)
-  }
-
-  // Register debug function
-  useEffect(() => {
-    if (!debugContext) return
-    debugContext.registerDebugFunction('message-milestone-demo', debugTriggerMilestone)
-  }, [debugContext])
 
   useEffect(() => {
     if (!token || !peerUsername) return

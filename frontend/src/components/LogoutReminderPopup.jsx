@@ -1,6 +1,5 @@
-import { useState, useEffect, useRef, useContext } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { PopupDebugContext } from '../context/PopupDebugContext'
 import './LogoutReminderPopup.css'
 
 /**
@@ -10,7 +9,7 @@ import './LogoutReminderPopup.css'
  * - 2nd: 8:15 PM - 8:30 PM (Completed checkbox + Submit)
  * - 3rd: 8:30 PM onwards (Only if Completed not checked on 2nd)
  */
-export default function LogoutReminderPopup({ username, onLogout }) {
+export default function LogoutReminderPopup({ onLogout }) {
   const [currentPopupNumber, setCurrentPopupNumber] = useState(0)
   const [showPopup, setShowPopup] = useState(false)
   const [isCompleted, setIsCompleted] = useState(false)
@@ -18,53 +17,8 @@ export default function LogoutReminderPopup({ username, onLogout }) {
   const [hasShown2nd, setHasShown2nd] = useState(false)
   const [hasShown3rd, setHasShown3rd] = useState(false)
   const [isShaking, setIsShaking] = useState(false)
-  const [showDebugMenu, setShowDebugMenu] = useState(false)
   const popupRef = useRef(null)
-  const debugContext = useContext(PopupDebugContext)
-
-  const isTestUser = username === 'test' || username === 'Test'
   const v = `v${currentPopupNumber}` // e.g. "v1", "v2", "v3"
-
-  // Debug methods for test user
-  const triggerPopup1 = () => {
-    setCurrentPopupNumber(1)
-    setShowPopup(true)
-    setIsCompleted(false)
-    setHasShown1st(true)
-    setShowDebugMenu(false)
-  }
-
-  const triggerPopup2 = () => {
-    setCurrentPopupNumber(2)
-    setShowPopup(true)
-    setIsCompleted(false)
-    setHasShown2nd(true)
-    setShowDebugMenu(false)
-  }
-
-  const triggerPopup3 = () => {
-    setCurrentPopupNumber(3)
-    setShowPopup(true)
-    setHasShown3rd(true)
-    setShowDebugMenu(false)
-  }
-
-  const resetDebugState = () => {
-    setHasShown1st(false)
-    setHasShown2nd(false)
-    setHasShown3rd(false)
-    setIsCompleted(false)
-    setShowPopup(false)
-    setCurrentPopupNumber(0)
-  }
-
-  // Register debug functions with global context
-  useEffect(() => {
-    if (!debugContext) return
-    debugContext.registerDebugFunction('logout-popup-1', triggerPopup1)
-    debugContext.registerDebugFunction('logout-popup-2', triggerPopup2)
-    debugContext.registerDebugFunction('logout-popup-3', triggerPopup3)
-  }, [debugContext])
 
   // Check current time and determine which popup to show
   useEffect(() => {
@@ -149,7 +103,6 @@ export default function LogoutReminderPopup({ username, onLogout }) {
 
   return (
     <>
-      {/* Debug menu now handled by GlobalDebugMenu */}
       <AnimatePresence>
       {showPopup && (
         <motion.div
