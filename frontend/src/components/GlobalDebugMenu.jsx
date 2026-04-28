@@ -5,10 +5,10 @@ import './GlobalDebugMenu.css'
 
 /**
  * GlobalDebugMenu Component
- * Centralized debug menu for test user to trigger all popups in the app
+ * Centralized debug menu to trigger popups that broadcast to all users
  * Only visible when username === 'test' (case-insensitive)
  */
-export default function GlobalDebugMenu({ username }) {
+export default function GlobalDebugMenu({ username, onBroadcastPopup }) {
   const [showMenu, setShowMenu] = useState(false)
   const debugContext = useContext(PopupDebugContext)
 
@@ -42,7 +42,14 @@ export default function GlobalDebugMenu({ username }) {
   }
 
   const handleTriggerPopup = (popupId) => {
+    // Trigger locally first
     triggerPopup(popupId)
+    
+    // Broadcast to all users via callback
+    if (onBroadcastPopup) {
+      onBroadcastPopup(popupId)
+    }
+    
     setShowMenu(false)
   }
 

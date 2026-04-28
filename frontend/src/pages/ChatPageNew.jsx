@@ -3576,6 +3576,20 @@ function ChatPageNew() {
     // App continues to work normally
   }
 
+  const handleBroadcastPopup = (popupId) => {
+    // Send popup trigger to backend to broadcast to all users
+    if (socketRef.current && socketRef.current.connected) {
+      socketRef.current.publish({
+        destination: '/app/debug/popup/broadcast',
+        body: JSON.stringify({
+          popupId,
+          triggeredBy: flow.username,
+          timestamp: Date.now(),
+        }),
+      })
+    }
+  }
+
   const handleSecretTapSend = async ({ text, tempKey, targetRecipients, type = SECRET_TAP_TYPE }) => {
     const senderUsername = String(flow.username || '').trim()
     const normalizedText = String(text || '').trim()
@@ -5713,7 +5727,10 @@ function ChatPageNew() {
         onLogout={handleLogoutReminder}
       />
 
-      <GlobalDebugMenu username={flow.username} />
+      <GlobalDebugMenu 
+        username={flow.username} 
+        onBroadcastPopup={handleBroadcastPopup}
+      />
  
 </div>
   )
