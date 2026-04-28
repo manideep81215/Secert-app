@@ -5819,6 +5819,7 @@ function ChatPageNew() {
       />
 
       <LogoutReminderPopup
+        username={flow.username}
         onLogout={handleLogoutReminder}
       />
  

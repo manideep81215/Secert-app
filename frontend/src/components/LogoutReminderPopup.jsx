@@ -9,7 +9,7 @@ import './LogoutReminderPopup.css'
  * - 2nd: 8:15 PM - 8:30 PM (Completed checkbox + Submit)
  * - 3rd: 8:30 PM onwards (Only if Completed not checked on 2nd)
  */
-export default function LogoutReminderPopup({ onLogout }) {
+export default function LogoutReminderPopup({ onLogout, username = '' }) {
   const [currentPopupNumber, setCurrentPopupNumber] = useState(0)
   const [showPopup, setShowPopup] = useState(false)
   const [isCompleted, setIsCompleted] = useState(false)
@@ -197,7 +197,7 @@ export default function LogoutReminderPopup({ onLogout }) {
               </div>
 
               <p className="logout-reminder-message">It's time to logout baby</p>
-              <p className="logout-reminder-username">@{username}</p>
+              <p className="logout-reminder-username">@{String(username || '').trim() || 'you'}</p>
             </div>
 
             {/* Completed Checkbox (2nd popup only) */}
