@@ -133,6 +133,11 @@
   transition: all 0.3s ease;
   display: grid;
   place-items: center;
+  position: relative;
+  z-index: 2;
+  pointer-events: auto;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .btn-users-games:hover {
@@ -3920,6 +3925,11 @@
 
 .chat-container .btn-game {
   color: #7b4e24 !important;
+  position: relative;
+  z-index: 2;
+  pointer-events: auto;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .chat-container .secret-tap-btn {

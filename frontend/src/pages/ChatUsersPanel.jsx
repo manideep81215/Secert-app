@@ -66,10 +66,10 @@ function ChatUsersPanel({
       <div className="users-header">
         <h2>Messages</h2>
         <div className="users-header-actions">
-            <button className="btn-users-games" onClick={onOpenGames} title="Go to dashboard" aria-label="Go to dashboard">
+            <button type="button" className="btn-users-games" onClick={onOpenGames} title="Go to dashboard" aria-label="Go to dashboard">
               {'\uD83C\uDFAE'}
             </button>
-            <button className="btn-new-chat" onClick={onStartNewChat}>+</button>
+            <button type="button" className="btn-new-chat" onClick={onStartNewChat}>+</button>
           </div>
         </div>
         <div className="users-search">
@@ -100,10 +100,10 @@ function ChatUsersPanel({
       <div className="users-header">
         <h2>Messages</h2>
         <div className="users-header-actions">
-          <button className="btn-users-games" onClick={onOpenGames} title="Go to dashboard" aria-label="Go to dashboard">
+          <button type="button" className="btn-users-games" onClick={onOpenGames} title="Go to dashboard" aria-label="Go to dashboard">
             {'\uD83C\uDFAE'}
           </button>
-          <button className="btn-new-chat" onClick={onStartNewChat}>+</button>
+          <button type="button" className="btn-new-chat" onClick={onStartNewChat}>+</button>
         </div>
       </div>
       <div className="users-search">

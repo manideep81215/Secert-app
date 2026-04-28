@@ -199,6 +199,7 @@ function ChatPageNew() {
   const keyboardBottomLockRef = useRef({ rafId: 0, until: 0 })
   const shouldAutoScrollToBottomRef = useRef(true)
   const selectedUserRef = useRef(null)
+  const lastSelectedUserRef = useRef(null)
   const statusMapRef = useRef({})
   const socketRef = useRef(null)
   const attachMenuRef = useRef(null)
@@ -892,6 +893,18 @@ function ChatPageNew() {
         : user
     )))
   }
+  const setActiveChatUser = (user, { clearRememberedSelection = false } = {}) => {
+    if (user?.username) {
+      lastSelectedUserRef.current = user
+    } else if (clearRememberedSelection) {
+      lastSelectedUserRef.current = null
+    }
+    setSelectedUser(user || null)
+  }
+  const clearActiveChatSelection = () => {
+    lastSelectedUserRef.current = null
+    setSelectedUser(null)
+  }
   const canEditMessage = (message) => {
     if (!message || message.sender !== 'user') return false
     if (isMessageRetryable(message)) return false
@@ -1216,6 +1229,9 @@ function ChatPageNew() {
 
   useEffect(() => {
     selectedUserRef.current = selectedUser
+    if (selectedUser?.username) {
+      lastSelectedUserRef.current = selectedUser
+    }
   }, [selectedUser])
 
   useEffect(() => {
@@ -1403,11 +1419,12 @@ function ChatPageNew() {
     if (!isMobileView) return
     const requestedFromQuery = new URLSearchParams(location.search).get('with')
     const hasRouteSelection = Boolean(location.state?.selectedUserId || location.state?.selectedUsername || requestedFromQuery)
-    if (hasRouteSelection && !selectedUser) {
+    const hasActiveSelection = Boolean(selectedUser?.username || (hasRouteSelection && lastSelectedUserRef.current?.username))
+    if (hasRouteSelection && !selectedUser?.username) {
       setShowMobileUsers(false)
       return
     }
-    setShowMobileUsers(!selectedUser)
+    setShowMobileUsers(!hasActiveSelection)
   }, [isMobileView, selectedUser, location.state, location.search])
 
   useEffect(() => {
@@ -3325,6 +3342,32 @@ function ChatPageNew() {
       // Ignore dismiss persistence failures.
     }
   }
+  const handleOpenGames = (event) => {
+    event?.preventDefault?.()
+    event?.stopPropagation?.()
+    const activeTypingTarget = typingTargetRef.current || selectedUserRef.current?.username
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current)
+      typingTimeoutRef.current = null
+    }
+    if (activeTypingTarget) {
+      publishTyping(false, true, activeTypingTarget)
+    }
+    const activeElement = document.activeElement
+    if (activeElement instanceof HTMLElement) {
+      activeElement.blur()
+    }
+    setReactionTray(null)
+    setActiveMessageActionsKey(null)
+    setShowDeleteConfirm(false)
+    setPendingDeleteMessage(null)
+    navigate('/games', {
+      state: {
+        from: '/chat',
+        selectedUsername: selectedUserRef.current?.username || lastSelectedUserRef.current?.username || '',
+      },
+    })
+  }
 
   useEffect(() => {
     const shouldOpenUsersList = Boolean(location.state?.openUsersList)
@@ -3340,10 +3383,13 @@ function ChatPageNew() {
       setConversationClears((prev) => ({ ...prev, [convoKey]: clearCutoffAt }))
       if (selectedUserRef.current?.username?.toLowerCase() === clearForUsername.toLowerCase()) {
         setMessages([])
+        if (isMobileView) {
+          setShowMobileUsers(false)
+        }
       }
     }
     if (shouldOpenUsersList) {
-      setSelectedUser(null)
+      clearActiveChatSelection()
       setShowMobileUsers(true)
       navigate('/chat', { replace: true })
       return
@@ -3366,10 +3412,13 @@ function ChatPageNew() {
     )
 
     if (nextSelectedUser) {
-      setSelectedUser(nextSelectedUser)
+      setActiveChatUser(nextSelectedUser)
+      if (isMobileView) {
+        setShowMobileUsers(false)
+      }
       navigate('/chat', { replace: true })
     }
-  }, [users, location.state, location.search, navigate, flow.username])
+  }, [users, location.state, location.search, navigate, flow.username, isMobileView])
 
   const handleSendMessage = async () => {
     const text = inputValue.trim()
@@ -4959,7 +5008,7 @@ function ChatPageNew() {
   }
 
   const handleSelectUserFromPanel = (user) => {
-    setSelectedUser(user)
+    setActiveChatUser(user)
     setUnreadMap((prev) => ({ ...prev, [toUserKey(user.username)]: false }))
     if (isMobileView) {
       setShowMobileUsers(false)
@@ -5109,8 +5158,8 @@ function ChatPageNew() {
         selectedUserId={selectedUser?.id || null}
         searchQuery={searchQuery}
         onSearchQueryChange={setSearchQuery}
-        onOpenGames={() => navigate('/games')}
-        onStartNewChat={() => setSelectedUser(filteredUsers[0] || null)}
+        onOpenGames={handleOpenGames}
+        onStartNewChat={() => setActiveChatUser(filteredUsers[0] || null, { clearRememberedSelection: !filteredUsers[0] })}
         onSelectUser={handleSelectUserFromPanel}
         getAvatarLabel={getAvatarLabel}
         getUserDisplayName={getUserDisplayName}
@@ -5124,18 +5173,18 @@ function ChatPageNew() {
           animate={{ y: 0 }}
           transition={{ duration: 0.3 }}
         >
-          <button
-            className="btn-back-mobile"
-            onClick={() => {
-              if (isMobileView) {
-                setSelectedUser(null)
+            <button
+              className="btn-back-mobile"
+              onClick={() => {
+                if (isMobileView) {
+                  clearActiveChatSelection()
+                  setShowMobileUsers(true)
+                  return
+                }
+                clearActiveChatSelection()
                 setShowMobileUsers(true)
-                return
-              }
-              setSelectedUser(null)
-              setShowMobileUsers(true)
-            }}
-            title="Back to users"
+              }}
+              title="Back to users"
             aria-label="Back to users"
           >
             <BackIcon />
@@ -5467,11 +5516,9 @@ function ChatPageNew() {
           <div className="input-wrapper">
             <div className="input-actions">
               <button
+                type="button"
                 className="btn-action btn-game"
-                onClick={(event) => {
-                  event.stopPropagation()
-                  navigate('/games')
-                }}
+                onClick={handleOpenGames}
                 title="Open games"
                 aria-label="Open games"
               >
