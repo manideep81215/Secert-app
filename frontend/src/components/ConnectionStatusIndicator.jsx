@@ -2,6 +2,11 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import './ConnectionStatusIndicator.css'
 
+const MotionDiv = motion.div
+const MotionSvg = motion.svg
+const MotionCircle = motion.circle
+const MotionSpan = motion.span
+
 /**
  * ConnectionStatusIndicator Component
  * Displays the real-time connection status with three states:
@@ -11,82 +16,52 @@ import './ConnectionStatusIndicator.css'
  */
 export default function ConnectionStatusIndicator({ isConnected, isConnecting, onRetryClick }) {
   const [connectPercentage, setConnectPercentage] = useState(0)
-  const [canRetry, setCanRetry] = useState(false)
-  const [disconnectedSince, setDisconnectedSince] = useState(null)
 
   // Track when connection is lost
   useEffect(() => {
-    if (isConnected) {
-      setConnectPercentage(100)
-      setCanRetry(false)
-      setDisconnectedSince(null)
-    } else if (isConnecting) {
-      // Socket is actively trying to connect
-      setConnectPercentage(0)
-      setCanRetry(false)
-      setDisconnectedSince(null)
-      // Animate percentage from 0 to 90 during connection attempt
-      const startTime = Date.now()
-      const animationDuration = 8000 // 8 seconds to reach ~90%
-      const interval = setInterval(() => {
-        const elapsed = Date.now() - startTime
-        const progress = Math.min((elapsed / animationDuration) * 90, 90)
-        setConnectPercentage(Math.round(progress))
-      }, 100)
-      return () => clearInterval(interval)
-    } else if (!isConnected && !isConnecting) {
-      // Disconnected and not trying to connect
-      setConnectPercentage(0)
-      
-      // Record when disconnection started
-      if (!disconnectedSince) {
-        setDisconnectedSince(Date.now())
-      }
-      
-      // Enable retry button after 2 seconds of disconnection
-      const retryCheckTimer = setInterval(() => {
-        if (!disconnectedSince) return
-        const timeSinceDisconnection = Date.now() - disconnectedSince
-        if (timeSinceDisconnection >= 2000) {
-          setCanRetry(true)
-          clearInterval(retryCheckTimer)
-        }
-      }, 100)
-      
-      return () => clearInterval(retryCheckTimer)
-    }
-  }, [isConnecting, isConnected, disconnectedSince])
+    if (!isConnecting) return undefined
+
+    const startTime = Date.now()
+    const animationDuration = 8000
+    const interval = setInterval(() => {
+      const elapsed = Date.now() - startTime
+      const progress = Math.min((elapsed / animationDuration) * 90, 90)
+      setConnectPercentage(Math.round(progress))
+    }, 100)
+
+    return () => clearInterval(interval)
+  }, [isConnecting])
+
+  const visiblePercentage = isConnected ? 100 : (isConnecting ? connectPercentage : 0)
 
   const getStatusLabel = () => {
-    if (isConnecting) return `Connecting... ${connectPercentage}%`
+    if (isConnecting) return `Connecting... ${visiblePercentage}%`
     if (isConnected) return 'Connected 100%'
-    if (canRetry) return 'Disconnected (Click to Retry)'
-    return 'Disconnected 0%'
+    return 'Disconnected. Click to reconnect'
   }
 
   const getStatusClass = () => {
     if (isConnecting) return 'connecting'
     if (isConnected) return 'connected'
-    if (canRetry) return 'disconnected retry-available'
-    return 'disconnected'
+    return 'disconnected retry-available'
   }
 
   const handleClick = () => {
-    if (canRetry && onRetryClick && !isConnecting && !isConnected) {
-      setCanRetry(false)
-      setDisconnectedSince(null)
+    if (onRetryClick && !isConnecting && !isConnected) {
+      setConnectPercentage(0)
       onRetryClick()
     }
   }
 
   return (
     <div 
-      className={`connection-status-indicator ${getStatusClass()}`} 
+      className={`connection-status-indicator ${getStatusClass()} ${!isConnected && !isConnecting ? 'tooltip-visible' : ''}`} 
       title={getStatusLabel()}
       onClick={handleClick}
-      role={canRetry ? 'button' : undefined}
-      tabIndex={canRetry ? 0 : undefined}
-      onKeyDown={canRetry ? (e) => {
+      role={!isConnected && !isConnecting ? 'button' : undefined}
+      tabIndex={!isConnected && !isConnecting ? 0 : undefined}
+      aria-label={getStatusLabel()}
+      onKeyDown={!isConnected && !isConnecting ? (e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault()
           handleClick()
@@ -95,7 +70,7 @@ export default function ConnectionStatusIndicator({ isConnected, isConnecting, o
     >
       {isConnecting ? (
         // Connecting state with percentage
-        <motion.div
+        <MotionDiv
           className="connection-progress-container"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -112,29 +87,29 @@ export default function ConnectionStatusIndicator({ isConnected, isConnecting, o
             {/* Background circle */}
             <circle cx="50" cy="50" r="40" className="progress-circle-bg" />
             {/* Progress circle */}
-            <motion.circle
+            <MotionCircle
               cx="50"
               cy="50"
               r="40"
               className="progress-circle-fill"
               initial={{ strokeDashoffset: 251 }}
-              animate={{ strokeDashoffset: 251 - (connectPercentage / 100) * 251 }}
+              animate={{ strokeDashoffset: 251 - (visiblePercentage / 100) * 251 }}
               transition={{ duration: 0.3 }}
             />
           </svg>
-          <motion.span
+          <MotionSpan
             className="connection-percentage"
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ duration: 0.2 }}
-            key={connectPercentage}
+            key={visiblePercentage}
           >
-            {connectPercentage}%
-          </motion.span>
-        </motion.div>
+            {visiblePercentage}%
+          </MotionSpan>
+        </MotionDiv>
       ) : isConnected ? (
         // Connected state - Green linked icon
-        <motion.svg
+        <MotionSvg
           className="connection-icon connected-icon"
           viewBox="0 0 24 24"
           fill="none"
@@ -147,10 +122,10 @@ export default function ConnectionStatusIndicator({ isConnected, isConnecting, o
           {/* Linked icon */}
           <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
           <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-        </motion.svg>
+        </MotionSvg>
       ) : (
         // Disconnected state - Red unlinked icon
-        <motion.svg
+        <MotionSvg
           className="connection-icon disconnected-icon"
           viewBox="0 0 24 24"
           fill="none"
@@ -164,7 +139,7 @@ export default function ConnectionStatusIndicator({ isConnected, isConnecting, o
           <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
           <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
           <line x1="1" y1="1" x2="23" y2="23" strokeLinecap="round" />
-        </motion.svg>
+        </MotionSvg>
       )}
 
       {/* Tooltip on hover */}

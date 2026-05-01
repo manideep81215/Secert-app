@@ -133,6 +133,10 @@
   opacity: 1;
 }
 
+.connection-status-indicator.tooltip-visible .connection-status-label {
+  opacity: 1;
+}
+
 /* Retry Pulse Animation */
 @keyframes retry-pulse {
   0%, 100% {
@@ -164,4 +168,3 @@
     bottom: -26px;
   }
 }
-

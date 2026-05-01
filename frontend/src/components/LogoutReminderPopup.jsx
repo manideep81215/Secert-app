@@ -2,6 +2,26 @@ import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import './LogoutReminderPopup.css'
 
+const MotionDiv = motion.div
+const LOGOUT_REMINDER_SUBMITTED_KEY = 'logout_reminder_submitted_date_v1'
+
+const getLocalDateKey = (date = new Date()) => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const hasSubmittedToday = () => {
+  if (typeof window === 'undefined') return false
+  return window.localStorage.getItem(LOGOUT_REMINDER_SUBMITTED_KEY) === getLocalDateKey()
+}
+
+const markSubmittedToday = () => {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(LOGOUT_REMINDER_SUBMITTED_KEY, getLocalDateKey())
+}
+
 /**
  * LogoutReminderPopup Component
  * Shows logout reminders at specific times:
@@ -11,11 +31,11 @@ import './LogoutReminderPopup.css'
  */
 export default function LogoutReminderPopup({ onLogout, username = '' }) {
   const [currentPopupNumber, setCurrentPopupNumber] = useState(0)
-  const [showPopup, setShowPopup] = useState(false)
+  const [showPopup, setShowPopup] = useState(() => false)
   const [isCompleted, setIsCompleted] = useState(false)
-  const [hasShown1st, setHasShown1st] = useState(false)
-  const [hasShown2nd, setHasShown2nd] = useState(false)
-  const [hasShown3rd, setHasShown3rd] = useState(false)
+  const [hasShown1st, setHasShown1st] = useState(() => hasSubmittedToday())
+  const [hasShown2nd, setHasShown2nd] = useState(() => hasSubmittedToday())
+  const [hasShown3rd, setHasShown3rd] = useState(() => hasSubmittedToday())
   const [isShaking, setIsShaking] = useState(false)
   const popupRef = useRef(null)
   const v = `v${currentPopupNumber}` // e.g. "v1", "v2", "v3"
@@ -23,6 +43,14 @@ export default function LogoutReminderPopup({ onLogout, username = '' }) {
   // Check current time and determine which popup to show
   useEffect(() => {
     const checkTimeAndShowPopup = () => {
+      if (hasSubmittedToday()) {
+        setShowPopup(false)
+        setHasShown1st(true)
+        setHasShown2nd(true)
+        setHasShown3rd(true)
+        return
+      }
+
       const now = new Date()
       const hours = now.getHours()
       const minutes = now.getMinutes()
@@ -66,6 +94,11 @@ export default function LogoutReminderPopup({ onLogout, username = '' }) {
   }, [currentPopupNumber, showPopup])
 
   const handleSubmit = () => {
+    markSubmittedToday()
+    setHasShown1st(true)
+    setHasShown2nd(true)
+    setHasShown3rd(true)
+
     if (onLogout) {
       onLogout({
         timestamp: new Date().toISOString(),
@@ -105,14 +138,14 @@ export default function LogoutReminderPopup({ onLogout, username = '' }) {
     <>
       <AnimatePresence>
       {showPopup && (
-        <motion.div
+        <MotionDiv
           className="logout-reminder-overlay"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.3 }}
         >
-          <motion.div
+          <MotionDiv
             ref={popupRef}
             className={[
               'logout-reminder-popup',
@@ -235,8 +268,8 @@ export default function LogoutReminderPopup({ onLogout, username = '' }) {
               {currentPopupNumber === 2 && 'Check "Logout completed" if done, otherwise 3rd reminder will appear'}
               {currentPopupNumber === 3 && 'Final logout reminder'}
             </p>
-          </motion.div>
-        </motion.div>
+          </MotionDiv>
+        </MotionDiv>
       )}
     </AnimatePresence>
     </>
