@@ -2496,6 +2496,9 @@ function ChatPageNew() {
       heartbeatOutgoing: 10000,
       reconnectDelay: 600,
       connectionTimeout: 7000,
+      beforeConnect: () => {
+        setIsSocketConnecting(true)
+      },
       onConnect: () => {
         setIsSocketConnecting(false)
         if (wsErrorTimerRef.current) {
@@ -2874,17 +2877,21 @@ function ChatPageNew() {
         }, 300)
       },
       onWebSocketError: () => {
-        // Mark as disconnected - socket will auto-retry via reconnectDelay
-        setIsSocketConnecting(false)
         if (Date.now() < Number(wsResumeSuppressUntilRef.current || 0)) return
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+          setIsSocketConnecting(false)
+          return
+        }
+        // Socket is attempting auto-retry via reconnectDelay.
+        setIsSocketConnecting(true)
         if (wsErrorTimerRef.current) return
         wsErrorTimerRef.current = setTimeout(() => {
           wsErrorTimerRef.current = null
           if (client.connected) {
-            setIsSocketConnecting(true)
+            setIsSocketConnecting(false)
             return
           }
-          // Socket is attempting auto-retry via reconnectDelay
+          setIsSocketConnecting(true)
         }, 1500)
       },
       onWebSocketClose: (event) => {
@@ -2893,19 +2900,22 @@ function ChatPageNew() {
           setIsSocketConnecting(false) // Normal closure, stop connecting
           return
         }
-        // Mark as disconnected - socket will auto-retry via reconnectDelay
-        setIsSocketConnecting(false)
         const now = Date.now()
         const inResumeWindow = now < Number(wsResumeSuppressUntilRef.current || 0)
         const recentlyBackgrounded = now - Number(wsLastHiddenAtRef.current || 0) < 20000
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+          setIsSocketConnecting(false)
+          return
+        }
+        // Socket is attempting auto-retry via reconnectDelay.
+        setIsSocketConnecting(true)
         if ((code === 1006 || code === 1002) && (inResumeWindow || recentlyBackgrounded)) return
-        if (typeof navigator !== 'undefined' && navigator.onLine === false) return
         const reason = event?.reason ? `: ${event.reason}` : ''
         notifyRealtimeIssue(`Realtime disconnected (${code})${reason}`)
       },
       onStompError: (frame) => {
-        // Mark as disconnected - socket will auto-retry via reconnectDelay
-        setIsSocketConnecting(false)
+        // Socket is attempting auto-retry via reconnectDelay.
+        setIsSocketConnecting(true)
         const reason = frame?.headers?.message || frame?.body || 'STOMP broker error'
         notifyRealtimeIssue(`Realtime error: ${reason}`)
       },
@@ -5197,7 +5207,7 @@ function ChatPageNew() {
     >
       <LoveReminder />
       <LoveJourneyPopupHost />
-      <MonthlyRecap token={flow.token} peerUsername={selectedUser?.username} />
+      <MonthlyRecap token={flow.token} username={flow.username} peerUsername={selectedUser?.username} />
       <MilestonePopup token={flow.token} peerUsername={selectedUser?.username} triggerCheck={milestoneTriggerTick} />
       <ChatUsersPanel
         filteredUsers={filteredUsers}

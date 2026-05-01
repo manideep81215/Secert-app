@@ -6,6 +6,11 @@ import './MonthlyRecap.css'
 const DISMISS_KEY_PREFIX = 'monthly_recap_dismissed_v1:'
 const CLOSE_ANIMATION_MS = 380
 
+function normalizeStoragePart(value, fallback) {
+  const normalized = String(value || '').trim().toLowerCase()
+  return normalized || fallback
+}
+
 function getRecapCycleKey(value) {
   const endDate = new Date(value.getFullYear(), value.getMonth(), 1)
   const year = endDate.getFullYear()
@@ -54,17 +59,19 @@ function StatRow({ emoji, label, value, delay, color }) {
   )
 }
 
-function MonthlyRecap({ token, peerUsername, forceShow = false }) {
+function MonthlyRecap({ token, username, peerUsername, forceShow = false }) {
   const navigate = useNavigate()
   const [stats, setStats] = useState(null)
   const [show, setShow] = useState(false)
   const [visible, setVisible] = useState(false)
 
   const now = useMemo(() => new Date(), [])
-  const dismissKey = `${DISMISS_KEY_PREFIX}${getRecapCycleKey(now)}`
+  const viewerKey = normalizeStoragePart(username, 'viewer')
+  const peerKey = normalizeStoragePart(peerUsername, 'peer')
+  const dismissKey = `${DISMISS_KEY_PREFIX}${getRecapCycleKey(now)}:${viewerKey}:${peerKey}`
 
   useEffect(() => {
-    if (!token || !peerUsername) return
+    if (!token || !username || !peerUsername) return
 
     const isRecapDay = now.getDate() === 1
     if (!isRecapDay && !forceShow) return
@@ -95,7 +102,7 @@ function MonthlyRecap({ token, peerUsername, forceShow = false }) {
     return () => {
       cancelled = true
     }
-  }, [dismissKey, forceShow, now, peerUsername, token])
+  }, [dismissKey, forceShow, now, peerUsername, token, username])
 
   const closeSheet = (persistDismiss) => {
     if (persistDismiss) {
