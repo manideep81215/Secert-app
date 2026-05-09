@@ -27,28 +27,39 @@ public class UserController {
   }
 
   @GetMapping
-  public ResponseEntity<List<UserEntity>> getAllUsers() {
+  public ResponseEntity<List<UserPublicDto>> getAllUsers(
+      @RequestHeader(value = "Authorization", required = false) String authHeader) {
+    requireAuthUser(authHeader);
     List<UserEntity> users = userRepository.findAll();
-    return ResponseEntity.ok(users);
+    return ResponseEntity.ok(users.stream().map(this::toPublicDto).toList());
   }
 
   @GetMapping("/search")
-  public ResponseEntity<List<UserEntity>> searchByUsername(@RequestParam String username) {
+  public ResponseEntity<List<UserPublicDto>> searchByUsername(
+      @RequestParam String username,
+      @RequestHeader(value = "Authorization", required = false) String authHeader) {
+    requireAuthUser(authHeader);
     List<UserEntity> users = userRepository.findByUsernameContainingIgnoreCase(username);
-    return ResponseEntity.ok(users);
+    return ResponseEntity.ok(users.stream().map(this::toPublicDto).toList());
   }
 
   @GetMapping("/{id}")
-  public ResponseEntity<UserEntity> getUserById(@PathVariable Long id) {
+  public ResponseEntity<?> getUserById(
+      @PathVariable Long id,
+      @RequestHeader(value = "Authorization", required = false) String authHeader) {
+    UserEntity me = requireAuthUser(authHeader);
     return userRepository.findById(id)
-        .map(ResponseEntity::ok)
+        .map((user) -> ResponseEntity.ok(id.equals(me.getId()) ? toPrivateDto(user) : toPublicDto(user)))
         .orElse(ResponseEntity.notFound().build());
   }
 
   @GetMapping("/username/{username}")
-  public ResponseEntity<UserEntity> getUserByUsername(@PathVariable String username) {
+  public ResponseEntity<UserPublicDto> getUserByUsername(
+      @PathVariable String username,
+      @RequestHeader(value = "Authorization", required = false) String authHeader) {
+    requireAuthUser(authHeader);
     return userRepository.findByUsername(username)
-        .map(ResponseEntity::ok)
+        .map((user) -> ResponseEntity.ok(toPublicDto(user)))
         .orElse(ResponseEntity.notFound().build());
   }
 
@@ -92,9 +103,45 @@ public class UserController {
   }
 
   private void authorizeUser(Long requestedUserId, String authHeader) {
-    Long tokenUserId = jwtTokenService.extractAccessUserId(authHeader);
-    if (!requestedUserId.equals(tokenUserId)) {
+    UserEntity user = requireAuthUser(authHeader);
+    if (!requestedUserId.equals(user.getId())) {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Cannot access another user's data");
     }
   }
+
+  private UserEntity requireAuthUser(String authHeader) {
+    Long tokenUserId = jwtTokenService.extractAccessUserId(authHeader);
+    return userRepository.findById(tokenUserId)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found"));
+  }
+
+  private UserPublicDto toPublicDto(UserEntity user) {
+    return new UserPublicDto(
+        user.getId(),
+        user.getUsername(),
+        user.getName(),
+        user.getRole());
+  }
+
+  private UserPrivateDto toPrivateDto(UserEntity user) {
+    return new UserPrivateDto(
+        user.getId(),
+        user.getUsername(),
+        user.getName(),
+        user.getPhone(),
+        user.getEmail(),
+        user.getDob(),
+        user.getRole());
+  }
+
+  public record UserPublicDto(Long id, String username, String name, String role) {}
+
+  public record UserPrivateDto(
+      Long id,
+      String username,
+      String name,
+      String phone,
+      String email,
+      String dob,
+      String role) {}
 }

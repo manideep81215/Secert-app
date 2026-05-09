@@ -67,13 +67,22 @@ public class ChatPushMessagingService extends FirebaseMessagingService {
     String notificationTag = buildNotificationTag(peerUsername, url, title);
     
     NotificationReplyStore.save(this, notificationId, peerUsername, pushToken, url, title);
+    
+    // Add message to store and get all messages for this peer
+    // Clean up sender label - remove @ if present
+    String senderLabel = title.isEmpty() ? "Message" : title;
+    if (senderLabel.startsWith("@")) {
+      senderLabel = senderLabel.substring(1);
+    }
+    NotificationMessageStore.addMessage(this, peerUsername, senderLabel, body);
+    java.util.List<String> allMessages = NotificationMessageStore.getMessages(this, peerUsername);
+    
     PendingIntent openIntent = createOpenChatPendingIntent(this, url);
 
     NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
         .setSmallIcon(R.drawable.ic_stat_simp_games)
         .setContentTitle(title.isEmpty() ? "New message" : title)
         .setContentText(body.isEmpty() ? "Tap to open chat" : body)
-        .setStyle(new NotificationCompat.BigTextStyle().bigText(body.isEmpty() ? "Tap to open chat" : body))
         .setCategory(NotificationCompat.CATEGORY_MESSAGE)
         .setPriority(NotificationCompat.PRIORITY_HIGH)
         .setAutoCancel(true)
@@ -82,6 +91,18 @@ public class ChatPushMessagingService extends FirebaseMessagingService {
         .setSound(notificationSound)
         .setVibrate(new long[]{0, 100, 200, 100})
         .setLights(0xFF00FF00, 1000, 1000);
+    
+    // Use InboxStyle to show all messages
+    NotificationCompat.InboxStyle inboxStyle = new NotificationCompat.InboxStyle();
+    if (!allMessages.isEmpty()) {
+      for (String message : allMessages) {
+        inboxStyle.addLine(message);
+      }
+      inboxStyle.setSummaryText(allMessages.size() + " message" + (allMessages.size() > 1 ? "s" : ""));
+    } else {
+      inboxStyle.addLine(body.isEmpty() ? "Tap to open chat" : body);
+    }
+    builder.setStyle(inboxStyle);
 
     if (openIntent != null) {
       builder.setContentIntent(openIntent);
@@ -167,6 +188,10 @@ public class ChatPushMessagingService extends FirebaseMessagingService {
     String notificationTag = buildNotificationTag(peerUsername, url, title);
     NotificationManager notificationManager = getSystemService(NotificationManager.class);
     if (notificationManager == null) return;
+    
+    // Clear stored messages when notification is dismissed
+    NotificationMessageStore.clearMessages(this, peerUsername);
+    
     if (!notificationTag.isEmpty()) {
       notificationManager.cancel(notificationTag, notificationId);
       return;

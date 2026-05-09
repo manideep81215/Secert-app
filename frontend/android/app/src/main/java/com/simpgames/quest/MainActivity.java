@@ -78,6 +78,12 @@ public class MainActivity extends BridgeActivity {
     if (!ChatPushMessagingService.isOpenedFromNotification(intent)) return;
     String route = ChatPushMessagingService.extractChatUrl(intent);
     String peerUsername = ChatPushMessagingService.extractPeerUsername(intent);
+    
+    // Clear message store when opening chat from notification
+    if (peerUsername != null && !peerUsername.isBlank()) {
+      NotificationMessageStore.clearMessages(this, peerUsername);
+    }
+    
     if ((route == null || route.isBlank()) && peerUsername != null && !peerUsername.isBlank()) {
       route = "/#/chat?with=" + peerUsername;
     }
