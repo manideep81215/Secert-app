@@ -3490,7 +3490,8 @@
   }
 
   .chat-container[data-native="true"][data-android="true"].keyboard-open:not(.mobile-users-open) .input-area {
-    margin-bottom: var(--chat-keyboard-offset, 0px) !important;
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
   }
 
   .chat-container[data-native="true"][data-android="true"]:not(.mobile-users-open) .reply-preview,

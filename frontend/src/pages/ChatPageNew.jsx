@@ -1716,17 +1716,7 @@ function ChatPageNew() {
           const nativeHeight = Number(info?.keyboardHeight || 0)
           keyboardSettleUntilRef.current = Date.now() + 420
           if (isAndroidPlatform) {
-            const visibleViewportHeight = Math.round(
-              window.visualViewport?.height ||
-              window.innerHeight ||
-              viewportHeight ||
-              0,
-            )
-            const baseline = Math.max(maxViewportHeightRef.current || 0, visibleViewportHeight)
-            const resizedDelta = Math.max(0, baseline - visibleViewportHeight)
-            // Use only the remaining keyboard height not already applied by viewport resize.
-            const remainingOffset = Math.max(0, nativeHeight - resizedDelta)
-            setKeyboardOffset(remainingOffset <= 28 ? 0 : remainingOffset)
+            setKeyboardOffset(0)
           }
           if (nativeHeight > 0 && isIosPlatform && typeof window.visualViewport === 'undefined') {
             setKeyboardOffset(nativeHeight)
