@@ -3599,7 +3599,7 @@ function ChatPageNew() {
   const resizeMessageInput = (inputEl = messageInputRef.current) => {
     if (!(inputEl instanceof HTMLTextAreaElement)) return
 
-    inputEl.style.height = 'auto'
+    inputEl.style.setProperty('height', 'auto', 'important')
 
     const computedStyle = window.getComputedStyle(inputEl)
     const lineHeight = parseFloat(computedStyle.lineHeight) || 19
@@ -3608,10 +3608,11 @@ function ChatPageNew() {
     const borderTop = parseFloat(computedStyle.borderTopWidth) || 0
     const borderBottom = parseFloat(computedStyle.borderBottomWidth) || 0
     const minHeight = Math.ceil(lineHeight + paddingTop + paddingBottom + borderTop + borderBottom)
-    const maxHeight = Math.ceil((lineHeight * 4) + paddingTop + paddingBottom + borderTop + borderBottom)
+    const maxLines = isNativeCapacitorRuntime() ? 7 : 6
+    const maxHeight = Math.ceil((lineHeight * maxLines) + paddingTop + paddingBottom + borderTop + borderBottom)
     const nextHeight = Math.max(minHeight, Math.min(inputEl.scrollHeight, maxHeight))
 
-    inputEl.style.height = `${nextHeight}px`
+    inputEl.style.setProperty('height', `${nextHeight}px`, 'important')
     inputEl.style.overflowY = inputEl.scrollHeight > maxHeight ? 'auto' : 'hidden'
   }
 
