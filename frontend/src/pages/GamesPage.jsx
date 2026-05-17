@@ -164,8 +164,15 @@ function GamesPage() {
         notifyRealtimeIssue(`Dashboard realtime disconnected (${code})${reason}`)
       },
       onStompError: (frame) => {
-        const reason = frame?.headers?.message || frame?.body || 'STOMP broker error'
-        notifyRealtimeIssue(`Dashboard realtime error: ${reason}`)
+        const reason = String(frame?.headers?.message || frame?.body || '')
+        const looksLikeAuthFailure = /authorization|unauthori[sz]ed|token|expired|clientInboundChannel/i.test(reason)
+        if (looksLikeAuthFailure) {
+          notifyRealtimeIssue('Session expired. Please login again.')
+          resetFlowState(setFlow)
+          navigate('/auth')
+          return
+        }
+        notifyRealtimeIssue('Dashboard realtime connection failed. Please refresh and try again.')
       },
     })
 
