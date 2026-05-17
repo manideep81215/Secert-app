@@ -377,12 +377,16 @@
   width: 3.2rem;
   height: 3.2rem;
   min-width: 3.2rem;
+  max-width: 3.2rem;
+  aspect-ratio: 1 / 1;
   padding: 0;
   border-radius: 50%;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   margin: 0 auto 0.8rem;
+  flex: 0 0 3.2rem;
+  overflow: hidden;
 }
 
 .modal-biometric-icon {
@@ -408,6 +412,15 @@
   .modal-btn {
     flex: 1;
     min-width: auto;
+  }
+
+  .modal-btn.modal-btn-icon {
+    width: 3.2rem;
+    height: 3.2rem;
+    min-width: 3.2rem;
+    max-width: 3.2rem;
+    flex: 0 0 3.2rem;
+    border-radius: 50%;
   }
 
   .modal-buttons {
